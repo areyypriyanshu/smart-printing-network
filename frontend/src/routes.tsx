@@ -11,6 +11,7 @@ import {
   RequireRole,
 } from "./features/auth";
 import { HomePage } from "./features/home/home-page";
+import { OrderPage } from "./features/orders/order-page";
 import { OrderWizardPage } from "./features/order-wizard";
 
 const VendorRatesPage = lazy(() =>
@@ -39,6 +40,16 @@ export function AppRoutes() {
             <RequireAuth>
               <RequireRole role="customer">
                 <OrderWizardPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/orders/:orderId"
+          element={
+            <RequireAuth>
+              <RequireRole role="customer">
+                <OrderPage />
               </RequireRole>
             </RequireAuth>
           }

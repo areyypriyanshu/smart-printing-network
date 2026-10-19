@@ -18,6 +18,11 @@ const MESSAGES: Record<string, string> = {
   SHOP_UNAVAILABLE: "This shop is not taking orders right now.",
   RATE_NOT_SET: "This shop does not offer those options.",
   PICKUP_CODE_INVALID: "Code does not match.",
+  UPLOAD_ALREADY_USED: "This file is already attached to an order.",
+  INVALID_TRANSITION: "This order cannot change at this point.",
+  PAYMENT_GATEWAY_ERROR:
+    "The payment provider could not start the payment. Try again shortly.",
+  WEBHOOK_SIGNATURE_INVALID: "The payment notification could not be verified.",
 };
 
 export function messageForError(error: unknown): string {

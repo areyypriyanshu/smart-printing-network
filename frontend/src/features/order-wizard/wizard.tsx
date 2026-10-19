@@ -6,11 +6,12 @@ import { Alert, Button, Stepper } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { useUpload } from "./api";
 import { OptionsStep } from "./options-step";
-import { ShopStep } from "./shop-step";
+import { PayStep } from "./pay-step";
+import { ShopStep, type ShopSelection } from "./shop-step";
 import { UploadStep } from "./upload-step";
 import { OPTION_DEFAULTS, type OptionsFormValues } from "./schemas";
 
-const STEPS = ["Upload", "Options", "Shop and price"];
+const STEPS = ["Upload", "Options", "Shop and price", "Review and pay"];
 
 export function OrderWizardPage() {
   const [params, setParams] = useSearchParams();
@@ -20,6 +21,7 @@ export function OrderWizardPage() {
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [options, setOptions] = useState<OptionsFormValues | null>(null);
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<ShopSelection | null>(null);
   const [step, setStep] = useState<number | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(false);
 
@@ -31,6 +33,7 @@ export function OrderWizardPage() {
     setUpload(result);
     setOptions(null);
     setSelectedShopId(null);
+    setSelection(null);
     setParams({ upload: result.id }, { replace: true });
     setStep(1);
   };
@@ -39,6 +42,7 @@ export function OrderWizardPage() {
     setUpload(null);
     setOptions(null);
     setSelectedShopId(null);
+    setSelection(null);
     setResumeDismissed(true);
     setStep(0);
     setParams({}, { replace: true });
@@ -107,6 +111,7 @@ export function OrderWizardPage() {
           onContinue={(values) => {
             setOptions(values);
             setSelectedShopId(null);
+            setSelection(null);
             setStep(2);
           }}
         />
@@ -117,10 +122,27 @@ export function OrderWizardPage() {
           upload={activeUpload}
           options={options}
           selectedShopId={selectedShopId}
-          onSelect={setSelectedShopId}
+          onSelect={(value) => {
+            setSelectedShopId(value.shop.id);
+            setSelection(value);
+          }}
+          onContinue={() => setStep(3)}
           onBack={() => setStep(1)}
         />
       )}
+
+      {currentStep === 3 &&
+        activeUpload !== null &&
+        options !== null &&
+        selection !== null && (
+          <PayStep
+            upload={activeUpload}
+            options={options}
+            shop={selection.shop}
+            quote={selection.quote}
+            onBack={() => setStep(2)}
+          />
+        )}
     </section>
   );
 }

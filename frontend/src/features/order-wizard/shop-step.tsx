@@ -6,11 +6,21 @@ import { useShops } from "../shops/api";
 import { useShopQuotes, type ShopQuote } from "./api";
 import { describeOptions, type OptionsFormValues } from "./schemas";
 
+export type ShopSelection = {
+  shop: { id: string; name: string; address: string };
+  quote: {
+    price_paise: number;
+    rate_paise: number;
+    min_order_paise: number;
+  };
+};
+
 type ShopStepProps = {
   upload: UploadResponse;
   options: OptionsFormValues;
   selectedShopId: string | null;
-  onSelect: (shopId: string) => void;
+  onSelect: (selection: ShopSelection) => void;
+  onContinue: () => void;
   onBack: () => void;
 };
 
@@ -30,6 +40,7 @@ export function ShopStep({
   options,
   selectedShopId,
   onSelect,
+  onContinue,
   onBack,
 }: ShopStepProps) {
   const shops = useShops();
@@ -134,7 +145,20 @@ export function ShopStep({
                         variant={
                           shop.id === selectedShopId ? "secondary" : "primary"
                         }
-                        onClick={() => onSelect(shop.id)}
+                        onClick={() =>
+                          onSelect({
+                            shop: {
+                              id: shop.id,
+                              name: shop.name,
+                              address: shop.address,
+                            },
+                            quote: {
+                              price_paise: state.quote.price_paise,
+                              rate_paise: state.quote.rate_paise,
+                              min_order_paise: state.quote.min_order_paise,
+                            },
+                          })
+                        }
                       >
                         {shop.id === selectedShopId
                           ? "Selected"
@@ -172,10 +196,9 @@ export function ShopStep({
               {formatPaise(selected.state.quote.price_paise)}
             </dd>
           </dl>
-          <p className="text-xs text-steel">
-            Order review and payment arrive in the next milestone of this
-            project.
-          </p>
+          <div>
+            <Button onClick={onContinue}>Continue to payment</Button>
+          </div>
         </section>
       )}
 

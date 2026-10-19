@@ -90,11 +90,12 @@ async function parseError(response: Response): Promise<ApiError> {
 export type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
+  headers?: Record<string, string>;
   retryOnUnauthorized?: boolean;
 };
 
 async function send(path: string, options: RequestOptions): Promise<Response> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...options.headers };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (accessToken !== null) headers.Authorization = `Bearer ${accessToken}`;
   return fetch(`${API_BASE}${path}`, {
