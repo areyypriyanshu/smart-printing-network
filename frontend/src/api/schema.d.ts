@@ -636,11 +636,8 @@ export interface components {
              * Format: date-time
              */
             at: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
+            /** Id */
+            id: number;
             /** Reason */
             reason: string | null;
             /**

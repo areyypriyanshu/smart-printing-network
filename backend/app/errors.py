@@ -112,6 +112,20 @@ class InvalidTransition(AppError):
     status_code = 409
 
 
+class ShopAlreadyVerified(AppError):
+    """The shop is already approved, so there is nothing to approve."""
+
+    code = "SHOP_ALREADY_VERIFIED"
+    status_code = 409
+
+
+class ShopNotVerified(AppError):
+    """The shop was never approved, so there is nothing to suspend."""
+
+    code = "SHOP_NOT_VERIFIED"
+    status_code = 409
+
+
 class PaymentGatewayError(AppError):
     code = "PAYMENT_GATEWAY_ERROR"
     status_code = 502

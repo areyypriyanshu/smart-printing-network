@@ -8,7 +8,9 @@ queue of paid orders from a counter screen.
 > **Status:** Phase 1 is built end to end. A customer can upload, get a
 > price, pay, and collect. A shop can accept, print, mark ready and hand
 > over against the pickup code. The worker expires unpaid orders, rejects
-> orders no shop picked up, retries refunds and deletes old files.
+> orders no shop picked up, retries refunds and deletes old files. An
+> order can be paid online or in cash at the counter, and an admin panel
+> approves the shops that are allowed to take orders.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
@@ -104,8 +106,35 @@ Demo accounts, created by `make seed` (local and CI only, never production):
 | Vendor (shop 3) | vendor3@example.com | spn-demo-password |
 
 Seeded shops are verified and accepting orders. A vendor that
-self-registers through the app starts unverified; approve it locally with
-`docker compose run --rm api python -m app.cli verify-shop <vendor-email>`.
+self-registers through the app starts unverified, and somebody has to
+approve it. There are two ways to do that.
+
+**From the command line**, which is what a server with no admin account
+set up yet uses:
+
+```bash
+# See the shops that are waiting for a decision
+docker compose run --rm api python -m app.cli list-shops --pending
+
+# Approve one
+docker compose run --rm api python -m app.cli verify-shop <vendor-email>
+
+# Take a shop off the market
+docker compose run --rm api python -m app.cli suspend-shop <vendor-email> --reason "..."
+```
+
+**From the admin panel**, once an admin account exists. There is no
+endpoint that creates one, on purpose: an admin is the person who decides
+which shops are allowed to take orders, so the account is created by
+somebody who already holds the server.
+
+```bash
+docker compose run --rm api python -m app.cli create-admin you@example.com <password>
+```
+
+Then sign in at `/admin/shops`. The panel approves and suspends shops, and
+keeps a log of every decision. It cannot read a customer's order or move
+money; see [ADR 014](docs/adr/014-admin-panel.md).
 
 ### The same stack with HTTPS, the way it is deployed
 
