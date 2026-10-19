@@ -11,7 +11,7 @@ import {
   RequireRole,
 } from "./features/auth";
 import { HomePage } from "./features/home/home-page";
-import { OrderPage } from "./features/orders/order-page";
+import { OrderPage, OrdersPage } from "./features/orders";
 import { OrderWizardPage } from "./features/order-wizard";
 import { VendorQueuePage } from "./features/vendor-queue";
 
@@ -41,6 +41,16 @@ export function AppRoutes() {
             <RequireAuth>
               <RequireRole role="customer">
                 <OrderWizardPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/orders"
+          element={
+            <RequireAuth>
+              <RequireRole role="customer">
+                <OrdersPage />
               </RequireRole>
             </RequireAuth>
           }

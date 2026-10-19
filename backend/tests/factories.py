@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from app import security
-from app.gateways.payments import FakeGateway
+from app.gateways.payments import FakeGateway, GatewayOrder, GatewayRefund
 from app.models import Order, Shop, ShopRate, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -11,6 +11,53 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy.orm import Session
 
 DEFAULT_PASSWORD = "password-123"
+
+
+class RecordingGateway:
+    """A payment gateway double that records what it was asked to do.
+
+    `refund_error` makes the refund call fail, which is how the retry and
+    backoff behaviour is tested.
+    """
+
+    provider = "fake"
+    checkout_key_id: str | None = None
+
+    def __init__(self, *, refund_error: Exception | None = None) -> None:
+        self.refund_error = refund_error
+        self.refund_calls: list[dict[str, object]] = []
+
+    def create_order(
+        self, *, amount_paise: int, receipt: str, currency: str = "INR"
+    ) -> GatewayOrder:
+        return GatewayOrder(
+            provider=self.provider,
+            provider_order_id=f"fake_order_{receipt}",
+            amount_paise=amount_paise,
+            currency=currency,
+        )
+
+    def verify_webhook_signature(self, *, raw_body: bytes, signature: str) -> bool:
+        return True
+
+    def refund(
+        self, *, provider_payment_id: str, amount_paise: int, idempotency_note: str
+    ) -> GatewayRefund:
+        self.refund_calls.append(
+            {
+                "provider_payment_id": provider_payment_id,
+                "amount_paise": amount_paise,
+                "idempotency_note": idempotency_note,
+            }
+        )
+        if self.refund_error is not None:
+            raise self.refund_error
+        return GatewayRefund(
+            provider=self.provider,
+            refund_id=f"refund_{idempotency_note}",
+            provider_payment_id=provider_payment_id,
+            amount_paise=amount_paise,
+        )
 
 
 def create_user(
@@ -115,6 +162,33 @@ def login_headers(
     response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def create_unpaid_order(
+    session: Session,
+    *,
+    customer: User,
+    shop: Shop,
+    page_count: int = 1,
+    copies: int = 1,
+) -> Order:
+    """An order that is created but not paid, waiting for its payment window."""
+    upload = create_upload_row(session, customer=customer, page_count=page_count)
+    order, _payment = order_service.create_order(
+        session,
+        customer_id=customer.id,
+        request=OrderCreateRequest(
+            upload_id=upload.id,
+            shop_id=shop.id,
+            paper_size="A4",
+            color=False,
+            duplex=False,
+            copies=copies,
+        ),
+        idempotency_key=uuid.uuid4().hex,
+        gateway=FakeGateway(),
+    )
+    return order
 
 
 def create_paid_order(
