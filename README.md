@@ -135,6 +135,38 @@ Then sign in at `/admin/shops`. The panel approves and suspends shops, and
 keeps a log of every decision. It cannot read a customer's order or move
 money; see [ADR 014](docs/adr/014-admin-panel.md).
 
+### Managing the admin accounts themselves
+
+Admin accounts are managed from the command line, by whoever holds the
+server. There is no endpoint that lists or removes one.
+
+```bash
+# Who holds admin access
+docker compose run --rm api python -m app.cli list-admins
+
+# Revoke someone's access. It takes effect at once, not at token expiry:
+# both the login and every authenticated request check the account.
+docker compose run --rm api python -m app.cli deactivate-admin <email>
+
+# Give the access back
+docker compose run --rm api python -m app.cli activate-admin <email>
+
+# Delete an account that has never done anything
+docker compose run --rm api python -m app.cli delete-admin <email>
+```
+
+Deactivating is the normal way to remove access, and it is the better
+one. The account is kept, so the decisions it made stay attached to it in
+the moderation log, and the log is the reason the panel exists. A hard
+delete is only possible for an account with no recorded decision, no
+session, no order, no upload and no shop, because five tables point at
+`users.id` and none of them cascade.
+
+Two guards stop the obvious accidents. The last active admin cannot be
+deactivated or deleted, because that would leave nobody who can undo it
+from the panel; create another one first. And an account that has
+recorded a decision cannot be deleted at all.
+
 ### The same stack with HTTPS, the way it is deployed
 
 The production Compose file runs locally too, so the whole path can be

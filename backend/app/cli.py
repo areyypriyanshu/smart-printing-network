@@ -2,14 +2,15 @@ import argparse
 import logging
 import sys
 import uuid
+from collections.abc import Callable
 from typing import TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.logging import setup_logging
-from app.models import AdminAction, Shop, ShopRate, User
+from app.models import AdminAction, Order, RefreshToken, Shop, ShopRate, Upload, User
 from app.services import auth_service
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,157 @@ def list_shops(session: Session, pending_only: bool) -> int:
     return 0
 
 
+def list_admins(session: Session) -> int:
+    """List the admin accounts, so it is clear who holds elevated access.
+
+    Inactive accounts are listed too. An admin that has been deactivated
+    still has its decisions in the moderation log, so hiding it would
+    make the log harder to read, not easier.
+    """
+    rows = list(
+        session.execute(
+            select(
+                User,
+                func.count(AdminAction.id).label("actions"),
+            )
+            .outerjoin(AdminAction, AdminAction.admin_id == User.id)
+            .where(User.role == "admin")
+            .group_by(User.id)
+            .order_by(User.created_at.asc(), User.id.asc())
+        ).all()
+    )
+    if not rows:
+        print("There are no admin accounts.")
+        print("Create one with: python -m app.cli create-admin <email> <password>")
+        return 0
+    for user, actions in rows:
+        state = "active" if user.is_active else "deactivated"
+        print(f"{user.email}  {state}  {user.full_name}  {actions} decision(s)")
+        print(f"            created {user.created_at.isoformat()}")
+    active = sum(1 for user, _ in rows if user.is_active)
+    print(f"{len(rows)} admin account(s), {active} active.")
+    return 0
+
+
+def set_admin_active(session: Session, email: str, active: bool) -> int:
+    """Turn an admin account on or off.
+
+    Deactivating is the normal way to remove access, and it takes effect
+    at once: both the login and every authenticated request check
+    `is_active`, so an access token that was issued before the change
+    stops working immediately rather than at its expiry.
+
+    The account itself is kept. Its decisions stay in the moderation log,
+    and the log is the reason the admin panel exists.
+    """
+    user = session.scalar(select(User).where(User.email == email, User.role == "admin"))
+    if user is None:
+        print(f"No admin account with email {email}", file=sys.stderr)
+        return 1
+    if user.is_active == active:
+        state = "already active" if active else "already deactivated"
+        print(f"{email} is {state}.")
+        return 0
+    if not active and _active_admin_count(session) == 1:
+        # Deactivating the last admin leaves nobody who can undo it from
+        # the panel. It is still recoverable with create-admin, but the
+        # operator should mean to do it.
+        print(
+            f"{email} is the only active admin. Create another one before deactivating it.",
+            file=sys.stderr,
+        )
+        return 1
+    user.is_active = active
+    session.commit()
+    if active:
+        print(f"Reactivated admin account {email}")
+    else:
+        print(f"Deactivated admin account {email}. Its access is revoked now.")
+    return 0
+
+
+def delete_admin(session: Session, email: str) -> int:
+    """Delete an admin account outright.
+
+    Only possible for an account that has never done anything. Five
+    tables point at `users.id` and none of them cascade, so an account
+    with a decision, a shop, an order, an upload or a session cannot be
+    deleted without breaking one of them. Those accounts are deactivated
+    instead, and that is the better answer anyway, because the
+    moderation log is worth more than the tidiness of a missing row.
+    """
+    user = session.scalar(select(User).where(User.email == email, User.role == "admin"))
+    if user is None:
+        print(f"No admin account with email {email}", file=sys.stderr)
+        return 1
+    blockers = _admin_blockers(session, user.id)
+    if blockers:
+        print(
+            f"{email} cannot be deleted because it still has {blockers}. "
+            f"Deactivate it instead: python -m app.cli deactivate-admin {email}",
+            file=sys.stderr,
+        )
+        return 1
+    if user.is_active and _active_admin_count(session) == 1:
+        print(
+            f"{email} is the only active admin. Create another one before deleting it.",
+            file=sys.stderr,
+        )
+        return 1
+    session.delete(user)
+    session.commit()
+    print(f"Deleted admin account {email}")
+    return 0
+
+
+def _active_admin_count(session: Session) -> int:
+    return (
+        session.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.role == "admin", User.is_active.is_(True))
+        )
+        or 0
+    )
+
+
+def _admin_blockers(session: Session, admin_id: uuid.UUID) -> str:
+    """What, if anything, still points at this admin account.
+
+    Returns a short phrase naming the things, or an empty string when the
+    account is pristine and can be deleted.
+    """
+    found: list[str] = []
+    counts = {
+        "recorded decision": session.scalar(
+            select(func.count()).select_from(AdminAction).where(AdminAction.admin_id == admin_id)
+        )
+        or 0,
+        "open session": session.scalar(
+            select(func.count())
+            .select_from(RefreshToken)
+            .where(RefreshToken.user_id == admin_id, RefreshToken.revoked_at.is_(None))
+        )
+        or 0,
+        "order": session.scalar(
+            select(func.count()).select_from(Order).where(Order.customer_id == admin_id)
+        )
+        or 0,
+        "upload": session.scalar(
+            select(func.count()).select_from(Upload).where(Upload.customer_id == admin_id)
+        )
+        or 0,
+        "shop": session.scalar(
+            select(func.count()).select_from(Shop).where(Shop.owner_id == admin_id)
+        )
+        or 0,
+    }
+    for label, count in counts.items():
+        if count:
+            found.append(f"{count} {label}{'' if count == 1 else 's'}")
+    return ", ".join(found)
+
+
 def create_admin(session: Session, email: str, password: str, full_name: str) -> int:
     existing = session.scalar(select(User).where(User.email == email))
     if existing is not None:
@@ -221,7 +373,15 @@ def _admin_id_for(session: Session, email: str | None) -> uuid.UUID | None:
     return user.id
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    session_factory: Callable[[], Session] = SessionLocal,
+) -> int:
+    """Run a command.
+
+    The session factory is a parameter so the commands can be tested
+    against the test database instead of the live one.
+    """
     parser = argparse.ArgumentParser(
         prog="app.cli", description="Smart Printing Network backend CLI"
     )
@@ -253,11 +413,28 @@ def main(argv: list[str] | None = None) -> int:
         "--name", default="Administrator", help="the name shown in the admin panel"
     )
 
+    subparsers.add_parser("list-admins", help="list the admin accounts")
+
+    deactivate_parser = subparsers.add_parser(
+        "deactivate-admin", help="revoke an admin's access, keeping the account"
+    )
+    deactivate_parser.add_argument("email", help="admin account email")
+
+    activate_parser = subparsers.add_parser(
+        "activate-admin", help="give an admin their access back"
+    )
+    activate_parser.add_argument("email", help="admin account email")
+
+    delete_parser = subparsers.add_parser(
+        "delete-admin", help="delete an admin account that has never done anything"
+    )
+    delete_parser.add_argument("email", help="admin account email")
+
     args = parser.parse_args(argv)
 
     setup_logging()
 
-    with SessionLocal() as session:
+    with session_factory() as session:
         if args.command == "seed":
             seed(session)
             return 0
@@ -271,6 +448,14 @@ def main(argv: list[str] | None = None) -> int:
             return list_shops(session, pending_only=bool(args.pending))
         if args.command == "create-admin":
             return create_admin(session, str(args.email), str(args.password), str(args.name))
+        if args.command == "list-admins":
+            return list_admins(session)
+        if args.command == "deactivate-admin":
+            return set_admin_active(session, str(args.email), active=False)
+        if args.command == "activate-admin":
+            return set_admin_active(session, str(args.email), active=True)
+        if args.command == "delete-admin":
+            return delete_admin(session, str(args.email))
     return 2
 
 
