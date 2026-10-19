@@ -43,6 +43,20 @@ describe("LoginPage", () => {
     expect(screen.getByText("Enter your password")).toBeInTheDocument();
   });
 
+  it("toggles password visibility", async () => {
+    const user = userEvent.setup();
+    renderLoginPage();
+
+    const password = await screen.findByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
+  });
+
   it("shows an alert for wrong credentials", async () => {
     server.use(
       http.post("/api/v1/auth/login", () =>

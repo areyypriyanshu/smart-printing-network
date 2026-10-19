@@ -3,9 +3,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 
-import { Alert, Button, TextField } from "../../components/ui";
+import { Alert, Button, PasswordField, TextField } from "../../components/ui";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { registerRequest } from "./api";
+import { AuthLayout } from "./auth-layout";
 import { registerSchema, type RegisterValues } from "./schemas";
 
 export function RegisterPage() {
@@ -40,8 +41,21 @@ export function RegisterPage() {
   });
 
   return (
-    <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-ink">Create your account</h1>
+    <AuthLayout
+      title="Create your account"
+      subtitle="Save your uploads and order prints in a few steps."
+      footer={
+        <p className="border-t border-hairline pt-6 text-sm text-steel">
+          Already have an account?{" "}
+          <Link
+            className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
+            to="/login"
+          >
+            Sign in
+          </Link>
+        </p>
+      }
+    >
       {serverError !== null && <Alert>{serverError}</Alert>}
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <TextField
@@ -57,9 +71,8 @@ export function RegisterPage() {
           error={errors.email?.message}
           {...register("email")}
         />
-        <TextField
+        <PasswordField
           label="Password"
-          type="password"
           autoComplete="new-password"
           error={errors.password?.message}
           {...register("password")}
@@ -72,12 +85,6 @@ export function RegisterPage() {
           Create account
         </Button>
       </form>
-      <p className="text-sm text-steel">
-        Already have an account?{" "}
-        <Link className="text-primary underline" to="/login">
-          Sign in
-        </Link>
-      </p>
-    </section>
+    </AuthLayout>
   );
 }

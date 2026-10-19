@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useLocation, useNavigate } from "react-router";
 
-import { Alert, Button, TextField } from "../../components/ui";
+import { Alert, Button, PasswordField, TextField } from "../../components/ui";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
+import { AuthLayout } from "./auth-layout";
 import { loginSchema, type LoginValues } from "./schemas";
 import { useSession } from "./session";
 
@@ -47,8 +48,32 @@ export function LoginPage() {
   });
 
   return (
-    <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-ink">Sign in</h1>
+    <AuthLayout
+      title="Sign in"
+      subtitle="Order prints from verified shops near you."
+      footer={
+        <div className="flex flex-col gap-2 border-t border-hairline pt-6">
+          <p className="text-sm text-steel">
+            New customer?{" "}
+            <Link
+              className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
+              to="/register"
+            >
+              Create an account
+            </Link>
+          </p>
+          <p className="text-sm text-steel">
+            Run a print shop?{" "}
+            <Link
+              className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
+              to="/register-vendor"
+            >
+              Register your shop
+            </Link>
+          </p>
+        </div>
+      }
+    >
       {state?.registered === true && (
         <Alert variant="success">Account created. Sign in to continue.</Alert>
       )}
@@ -61,9 +86,8 @@ export function LoginPage() {
           error={errors.email?.message}
           {...register("email")}
         />
-        <TextField
+        <PasswordField
           label="Password"
-          type="password"
           autoComplete="current-password"
           error={errors.password?.message}
           {...register("password")}
@@ -72,18 +96,6 @@ export function LoginPage() {
           Sign in
         </Button>
       </form>
-      <p className="text-sm text-steel">
-        New customer?{" "}
-        <Link className="text-primary underline" to="/register">
-          Create an account
-        </Link>
-      </p>
-      <p className="text-sm text-steel">
-        Run a print shop?{" "}
-        <Link className="text-primary underline" to="/register-vendor">
-          Register your shop
-        </Link>
-      </p>
-    </section>
+    </AuthLayout>
   );
 }

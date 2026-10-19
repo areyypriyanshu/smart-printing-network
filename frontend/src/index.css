@@ -98,13 +98,13 @@
   background-size: 10px 10px;
 }
 
-.sunset-stripe {
+/* CMYK calibration strip used as a registration accent. */
+.cmyk-stripe {
   background: linear-gradient(
     90deg,
-    #fa520f 0%,
-    #ffa110 28%,
-    #ffb83e 55%,
-    #ffd900 78%,
-    #fff8e0 100%
+    #00aeef 0% 25%,
+    #ec008c 25% 50%,
+    #ffd400 50% 75%,
+    #231f20 75% 100%
   );
 }
