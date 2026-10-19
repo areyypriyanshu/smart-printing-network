@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -13,12 +14,14 @@ from app.errors import (
     Forbidden,
     InvalidTransition,
     NotFound,
+    PaymentGatewayError,
     PriceChanged,
     RateNotSet,
     ShopUnavailable,
     UploadAlreadyUsed,
 )
-from app.models import Order, OrderEvent, Shop, ShopRate, Upload
+from app.gateways.payments import GatewayError, PaymentGateway
+from app.models import Order, OrderEvent, Payment, Shop, ShopRate, Upload
 from app.schemas.order import (
     OrderCreateRequest,
     OrderDetailResponse,
@@ -28,6 +31,8 @@ from app.schemas.order import (
 )
 from app.services.upload_service import get_upload
 
+logger = logging.getLogger(__name__)
+
 
 def create_order(
     session: Session,
@@ -35,14 +40,18 @@ def create_order(
     customer_id: uuid.UUID,
     request: OrderCreateRequest,
     idempotency_key: str,
-) -> Order:
+    gateway: PaymentGateway,
+) -> tuple[Order, Payment]:
     existing = session.scalar(
         select(Order).where(
             Order.customer_id == customer_id, Order.idempotency_key == idempotency_key
         )
     )
     if existing is not None:
-        return existing
+        payment = session.scalar(select(Payment).where(Payment.order_id == existing.id))
+        if payment is None:
+            raise Conflict("The order exists but its payment is missing")
+        return existing, payment
 
     upload = get_upload(session, upload_id=request.upload_id, customer_id=customer_id)
     already_used = session.scalar(select(Order.id).where(Order.upload_id == upload.id))
@@ -104,7 +113,34 @@ def create_order(
     upload.delete_after = None
     session.commit()
     session.refresh(order)
-    return order
+
+    try:
+        gateway_order = gateway.create_order(
+            amount_paise=order.price_paise, receipt=str(order.id), currency="INR"
+        )
+    except GatewayError as exc:
+        logger.error("order_gateway_error", extra={"order_id": str(order.id)})
+        transition(
+            session,
+            order_id=order.id,
+            to_status="CANCELLED",
+            actor_type="system",
+            reason="gateway_error",
+        )
+        raise PaymentGatewayError("The payment provider could not start the payment") from exc
+
+    payment = Payment(
+        order_id=order.id,
+        provider=gateway_order.provider,
+        provider_order_id=gateway_order.provider_order_id,
+        amount_paise=gateway_order.amount_paise,
+        currency=gateway_order.currency,
+        status="CREATED",
+    )
+    session.add(payment)
+    session.commit()
+    session.refresh(payment)
+    return order, payment
 
 
 def transition(

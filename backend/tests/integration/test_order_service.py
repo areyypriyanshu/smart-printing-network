@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 from app.errors import Forbidden, InvalidTransition, PriceChanged, UploadAlreadyUsed
+from app.gateways.payments import FakeGateway
 from app.models import Order, OrderEvent, ShopRate, Upload
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -43,13 +44,17 @@ def _seed(session: Session) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     return customer.id, shop.id, upload.id
 
 
-def _create(session: Session, customer_id: uuid.UUID, shop_id: uuid.UUID, upload_id: uuid.UUID):
-    return order_service.create_order(
+def _create(
+    session: Session, customer_id: uuid.UUID, shop_id: uuid.UUID, upload_id: uuid.UUID
+) -> Order:
+    order, _payment = order_service.create_order(
         session,
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="key-1",
+        gateway=FakeGateway(),
     )
+    return order
 
 
 def test_create_order_snapshots_price_and_options(db_session: Session) -> None:
@@ -94,11 +99,12 @@ def test_duplicate_idempotency_key_returns_the_same_order(db_session: Session) -
     customer_id, shop_id, upload_id = _seed(db_session)
 
     first = _create(db_session, customer_id, shop_id, upload_id)
-    second = order_service.create_order(
+    second, _payment = order_service.create_order(
         db_session,
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="key-1",
+        gateway=FakeGateway(),
     )
 
     assert second.id == first.id
@@ -115,6 +121,7 @@ def test_expected_price_mismatch_raises_price_changed(db_session: Session) -> No
             customer_id=customer_id,
             request=_request(upload_id, shop_id, expected_price_paise=EXPECTED_PRICE + 1),
             idempotency_key="key-1",
+            gateway=FakeGateway(),
         )
 
     assert error.value.details["current_price_paise"] == EXPECTED_PRICE
@@ -152,6 +159,7 @@ def test_second_order_for_the_same_upload_is_rejected(db_session: Session) -> No
             customer_id=customer_id,
             request=_request(upload_id, shop_id),
             idempotency_key="key-2",
+            gateway=FakeGateway(),
         )
 
 

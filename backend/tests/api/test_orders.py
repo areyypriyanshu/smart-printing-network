@@ -56,11 +56,15 @@ def test_create_order_returns_the_order_with_a_price(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["status"] == "PENDING_PAYMENT"
-    assert body["price_paise"] == PAGES * COPIES * BASE_PAISE
-    assert body["page_count"] == PAGES
-    assert body["pickup_code"] is None
-    assert body["order_no"] > 0
+    assert body["order"]["status"] == "PENDING_PAYMENT"
+    assert body["order"]["price_paise"] == PAGES * COPIES * BASE_PAISE
+    assert body["order"]["page_count"] == PAGES
+    assert body["order"]["pickup_code"] is None
+    assert body["order"]["order_no"] > 0
+    assert body["payment"]["provider"] == "fake"
+    assert body["payment"]["amount_paise"] == PAGES * COPIES * BASE_PAISE
+    assert body["payment"]["currency"] == "INR"
+    assert body["payment"]["provider_order_id"].startswith("fake_order_")
 
 
 def test_create_order_requires_an_idempotency_key(client: TestClient, db_session: Session) -> None:
@@ -92,7 +96,7 @@ def test_duplicate_idempotency_key_creates_one_order(
 
     assert first.status_code == 201
     assert second.status_code == 201
-    assert first.json()["id"] == second.json()["id"]
+    assert first.json()["order"]["id"] == second.json()["order"]["id"]
     orders = list(db_session.scalars(select(Order).where(Order.customer_id == customer_id)))
     assert len(orders) == 1
 
@@ -192,7 +196,7 @@ def test_order_detail_is_hidden_from_other_customers(
     )
     snooper_headers = login_headers(client, "snooper@example.com")
 
-    response = client.get(f"{ORDERS}/{created.json()['id']}", headers=snooper_headers)
+    response = client.get(f"{ORDERS}/{created.json()['order']['id']}", headers=snooper_headers)
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
@@ -207,7 +211,7 @@ def test_order_detail_contains_the_timeline(client: TestClient, db_session: Sess
         json=_payload(upload_id, shop_id),
     )
 
-    response = client.get(f"{ORDERS}/{created.json()['id']}", headers=headers)
+    response = client.get(f"{ORDERS}/{created.json()['order']['id']}", headers=headers)
 
     assert response.status_code == 200
     body = response.json()

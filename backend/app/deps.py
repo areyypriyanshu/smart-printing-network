@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import security
 from app.db import get_db
 from app.errors import Forbidden, NotFound, Unauthenticated
+from app.gateways.payments import PaymentGateway
 from app.gateways.storage import Storage
 from app.models import Shop, User
 
@@ -47,6 +48,11 @@ def get_customer(user: User = Depends(_customer_only)) -> User:
 def get_storage(request: Request) -> Storage:
     storage: Storage = request.app.state.storage
     return storage
+
+
+def get_payment_gateway(request: Request) -> PaymentGateway:
+    gateway: PaymentGateway = request.app.state.payment_gateway
+    return gateway
 
 
 def get_current_shop(

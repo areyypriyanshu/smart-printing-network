@@ -112,6 +112,16 @@ class InvalidTransition(AppError):
     status_code = 409
 
 
+class PaymentGatewayError(AppError):
+    code = "PAYMENT_GATEWAY_ERROR"
+    status_code = 502
+
+
+class WebhookSignatureInvalid(AppError):
+    code = "WEBHOOK_SIGNATURE_INVALID"
+    status_code = 400
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "error": {

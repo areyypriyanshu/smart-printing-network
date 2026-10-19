@@ -43,6 +43,19 @@ class OrderEventResponse(BaseModel):
     at: datetime
 
 
+class PaymentCheckoutResponse(BaseModel):
+    provider: str
+    provider_order_id: str
+    amount_paise: int
+    currency: str
+    key_id: str | None = None
+
+
+class OrderCreateResponse(BaseModel):
+    order: OrderResponse
+    payment: PaymentCheckoutResponse
+
+
 class OrderDetailResponse(BaseModel):
     order: OrderResponse
     events: list[OrderEventResponse]

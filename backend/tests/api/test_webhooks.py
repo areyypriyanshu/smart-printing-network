@@ -1,0 +1,265 @@
+import json
+import uuid
+
+import pytest
+from app.gateways.payments import FakeGateway
+from app.models import Order, OrderEvent, Payment, WebhookEvent
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from tests.factories import (
+    create_full_rate_table,
+    create_shop,
+    create_upload_row,
+    create_user,
+    login_headers,
+)
+
+ORDERS = "/api/v1/orders"
+WEBHOOK = "/api/v1/webhooks/razorpay"
+SIMULATE = "/api/v1/testing/simulate-payment"
+BASE_PAISE = 200
+PAGES = 5
+COPIES = 2
+PRICE = PAGES * COPIES * BASE_PAISE
+GATEWAY = FakeGateway()
+
+
+def _seed(session: Session) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    customer = create_user(session, email="customer@example.com")
+    vendor = create_user(session, email="vendor@example.com", role="vendor")
+    shop = create_shop(session, owner=vendor)
+    create_full_rate_table(session, shop, base_paise=BASE_PAISE)
+    upload = create_upload_row(session, customer=customer, page_count=PAGES)
+    return customer.id, shop.id, upload.id
+
+
+def _create_order(client: TestClient, session: Session) -> dict:
+    _customer_id, shop_id, upload_id = _seed(session)
+    headers = login_headers(client, "customer@example.com")
+    response = client.post(
+        ORDERS,
+        headers={**headers, "Idempotency-Key": "key-1"},
+        json={
+            "upload_id": str(upload_id),
+            "shop_id": str(shop_id),
+            "paper_size": "A4",
+            "color": False,
+            "duplex": False,
+            "copies": COPIES,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def _paid_payload(provider_order_id: str, *, amount: int, currency: str = "INR") -> bytes:
+    return json.dumps(
+        {
+            "event": "order.paid",
+            "payload": {
+                "payment": {
+                    "id": "pay_fake_1",
+                    "order_id": provider_order_id,
+                    "amount": amount,
+                    "currency": currency,
+                }
+            },
+        }
+    ).encode()
+
+
+def _post_webhook(
+    client: TestClient, raw_body: bytes, *, event_id: str, signature: str | None = None
+):
+    return client.post(
+        WEBHOOK,
+        content=raw_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Razorpay-Event-Id": event_id,
+            "X-Razorpay-Signature": signature if signature is not None else GATEWAY.sign(raw_body),
+        },
+    )
+
+
+def test_webhook_with_a_forged_signature_is_rejected(
+    client: TestClient, db_session: Session
+) -> None:
+    created = _create_order(client, db_session)
+    provider_order_id = created["payment"]["provider_order_id"]
+    raw_body = _paid_payload(provider_order_id, amount=PRICE)
+
+    response = _post_webhook(client, raw_body, event_id="evt_1", signature="0" * 64)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "WEBHOOK_SIGNATURE_INVALID"
+    order = db_session.get(Order, uuid.UUID(created["order"]["id"]))
+    assert order is not None
+    assert order.status == "PENDING_PAYMENT"
+
+
+def test_signed_webhook_marks_the_order_paid(client: TestClient, db_session: Session) -> None:
+    created = _create_order(client, db_session)
+    provider_order_id = created["payment"]["provider_order_id"]
+    raw_body = _paid_payload(provider_order_id, amount=PRICE)
+
+    response = _post_webhook(client, raw_body, event_id="evt_1")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "paid"
+    order = db_session.get(Order, uuid.UUID(created["order"]["id"]))
+    assert order is not None
+    assert order.status == "PAID"
+    assert order.paid_at is not None
+    assert order.pickup_code is not None
+    assert len(order.pickup_code) == 6
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "CAPTURED"
+    assert payment.provider_payment_id == "pay_fake_1"
+
+
+def test_duplicate_webhook_delivery_is_a_no_op(client: TestClient, db_session: Session) -> None:
+    created = _create_order(client, db_session)
+    provider_order_id = created["payment"]["provider_order_id"]
+    raw_body = _paid_payload(provider_order_id, amount=PRICE)
+
+    first = _post_webhook(client, raw_body, event_id="evt_1")
+    second = _post_webhook(client, raw_body, event_id="evt_1")
+
+    assert first.status_code == 200
+    assert first.json()["status"] == "paid"
+    assert second.status_code == 200
+    assert second.json()["status"] == "duplicate"
+    events = list(
+        db_session.scalars(
+            select(OrderEvent).where(OrderEvent.order_id == uuid.UUID(created["order"]["id"]))
+        )
+    )
+    assert [event.to_status for event in events] == ["PENDING_PAYMENT", "PAID"]
+    assert (
+        len(list(db_session.scalars(select(WebhookEvent).where(WebhookEvent.event_id == "evt_1"))))
+        == 1
+    )
+
+
+def test_webhook_with_a_wrong_amount_does_not_mark_the_order_paid(
+    client: TestClient, db_session: Session
+) -> None:
+    created = _create_order(client, db_session)
+    provider_order_id = created["payment"]["provider_order_id"]
+    raw_body = _paid_payload(provider_order_id, amount=PRICE + 1)
+
+    response = _post_webhook(client, raw_body, event_id="evt_1")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "amount_mismatch"
+    order = db_session.get(Order, uuid.UUID(created["order"]["id"]))
+    assert order is not None
+    assert order.status == "PENDING_PAYMENT"
+    assert order.pickup_code is None
+
+
+def test_webhook_with_a_wrong_currency_does_not_mark_the_order_paid(
+    client: TestClient, db_session: Session
+) -> None:
+    created = _create_order(client, db_session)
+    provider_order_id = created["payment"]["provider_order_id"]
+    raw_body = _paid_payload(provider_order_id, amount=PRICE, currency="USD")
+
+    response = _post_webhook(client, raw_body, event_id="evt_1")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "amount_mismatch"
+    order = db_session.get(Order, uuid.UUID(created["order"]["id"]))
+    assert order is not None
+    assert order.status == "PENDING_PAYMENT"
+
+
+def test_late_payment_on_an_expired_order_queues_a_refund(
+    client: TestClient, db_session: Session
+) -> None:
+    created = _create_order(client, db_session)
+    order_id = uuid.UUID(created["order"]["id"])
+    provider_order_id = created["payment"]["provider_order_id"]
+    order = db_session.get(Order, order_id)
+    assert order is not None
+    from app.services import order_service
+
+    order_service.transition(
+        db_session, order_id=order_id, to_status="EXPIRED", actor_type="system"
+    )
+    raw_body = _paid_payload(provider_order_id, amount=PRICE)
+
+    response = _post_webhook(client, raw_body, event_id="evt_late")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "refund_pending"
+    db_session.refresh(order)
+    assert order.status == "EXPIRED"
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order_id))
+    assert payment is not None
+    assert payment.status == "REFUND_PENDING"
+
+
+def test_unknown_webhook_event_is_recorded_and_ignored(
+    client: TestClient, db_session: Session
+) -> None:
+    _create_order(client, db_session)
+    raw_body = json.dumps({"event": "something.else", "payload": {}}).encode()
+
+    response = _post_webhook(client, raw_body, event_id="evt_other")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ignored"
+    event = db_session.get(WebhookEvent, "evt_other")
+    assert event is not None
+    assert event.processed_at is not None
+
+
+def test_webhook_without_an_event_id_is_rejected(client: TestClient, db_session: Session) -> None:
+    _create_order(client, db_session)
+    raw_body = json.dumps({"event": "order.paid"}).encode()
+
+    response = client.post(
+        WEBHOOK,
+        content=raw_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Razorpay-Signature": GATEWAY.sign(raw_body),
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_simulate_payment_endpoint_marks_the_order_paid(
+    client: TestClient, db_session: Session
+) -> None:
+    created = _create_order(client, db_session)
+    order_id = created["order"]["id"]
+
+    response = client.post(SIMULATE, json={"order_id": order_id})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "paid"
+    order = db_session.get(Order, uuid.UUID(order_id))
+    assert order is not None
+    assert order.status == "PAID"
+    assert order.pickup_code is not None
+
+
+def test_simulate_payment_is_disabled_in_production(
+    client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = _create_order(client, db_session)
+    monkeypatch.setattr(
+        "app.routers.webhooks.get_settings",
+        lambda: type("Settings", (), {"env": "production", "payment_provider": "fake"})(),
+    )
+
+    response = client.post(SIMULATE, json={"order_id": created["order"]["id"]})
+
+    assert response.status_code == 404

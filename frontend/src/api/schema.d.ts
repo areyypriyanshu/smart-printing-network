@@ -192,6 +192,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/testing/simulate-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Simulate Payment */
+        post: operations["simulate_payment_api_v1_testing_simulate_payment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/uploads": {
         parameters: {
             query?: never;
@@ -260,6 +277,23 @@ export interface paths {
         head?: never;
         /** Update Shop */
         patch: operations["update_shop_api_v1_vendor_shop_patch"];
+        trace?: never;
+    };
+    "/api/v1/webhooks/razorpay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Razorpay Webhook */
+        post: operations["razorpay_webhook_api_v1_webhooks_razorpay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/healthz": {
@@ -359,6 +393,11 @@ export interface components {
              */
             upload_id: string;
         };
+        /** OrderCreateResponse */
+        OrderCreateResponse: {
+            order: components["schemas"]["OrderResponse"];
+            payment: components["schemas"]["PaymentCheckoutResponse"];
+        };
         /** OrderDetailResponse */
         OrderDetailResponse: {
             /** Events */
@@ -436,6 +475,19 @@ export interface components {
              * Format: uuid
              */
             upload_id: string;
+        };
+        /** PaymentCheckoutResponse */
+        PaymentCheckoutResponse: {
+            /** Amount Paise */
+            amount_paise: number;
+            /** Currency */
+            currency: string;
+            /** Key Id */
+            key_id?: string | null;
+            /** Provider */
+            provider: string;
+            /** Provider Order Id */
+            provider_order_id: string;
         };
         /** QuoteRequest */
         QuoteRequest: {
@@ -561,6 +613,14 @@ export interface components {
             name: string;
             /** Rates */
             rates: components["schemas"]["RateItem"][];
+        };
+        /** SimulatePaymentRequest */
+        SimulatePaymentRequest: {
+            /**
+             * Order Id
+             * Format: uuid
+             */
+            order_id: string;
         };
         /** UploadResponse */
         UploadResponse: {
@@ -903,7 +963,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrderResponse"];
+                    "application/json": components["schemas"]["OrderCreateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1031,6 +1091,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShopResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simulate_payment_api_v1_testing_simulate_payment_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulatePaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -1201,6 +1296,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VendorShopResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    razorpay_webhook_api_v1_webhooks_razorpay_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Razorpay-Signature"?: string;
+                "X-Razorpay-Event-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
