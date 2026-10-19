@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.gateways.payments import CashGateway
+from app.gateways.payments import CashGateway, GatewayError
 from app.models import Order, OrderEvent, Payment, Upload
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -306,3 +306,39 @@ def test_a_cash_order_keeps_its_place_in_the_queue(db_session: Session) -> None:
 
     assert [item.id for item in queue.items] == [earlier.id, later.id]
     assert all(item.paid_at is None for item in queue.items)
+
+
+def test_a_gateway_failure_cancels_a_cash_order(db_session: Session) -> None:
+    """A cash order that cannot be booked is cancelled, not left hanging."""
+    from app.errors import PaymentGatewayError
+    from app.gateways.payments.base import GatewayOrder, GatewayRefund
+
+    class BrokenCashGateway:
+        provider = "cash"
+        checkout_key_id = None
+
+        def create_order(self, **kwargs: object) -> GatewayOrder:
+            raise GatewayError("the counter could not be reached")
+
+        def verify_webhook_signature(self, *, raw_body: bytes, signature: str) -> bool:
+            return False
+
+        def refund(self, **kwargs: object) -> GatewayRefund:
+            raise GatewayError("never")
+
+    customer, shop = _seed(db_session)
+    upload = create_upload_row(db_session, customer=customer, page_count=1)
+
+    with pytest.raises(PaymentGatewayError):
+        order_service.create_order(
+            db_session,
+            customer_id=customer.id,
+            request=_cash_request(upload.id, shop.id),
+            idempotency_key=uuid.uuid4().hex,
+            gateway=BrokenCashGateway(),  # type: ignore[arg-type]
+        )
+
+    order = db_session.scalar(select(Order).where(Order.customer_id == customer.id))
+    assert order is not None
+    assert order.status == "CANCELLED"
+    assert order.status_reason == "gateway_error"

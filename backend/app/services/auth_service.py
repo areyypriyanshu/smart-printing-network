@@ -75,6 +75,26 @@ def register_vendor(
     return user, shop
 
 
+def register_admin(session: Session, *, email: str, password: str, full_name: str) -> User:
+    """Create an admin account.
+
+    There is deliberately no endpoint that calls this. An admin is the
+    person who decides which shops are allowed to take orders, so an open
+    signup for one would hand that decision to whoever found the form
+    first. Admin accounts are created from the command line by the
+    operator, who already has the server.
+    """
+    user = User(
+        email=email,
+        password_hash=security.hash_password(password),
+        full_name=full_name,
+        role="admin",
+    )
+    session.add(user)
+    _commit_or_email_taken(session)
+    return user
+
+
 def login(session: Session, *, email: str, password: str) -> tuple[User, TokenBundle]:
     user = session.scalar(select(User).where(User.email == email))
     if user is None or not security.verify_password(password, user.password_hash):

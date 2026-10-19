@@ -91,7 +91,6 @@ build.
 | Machine learning for price or wait estimates | Price is arithmetic. Wait estimates start as a rolling median and are only replaced by a model if they measurably lose to it on real data. |
 | Vendor payouts, GST invoicing | Marketplace money movement needs KYC, split payments and legal review. |
 | Email and SMS notifications | In app status only, for now. |
-| An admin interface | Shop verification is a CLI command. |
 | Page ranges, binding, multi file orders | Whole document printing only. |
 | Kubernetes, Redis, a managed database | One instance is enough, and each would add cost and failure modes without users to justify them. |
 
@@ -101,6 +100,24 @@ requirements document. The two decisions that shape the later phases are
 a neural network for the quality checker, and
 [ADR 007](adr/007-polling-before-websockets.md), which rules out a
 WebSocket until there is something worth pushing.
+
+### The admin panel is narrow on purpose
+
+There is an admin role, and it can do two things: approve a shop and
+suspend a shop. It cannot read a customer's order, a customer's file, or
+any money, and there is no admin endpoint that could.
+
+That restraint is the point. A verification queue is the job, and every
+table that becomes browsable is a table whose data can leak. An admin
+account is created from the command line, never over HTTP, because an
+admin is the person who decides which shops are allowed to take orders.
+
+A suspension takes a shop off the market without touching its existing
+orders: a customer who has already paid is owed that printout, and the
+shop that is printing it still has to be able to finish it. Every
+decision is recorded in `admin_actions`, with the admin, the shop, the
+time and the reason.
+[ADR 014](adr/014-admin-panel.md)
 
 ---
 

@@ -20,6 +20,9 @@ const MESSAGES: Record<string, string> = {
   PICKUP_CODE_INVALID: "Code does not match.",
   UPLOAD_ALREADY_USED: "This file is already attached to an order.",
   INVALID_TRANSITION: "This order cannot change at this point.",
+  SHOP_ALREADY_VERIFIED: "This shop is already approved and taking orders.",
+  SHOP_NOT_VERIFIED:
+    "This shop was never approved, so there is nothing to suspend.",
   PAYMENT_GATEWAY_ERROR:
     "The payment provider could not start the payment. Try again shortly.",
   WEBHOOK_SIGNATURE_INVALID: "The payment notification could not be verified.",

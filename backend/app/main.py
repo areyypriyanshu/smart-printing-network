@@ -11,7 +11,17 @@ from app.gateways.payments import build_payment_gateway
 from app.gateways.storage import S3Storage
 from app.logging import RequestIdMiddleware, setup_logging
 from app.rate_limit import RateLimiter
-from app.routers import auth, health, orders, quotes, shops, uploads, vendor, webhooks
+from app.routers import (
+    admin,
+    auth,
+    health,
+    orders,
+    quotes,
+    shops,
+    uploads,
+    vendor,
+    webhooks,
+)
 
 API_PREFIX = "/api/v1"
 
@@ -41,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(uploads.router, prefix=API_PREFIX)
     app.include_router(quotes.router, prefix=API_PREFIX)
     app.include_router(orders.router, prefix=API_PREFIX)
+    app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(webhooks.router, prefix=API_PREFIX)
     # Shadowing the method on the instance is the documented way to change
     # the OpenAPI document FastAPI produces.

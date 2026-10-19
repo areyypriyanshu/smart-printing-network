@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router";
 
 import { Layout } from "./components/Layout";
 import { NotFoundPage } from "./components/StatusPages";
+import { AdminShopsPage } from "./features/admin";
 import {
   LoginPage,
   RegisterPage,
@@ -91,6 +92,16 @@ export function AppRoutes() {
             <RequireAuth>
               <RequireRole role="vendor">
                 <VendorSettingsPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/shops"
+          element={
+            <RequireAuth>
+              <RequireRole role="admin">
+                <AdminShopsPage />
               </RequireRole>
             </RequireAuth>
           }
