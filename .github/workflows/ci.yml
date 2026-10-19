@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.6
+        env:
+          POSTGRES_USER: spn
+          POSTGRES_PASSWORD: spn
+          POSTGRES_DB: spn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U spn -d spn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://spn:spn@localhost:5432/spn
+      JWT_SECRET: ci-placeholder-not-a-real-secret-0123456789
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.13.1"
+          enable-cache: true
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --frozen
+      - name: Lint
+        working-directory: backend
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Type check
+        working-directory: backend
+        run: uv run mypy app
+      - name: Import contracts
+        working-directory: backend
+        run: uv run lint-imports
+      - name: Unit tests
+        working-directory: backend
+        run: uv run pytest tests/unit
+      - name: Migration up, down, up
+        working-directory: backend
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run alembic check
+      - name: API tests
+        working-directory: backend
+        run: uv run pytest tests/api
+      - name: Integration tests
+        working-directory: backend
+        run: uv run pytest tests/integration
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint and format
+        run: npm run lint && npm run format:check
+      - name: Type check
+        run: npm run typecheck
+      - name: Component tests
+        run: npm run test
+      - name: Build
+        run: npm run build
+
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.13.1"
+          enable-cache: true
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --frozen
+      - name: Regenerate types and check for drift
+        run: |
+          cd backend && uv run python scripts/export_openapi.py
+          cd ../frontend && npm ci && npx openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts
+          cd .. && git status --porcelain frontend/src/api/schema.d.ts
+          git diff --exit-code frontend/src/api/schema.d.ts
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --redact --no-banner --verbose
