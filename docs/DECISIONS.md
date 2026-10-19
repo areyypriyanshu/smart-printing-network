@@ -25,7 +25,8 @@ verified against the **raw request body** with a constant time
 comparison, deduplicated by the provider's event id, and checked for the
 amount and the currency before anything is marked as paid. A late payment
 on an expired order is refunded automatically.
-[ADR 004](adr/004-webhook-is-the-source-of-truth.md)
+[ADR 004](adr/004-webhook-is-the-source-of-truth.md),
+[ADR 005](adr/005-text-and-check-constraints.md)
 
 ### 2. One function changes an order's status, and the database checks the price
 
@@ -62,7 +63,8 @@ the standard library rather than adding a dependency, and `FakeGateway`
 signs real HMAC webhooks. The whole test suite, the local stack and the
 demo run against the fake, so the money path is exercised the same way in
 every environment.
-[ADR 009](adr/009-payment-gateway-interface.md)
+[ADR 009](adr/009-payment-gateway-interface.md),
+[ADR 010](adr/010-price-invariant-enforced-by-the-database.md)
 
 ### 5. Background work is database driven, with no broker
 
@@ -71,7 +73,8 @@ refunds and deleting old files are four functions that query Postgres,
 claim rows with `FOR UPDATE SKIP LOCKED`, and update them conditionally.
 There is no Redis, no Celery and no separate queue to run, monitor or
 debug. A second worker is safe by construction.
-[ADR 003](adr/003-database-driven-jobs.md)
+[ADR 003](adr/003-database-driven-jobs.md),
+[ADR 008](adr/008-single-instance-docker-compose.md)
 
 ---
 
@@ -93,7 +96,11 @@ build.
 | Kubernetes, Redis, a managed database | One instance is enough, and each would add cost and failure modes without users to justify them. |
 
 The full list of non goals, with the reasoning, is in the product
-requirements document.
+requirements document. The two decisions that shape the later phases are
+[ADR 006](adr/006-classical-image-analysis-not-a-cnn.md), which rules out
+a neural network for the quality checker, and
+[ADR 007](adr/007-polling-before-websockets.md), which rules out a
+WebSocket until there is something worth pushing.
 
 ---
 
