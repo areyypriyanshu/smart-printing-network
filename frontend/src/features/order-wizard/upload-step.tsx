@@ -7,22 +7,45 @@ import { uploadPdf } from "./api";
 
 const MAX_UPLOAD_MB = 50;
 
+/**
+ * The files the platform can print. A PDF is printed as it is. A Word,
+ * Excel or PowerPoint file is turned into a PDF first.
+ */
+const ACCEPTED_FILES = [
+  "application/pdf",
+  ".pdf",
+  ".docx",
+  ".xlsx",
+  ".pptx",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+].join(",");
+
 type UploadStepProps = {
   upload: UploadResponse | null;
   onUploaded: (upload: UploadResponse) => void;
   onContinue: () => void;
 };
 
+/** The files the platform can print, by extension and by media type. */
+const PRINTABLE_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".pptx"];
+
 function precheckError(file: File): string | null {
   if (file.size === 0) return "That file is empty.";
   if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
     return `The file is larger than ${MAX_UPLOAD_MB} MB.`;
   }
-  if (
-    file.type !== "application/pdf" &&
-    !file.name.toLowerCase().endsWith(".pdf")
-  ) {
-    return "That file is not a PDF.";
+  const name = file.name.toLowerCase();
+  const printable = PRINTABLE_EXTENSIONS.some((extension) =>
+    name.endsWith(extension),
+  );
+  if (!printable && !file.type.startsWith("application/pdf")) {
+    return (
+      "We print PDF, Word, Excel and PowerPoint files. " +
+      "Open your file in Google Docs, choose File, Download as PDF, " +
+      "then upload that."
+    );
   }
   return null;
 }
@@ -138,15 +161,17 @@ export function UploadStep({
         className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-hairline-strong bg-surface p-10 text-center hover:border-primary"
       >
         <span className="text-sm font-medium text-ink">
-          Drag a PDF here, or choose a file
+          Drag a PDF, Word, Excel or PowerPoint file here, or choose a file
         </span>
         <span className="text-xs text-steel">
-          Up to {MAX_UPLOAD_MB} MB. Password-protected files are not supported.
+          Up to {MAX_UPLOAD_MB} MB. Word, Excel and PowerPoint files are turned
+          into a PDF before they are printed. Password-protected files are not
+          supported.
         </span>
         <input
           id={inputId}
           type="file"
-          accept="application/pdf"
+          accept={ACCEPTED_FILES}
           className="sr-only"
           onChange={onFileChange}
         />

@@ -24,6 +24,11 @@ class Upload(Base):
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_uploads_size_bytes"),
         CheckConstraint("page_count > 0", name="ck_uploads_page_count"),
+        CheckConstraint(
+            "source_format IS NULL OR source_format IN "
+            "('pdf','docx','xlsx','pptx','legacy_office','rtf','image','text','empty','unknown')",
+            name="ck_uploads_source_format",
+        ),
         Index("uploads_customer_idx", "customer_id", text("created_at DESC")),
         Index(
             "uploads_purge_idx",
@@ -41,6 +46,9 @@ class Upload(Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(CHAR(64))
     page_count: Mapped[int] = mapped_column(Integer)
+    # What the customer uploaded. A document that is not a PDF is
+    # converted to one, and this says what it was before.
+    source_format: Mapped[str | None] = mapped_column(Text)
     delete_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     file_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -8,7 +8,9 @@ const MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: "Please check the highlighted fields.",
   RATE_LIMITED: "Too many attempts. Please wait a few minutes.",
   CONFLICT: "This was just updated elsewhere. Refresh and try again.",
-  FILE_NOT_PDF: "That file is not a PDF.",
+  FILE_NOT_PDF:
+    "We print PDF files. Open your file in Google Docs, choose File, " +
+    "Download as PDF, then upload that.",
   FILE_TOO_LARGE: "The file is larger than 50 MB.",
   PDF_ENCRYPTED:
     "This PDF is password protected. Remove the password and try again.",
@@ -19,6 +21,9 @@ const MESSAGES: Record<string, string> = {
   RATE_NOT_SET: "This shop does not offer those options.",
   PICKUP_CODE_INVALID: "Code does not match.",
   UPLOAD_ALREADY_USED: "This file is already attached to an order.",
+  FILE_UNAVAILABLE:
+    "This file is no longer stored, so it cannot be printed again. " +
+    "Upload it once more and we will print it again.",
   INVALID_TRANSITION: "This order cannot change at this point.",
   SHOP_ALREADY_VERIFIED: "This shop is already approved and taking orders.",
   SHOP_NOT_VERIFIED:
@@ -30,6 +35,11 @@ const MESSAGES: Record<string, string> = {
 
 export function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
+    // The server knows what the file actually is, so for a file problem
+    // its message is the one that says what to do about it.
+    if (error.code === "FILE_NOT_PDF" && error.message.length > 0) {
+      return error.message;
+    }
     const message = MESSAGES[error.code];
     if (message !== undefined) return message;
     return `Something went wrong. Reference: ${error.requestId ?? "unavailable"}.`;

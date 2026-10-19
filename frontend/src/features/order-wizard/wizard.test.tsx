@@ -1,7 +1,10 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+type PositionCallback = (position: GeolocationPosition) => void;
+type PositionErrorCallback = (error: GeolocationPositionError) => void;
 
 import type {
   QuoteResponse,
@@ -85,26 +88,47 @@ function useWizardHandlers() {
 }
 
 describe("OrderWizardPage", () => {
-  it("rejects a file that is not a PDF before uploading", async () => {
+  it("rejects a file it cannot print before uploading", async () => {
     const user = userEvent.setup({ applyAccept: false });
     renderWithProviders(<OrderWizardPage />, { route: "/new" });
 
-    const input = screen.getByLabelText(/drag a pdf here/i);
+    const input = screen.getByLabelText(/drag a pdf/i);
     await user.upload(
       input,
       new File(["hello"], "notes.txt", { type: "text/plain" }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That file is not a PDF.",
+      /Download as PDF/i,
     );
+  });
+
+  it("accepts a Word document", async () => {
+    useWizardHandlers();
+    server.use(
+      http.post("/api/v1/uploads", () =>
+        HttpResponse.json(uploadFixture, { status: 201 }),
+      ),
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    renderWithProviders(<OrderWizardPage />, { route: "/new" });
+
+    const input = screen.getByLabelText(/drag a pdf/i);
+    await user.upload(
+      input,
+      new File(["word"], "report.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    );
+
+    expect(await screen.findByText(/notes\.pdf/)).toBeInTheDocument();
   });
 
   it("rejects an empty file", async () => {
     const user = userEvent.setup();
     renderWithProviders(<OrderWizardPage />, { route: "/new" });
 
-    const input = screen.getByLabelText(/drag a pdf here/i);
+    const input = screen.getByLabelText(/drag a pdf/i);
     await user.upload(
       input,
       new File([], "empty.pdf", { type: "application/pdf" }),
@@ -125,7 +149,7 @@ describe("OrderWizardPage", () => {
     const user = userEvent.setup();
     renderWithProviders(<OrderWizardPage />, { route: "/new" });
 
-    const input = screen.getByLabelText(/drag a pdf here/i);
+    const input = screen.getByLabelText(/drag a pdf/i);
     await user.upload(
       input,
       new File(["%PDF-1.4 test"], "notes.pdf", { type: "application/pdf" }),
@@ -186,5 +210,63 @@ describe("OrderWizardPage", () => {
     });
     expect(within(selection).getByText("Alpha Prints")).toBeInTheDocument();
     expect(within(selection).getByText(/₹\s?10\.00/)).toBeInTheDocument();
+  });
+});
+
+describe("finding shops near me", () => {
+  it("asks the browser for a location and shows the shops around it", async () => {
+    useWizardHandlers();
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: { latitude: 19.07, longitude: 72.87 },
+      } as GeolocationPosition);
+    });
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      geolocation: { getCurrentPosition },
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<OrderWizardPage />, {
+      route: `/new?upload=${uploadFixture.id}`,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    await user.click(
+      await screen.findByRole("button", { name: /find shops near me/i }),
+    );
+
+    expect(getCurrentPosition).toHaveBeenCalled();
+    expect(
+      await screen.findByRole("button", { name: /showing shops near me/i }),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("carries on with every shop when the browser refuses the location", async () => {
+    useWizardHandlers();
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      geolocation: {
+        getCurrentPosition: (
+          _success: PositionCallback,
+          failure?: PositionErrorCallback | null,
+        ) =>
+          failure?.({ code: 1, message: "denied" } as GeolocationPositionError),
+      },
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<OrderWizardPage />, {
+      route: `/new?upload=${uploadFixture.id}`,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    await user.click(
+      await screen.findByRole("button", { name: /find shops near me/i }),
+    );
+
+    expect(
+      await screen.findByText(/could not find your location/i),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });
