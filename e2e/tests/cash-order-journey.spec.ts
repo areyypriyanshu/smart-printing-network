@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import {
+  SEEDED_PASSWORD,
+  signIn as signInHelper,
+  signInAsCustomer,
+} from "./helpers";
+
 // The same product, paid in cash.
 //
 // The customer reserves the job, shows the code at the counter and pays
@@ -10,34 +16,13 @@ import { expect, test, type Page } from "@playwright/test";
 
 const SHOP_NAME = "Central Prints";
 const VENDOR_EMAIL = "vendor1@example.com";
-const PASSWORD = "spn-demo-password";
-
-async function registerCustomer(page: Page, email: string) {
-  await page.goto("/register");
-  await page.getByLabel("Full name").fill("Cash Customer");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill("e2e-password-123");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/login$/);
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
-}
 
 test("a customer reserves a job and pays for it at the counter", async ({
   browser,
 }) => {
   const customerContext = await browser.newContext();
   const customer = await customerContext.newPage();
-  const email = `e2e-cash-${Date.now()}@example.com`;
-
-  await registerCustomer(customer, email);
-  await signIn(customer, email, "e2e-password-123");
+  await signInAsCustomer(customer);
 
   // The customer uploads the file and picks the options.
   await customer.goto("/new");
@@ -66,6 +51,10 @@ test("a customer reserves a job and pays for it at the counter", async ({
   await expect(customer.getByText("Reserved for you")).toBeVisible({
     timeout: 30_000,
   });
+  const orderNumber = (
+    await customer.getByText(/Order #\d+ is booked/).textContent()
+  ).match(/#(\d+)/)?.[1];
+  expect(orderNumber).toBeTruthy();
   const pickupCode = (
     await customer
       .locator("p.font-mono")
@@ -78,7 +67,7 @@ test("a customer reserves a job and pays for it at the counter", async ({
   // The shop sees it in the queue, marked as one to pay for in cash.
   const vendorContext = await browser.newContext();
   const vendor = await vendorContext.newPage();
-  await signIn(vendor, VENDOR_EMAIL, PASSWORD);
+  await signInHelper(vendor, VENDOR_EMAIL, SEEDED_PASSWORD);
   await vendor.goto("/vendor");
 
   const newColumn = vendor.getByRole("region", { name: "New" });
@@ -86,29 +75,32 @@ test("a customer reserves a job and pays for it at the counter", async ({
     timeout: 15_000,
   });
 
-  // The shop works the order as it would any other.
-  const card = newColumn.getByRole("article").first();
+  // The shop works the order as it would any other. The card is found
+  // by the pickup code, so another order in the queue does not get in
+  // the way.
+  const thisOrder = (region: string) =>
+    vendor
+      .getByRole("region", { name: region })
+      .getByRole("article")
+      .filter({ hasText: `#${orderNumber}` });
+  const card = newColumn
+    .getByRole("article")
+    .filter({ hasText: `#${orderNumber}` });
   await card.getByRole("button", { name: "Accept" }).click();
-  await expect(
-    vendor
-      .getByRole("region", { name: "Accepted" })
-      .getByRole("article")
-      .first(),
-  ).toBeVisible({ timeout: 15_000 });
-  await vendor.getByRole("button", { name: "Start printing" }).click();
-  await expect(
-    vendor
-      .getByRole("region", { name: "Printing" })
-      .getByRole("article")
-      .first(),
-  ).toBeVisible({ timeout: 15_000 });
-  await vendor.getByRole("button", { name: "Mark ready" }).click();
-  await expect(
-    vendor.getByRole("region", { name: "Ready" }).getByRole("article").first(),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(thisOrder("Accepted")).toBeVisible({ timeout: 15_000 });
+  await thisOrder("Accepted")
+    .getByRole("button", { name: "Start printing" })
+    .click();
+  await expect(thisOrder("Printing")).toBeVisible({ timeout: 15_000 });
+  await thisOrder("Printing")
+    .getByRole("button", { name: "Mark ready" })
+    .click();
+  await expect(thisOrder("Ready")).toBeVisible({ timeout: 15_000 });
 
   // The shop is told how much to take, and the wrong code is refused.
-  await vendor.getByRole("button", { name: "Verify pickup" }).click();
+  await thisOrder("Ready")
+    .getByRole("button", { name: "Verify pickup" })
+    .click();
   await expect(vendor.getByText(/Take ₹/)).toBeVisible();
   await vendor.getByLabel("Pickup code").fill("000000");
   await vendor.getByRole("button", { name: "Hand over" }).click();
@@ -117,9 +109,7 @@ test("a customer reserves a job and pays for it at the counter", async ({
   // The right code hands the printout over, and takes the money.
   await vendor.getByLabel("Pickup code").fill(pickupCode as string);
   await vendor.getByRole("button", { name: "Hand over" }).click();
-  await expect(
-    vendor.getByRole("region", { name: "Ready" }).getByRole("article"),
-  ).toHaveCount(0, { timeout: 15_000 });
+  await expect(thisOrder("Ready")).toHaveCount(0, { timeout: 15_000 });
 
   // The customer sees it collected and paid in cash.
   await customer.getByRole("link", { name: "View order" }).click();

@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import {
+  SEEDED_PASSWORD,
+  signIn as signInHelper,
+  signInAsCustomer,
+} from "./helpers";
+
 // The whole product, in a browser, with two people.
 //
 // The customer uploads a file, gets a price, pays and is shown a pickup
@@ -11,33 +17,11 @@ import { expect, test, type Page } from "@playwright/test";
 
 const SHOP_NAME = "Central Prints";
 const VENDOR_EMAIL = "vendor1@example.com";
-const SEEDED_PASSWORD = "spn-demo-password";
-const CUSTOMER_PASSWORD = "e2e-password-123";
-
-async function registerCustomer(page: Page, email: string) {
-  await page.goto("/register");
-  await page.getByLabel("Full name").fill("End To End Customer");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(CUSTOMER_PASSWORD);
-  await page.getByRole("button", { name: /create account/i }).click();
-  await expect(page).toHaveURL(/\/login$/);
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
-}
 
 test("a customer pays and a shop hands the order over", async ({ browser }) => {
   const customerContext = await browser.newContext();
   const customer = await customerContext.newPage();
-  const email = `e2e-customer-${Date.now()}@example.com`;
-
-  await registerCustomer(customer, email);
-  await signIn(customer, email, CUSTOMER_PASSWORD);
+  await signInAsCustomer(customer);
 
   // The customer uploads the file.
   await customer.goto("/new");
@@ -89,7 +73,7 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   // The shop works the order. A second browser, a different person.
   const vendorContext = await browser.newContext();
   const vendor = await vendorContext.newPage();
-  await signIn(vendor, VENDOR_EMAIL, SEEDED_PASSWORD);
+  await signInHelper(vendor, VENDOR_EMAIL, SEEDED_PASSWORD);
   await vendor.goto("/vendor");
 
   // The board has one card per active order, and the card moves between
