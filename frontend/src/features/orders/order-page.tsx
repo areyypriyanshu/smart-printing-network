@@ -1,16 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 
 import {
   getOrder,
   isTerminalStatus,
   orderStatusLabel,
+  reorderOrder,
   statusLabel,
   type OrderDetailResponse,
 } from "../../api/orders";
 import { Alert, Button } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
+import { pickupShareLink } from "../../lib/share";
+import { useShop } from "../shops/api";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -67,6 +71,30 @@ export function OrderPage() {
 
 function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
   const { order, events } = detail;
+  const shop = useShop(order.shop_id);
+  const navigate = useNavigate();
+  const [reorderError, setReorderError] = useState<string | null>(null);
+  const reorder = useMutation({
+    mutationFn: () => reorderOrder(order.id),
+    onSuccess: (result) => {
+      setReorderError(null);
+      // The wizard picks the job up from here, with the same options and
+      // the same shop already filled in.
+      void navigate("/new", {
+        state: {
+          uploadId: result.upload_id,
+          options: {
+            paper_size: result.paper_size,
+            color: result.color,
+            duplex: result.duplex,
+            copies: result.copies,
+          },
+          shopId: result.shop_id,
+        },
+      });
+    },
+    onError: (error) => setReorderError(messageForError(error)),
+  });
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
@@ -82,7 +110,7 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
       {order.pickup_code !== null && (
         <section
           aria-label="Pickup code"
-          className="flex flex-col gap-2 rounded-xl border border-hairline bg-surface p-6"
+          className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface p-6"
         >
           <h2 className="font-display text-base font-semibold text-ink">
             {order.payment_method === "at_store"
@@ -92,7 +120,38 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           <p className="font-mono text-3xl tracking-[0.3em] text-ink">
             {order.pickup_code}
           </p>
+          <p className="text-sm text-steel">
+            Somebody else can collect it for you. Anyone with this code can, so
+            send it only to the person you trust.
+          </p>
+          <div>
+            <a
+              href={pickupShareLink({
+                order_no: order.order_no,
+                pickup_code: order.pickup_code,
+                shopName: shop.data?.name ?? null,
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
+            >
+              Share the code on WhatsApp
+            </a>
+          </div>
         </section>
+      )}
+
+      {shop.data?.phone != null && (
+        <p className="text-sm text-steel">
+          The shop can be reached on{" "}
+          <a
+            href={`tel:${shop.data.phone.replace(/[^0-9+]/g, "")}`}
+            className="font-medium text-ink underline"
+          >
+            {shop.data.phone}
+          </a>
+          .
+        </p>
       )}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -143,7 +202,23 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
         </ol>
       </section>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
+        {detail.file_available ? (
+          <Button
+            onClick={() => reorder.mutate()}
+            pending={reorder.isPending}
+            pendingLabel="Preparing…"
+          >
+            Print this again
+          </Button>
+        ) : (
+          <Link
+            to="/new"
+            className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
+          >
+            Upload it again to print it again
+          </Link>
+        )}
         <Link
           to="/new"
           className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
@@ -151,6 +226,7 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           Start another order
         </Link>
       </div>
+      {reorderError !== null && <Alert>{reorderError}</Alert>}
     </section>
   );
 }

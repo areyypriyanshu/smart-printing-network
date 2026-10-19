@@ -99,6 +99,16 @@ export function getOrder(orderId: string): Promise<OrderDetailResponse> {
   return apiRequest(`/orders/${orderId}`);
 }
 
+export type ReorderResponse = components["schemas"]["ReorderResponse"];
+
+/**
+ * Book the same job again. The file is copied, so the new order has its
+ * own file and its own retention window.
+ */
+export function reorderOrder(orderId: string): Promise<ReorderResponse> {
+  return apiRequest(`/orders/${orderId}/reorder`, { method: "POST" });
+}
+
 export function listOrders(cursor?: number): Promise<OrderListResponse> {
   const query = cursor === undefined ? "" : `?cursor=${cursor}`;
   return apiRequest(`/orders${query}`);

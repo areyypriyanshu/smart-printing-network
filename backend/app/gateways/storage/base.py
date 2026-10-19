@@ -7,6 +7,15 @@ class Storage(Protocol):
 
     def delete(self, key: str) -> None: ...
 
+    def copy_file(self, source_key: str, target_key: str) -> None:
+        """Copy an object to a new key.
+
+        Used when the same file is printed again: the second order owns
+        its own object, so each one has its own retention window and
+        deleting one never breaks the other.
+        """
+        ...
+
     def presigned_get_url(
         self,
         key: str,

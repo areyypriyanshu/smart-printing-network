@@ -12,6 +12,7 @@ import type { UploadResponse } from "../../api/client";
 import { Alert, Button } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
+import { pickupShareLink } from "../../lib/share";
 import { openCheckout } from "../../lib/razorpay";
 import {
   describeOptions,
@@ -179,6 +180,10 @@ export function PayStep({
         <p className="font-mono text-3xl tracking-[0.3em] text-ink">
           {order.pickup_code}
         </p>
+        <p className="text-sm text-steel">
+          Somebody else can collect it for you. Anyone with this code can, so
+          send it only to the person you trust.
+        </p>
         <div className="flex flex-wrap gap-3">
           <Link
             to={`/orders/${order.id}`}
@@ -186,6 +191,18 @@ export function PayStep({
           >
             View order
           </Link>
+          <a
+            href={pickupShareLink({
+              order_no: order.order_no,
+              pickup_code: order.pickup_code ?? "",
+              shopName: shop.name,
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
+          >
+            Share the code on WhatsApp
+          </a>
         </div>
       </section>
     );

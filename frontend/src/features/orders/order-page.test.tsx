@@ -99,3 +99,86 @@ describe("OrderPage", () => {
     expect(screen.queryByLabelText("Pickup code")).not.toBeInTheDocument();
   });
 });
+
+describe("OrderPage extras", () => {
+  it("offers to share the pickup code on WhatsApp", async () => {
+    server.use(
+      http.get("/api/v1/orders/:id", () =>
+        HttpResponse.json({ order, events: [], file_available: true }),
+      ),
+      http.get("/api/v1/shops/:id", () =>
+        HttpResponse.json({
+          id: "shop-1",
+          name: "Central Prints",
+          address: "1 Main Street",
+          phone: "+91 98300 00000",
+          latitude: 22.5726,
+          longitude: 88.3639,
+          min_order_paise: 0,
+          rates: [],
+        }),
+      ),
+    );
+    renderOrderPage();
+
+    const link = await screen.findByRole("link", {
+      name: /share the code on whatsapp/i,
+    });
+    expect(link.getAttribute("href")).toContain("wa.me");
+    expect(decodeURIComponent(link.getAttribute("href") ?? "")).toContain(
+      "481902",
+    );
+  });
+
+  it("offers to print the job again while the file is still there", async () => {
+    server.use(
+      http.get("/api/v1/orders/:id", () =>
+        HttpResponse.json({ order, events: [], file_available: true }),
+      ),
+    );
+    renderOrderPage();
+
+    expect(
+      await screen.findByRole("button", { name: /print this again/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks for the file again once it has been deleted", async () => {
+    server.use(
+      http.get("/api/v1/orders/:id", () =>
+        HttpResponse.json({ order, events: [], file_available: false }),
+      ),
+    );
+    renderOrderPage();
+
+    expect(
+      await screen.findByRole("link", { name: /upload it again/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /print this again/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the shop's phone number when it has one", async () => {
+    server.use(
+      http.get("/api/v1/orders/:id", () =>
+        HttpResponse.json({ order, events: [], file_available: true }),
+      ),
+      http.get("/api/v1/shops/:id", () =>
+        HttpResponse.json({
+          id: "shop-1",
+          name: "Central Prints",
+          address: "1 Main Street",
+          phone: "+91 98300 00000",
+          latitude: 22.5726,
+          longitude: 88.3639,
+          min_order_paise: 0,
+          rates: [],
+        }),
+      ),
+    );
+    renderOrderPage();
+
+    expect(await screen.findByText("+91 98300 00000")).toBeInTheDocument();
+  });
+});

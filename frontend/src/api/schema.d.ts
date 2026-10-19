@@ -254,6 +254,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orders/{order_id}/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder Order
+         * @description Print the same job again, while the file is still stored.
+         *
+         *     The file is copied, so the new order has its own file and its own
+         *     retention window. When the file has already been deleted the answer
+         *     is `FILE_UNAVAILABLE` and the customer uploads it again.
+         */
+        post: operations["reorder_order_api_v1_orders__order_id__reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quotes": {
         parameters: {
             query?: never;
@@ -830,6 +854,11 @@ export interface components {
         OrderDetailResponse: {
             /** Events */
             events: components["schemas"]["OrderEventResponse"][];
+            /**
+             * File Available
+             * @default false
+             */
+            file_available: boolean;
             order: components["schemas"]["OrderResponse"];
         };
         /** OrderEventResponse */
@@ -1026,6 +1055,33 @@ export interface components {
             shop_address: string;
             /** Shop Name */
             shop_name: string;
+        };
+        /**
+         * ReorderResponse
+         * @description What is needed to print the same job again.
+         *
+         *     The upload is a copy of the original file, with its own retention
+         *     window, so the two orders never share a file.
+         */
+        ReorderResponse: {
+            /** Color */
+            color: boolean;
+            /** Copies */
+            copies: number;
+            /** Duplex */
+            duplex: boolean;
+            /** Paper Size */
+            paper_size: string;
+            /**
+             * Shop Id
+             * Format: uuid
+             */
+            shop_id: string;
+            /**
+             * Upload Id
+             * Format: uuid
+             */
+            upload_id: string;
         };
         /**
          * ShopListResponse
@@ -2483,6 +2539,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileUrlResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_order_api_v1_orders__order_id__reorder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReorderResponse"];
                 };
             };
             /** @description The request was rejected, for example a wrong pickup code. */

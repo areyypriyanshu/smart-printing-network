@@ -17,6 +17,7 @@ from app.domain.pricing import quote_paise
 from app.errors import (
     CashPaymentDisabled,
     Conflict,
+    FileUnavailable,
     Forbidden,
     InvalidTransition,
     NotFound,
@@ -36,6 +37,7 @@ from app.schemas.order import (
     OrderEventResponse,
     OrderListResponse,
     OrderResponse,
+    ReorderResponse,
 )
 from app.services.upload_service import get_upload, presigned_download
 
@@ -302,8 +304,10 @@ def get_order_detail(
             .order_by(OrderEvent.at.asc(), OrderEvent.id.asc())
         )
     )
+    upload = session.get(Upload, order.upload_id)
     return OrderDetailResponse(
         order=order_response(order),
+        file_available=upload is not None and upload.file_deleted_at is None,
         events=[
             OrderEventResponse(
                 from_status=event.from_status,
@@ -337,6 +341,69 @@ def cancel_order(session: Session, *, order_id: uuid.UUID, customer_id: uuid.UUI
         actor_id=customer_id,
     )
     return order_response(cancelled)
+
+
+def reorder(
+    session: Session,
+    storage: Storage,
+    *,
+    order_id: uuid.UUID,
+    customer_id: uuid.UUID,
+) -> ReorderResponse:
+    """Book the same job again, while the file is still there.
+
+    The file is copied to a new object rather than shared, so each order
+    owns its own file and its own retention window. Deleting one never
+    breaks the other, and the guarantee in FR-14 that a file is deleted
+    after the retention window holds for both.
+
+    When the file has already been deleted the customer is told to
+    upload it again. That is the honest answer: the file is gone, and
+    the platform does not keep a copy.
+    """
+    order = session.scalar(
+        select(Order).where(Order.id == order_id, Order.customer_id == customer_id)
+    )
+    if order is None:
+        raise NotFound("Order not found")
+    upload = session.get(Upload, order.upload_id)
+    if upload is None or upload.file_deleted_at is not None:
+        raise FileUnavailable(
+            "This file is no longer stored, so it cannot be printed again. "
+            "Upload it once more and we will print it again."
+        )
+
+    new_key = f"uploads/{uuid.uuid4().hex}.pdf"
+    try:
+        storage.copy_file(upload.file_key, new_key)
+    except Exception as exc:  # noqa: BLE001 - the storage error is reported
+        logger.error("reorder_copy_failed", extra={"order_id": str(order.id), "reason": str(exc)})
+        raise FileUnavailable(
+            "We could not make a copy of this file. Try again in a moment."
+        ) from exc
+
+    current = _now()
+    copy = Upload(
+        customer_id=customer_id,
+        file_key=new_key,
+        original_filename=upload.original_filename,
+        size_bytes=upload.size_bytes,
+        sha256=upload.sha256,
+        page_count=upload.page_count,
+        source_format=upload.source_format,
+        delete_after=current + timedelta(hours=get_settings().file_retention_hours),
+    )
+    session.add(copy)
+    session.commit()
+    session.refresh(copy)
+    return ReorderResponse(
+        upload_id=copy.id,
+        paper_size=order.paper_size,
+        color=order.color,
+        duplex=order.duplex,
+        copies=order.copies,
+        shop_id=order.shop_id,
+    )
 
 
 def customer_file_url(

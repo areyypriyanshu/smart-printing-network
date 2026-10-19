@@ -29,6 +29,15 @@ class S3Storage:
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self._bucket, Key=key)
 
+    def copy_file(self, source_key: str, target_key: str) -> None:
+        """Copy the object server side, so nothing travels twice."""
+        self._ensure_bucket()
+        self.client.copy_object(
+            Bucket=self._bucket,
+            CopySource={"Bucket": self._bucket, "Key": source_key},
+            Key=target_key,
+        )
+
     def presigned_get_url(
         self,
         key: str,

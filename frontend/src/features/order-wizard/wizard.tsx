@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 
 import type { UploadResponse } from "../../api/client";
 import { Alert, Button, Stepper } from "../../components/ui";
@@ -19,14 +19,32 @@ import {
 
 const STEPS = ["Upload", "Options", "Shop and price", "Review and pay"];
 
+/**
+ * What "print this again" hands over: the copy of the file, the options
+ * it was printed with, and the shop it was printed at. The customer can
+ * change any of it.
+ */
+type ReorderState = {
+  uploadId: string;
+  options: OptionsFormValues;
+  shopId: string;
+};
+
 export function OrderWizardPage() {
   const [params, setParams] = useSearchParams();
-  const urlUploadId = params.get("upload");
+  const location = useLocation();
+  const reorder = location.state as ReorderState | null;
+  // A repeat print brings its own copy of the file with it.
+  const urlUploadId = reorder?.uploadId ?? params.get("upload");
   const resume = useUpload(urlUploadId);
 
   const [upload, setUpload] = useState<UploadResponse | null>(null);
-  const [options, setOptions] = useState<OptionsFormValues | null>(null);
-  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
+  const [options, setOptions] = useState<OptionsFormValues | null>(
+    reorder?.options ?? null,
+  );
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(
+    reorder?.shopId ?? null,
+  );
   const [selection, setSelection] = useState<ShopSelection | null>(null);
   const [step, setStep] = useState<number | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(false);

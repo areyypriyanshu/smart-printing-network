@@ -141,6 +141,13 @@ class PickupCodeInvalid(AppError):
     status_code = 400
 
 
+class FileUnavailable(AppError):
+    """The file is no longer stored, so it cannot be printed again."""
+
+    code = "FILE_UNAVAILABLE"
+    status_code = 409
+
+
 class CashPaymentDisabled(AppError):
     """Paying at the shop is not switched on.
 

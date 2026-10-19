@@ -64,6 +64,24 @@ class OrderCreateResponse(BaseModel):
 class OrderDetailResponse(BaseModel):
     order: OrderResponse
     events: list[OrderEventResponse]
+    # Whether the file is still stored, and so whether the job can be
+    # printed again without uploading it a second time.
+    file_available: bool = False
+
+
+class ReorderResponse(BaseModel):
+    """What is needed to print the same job again.
+
+    The upload is a copy of the original file, with its own retention
+    window, so the two orders never share a file.
+    """
+
+    upload_id: uuid.UUID
+    paper_size: str
+    color: bool
+    duplex: bool
+    copies: int
+    shop_id: uuid.UUID
 
 
 class OrderListResponse(BaseModel):

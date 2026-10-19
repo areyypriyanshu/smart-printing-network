@@ -18,6 +18,7 @@ from app.schemas.order import (
     OrderListResponse,
     OrderResponse,
     PaymentCheckoutResponse,
+    ReorderResponse,
 )
 from app.services import order_service
 
@@ -70,6 +71,27 @@ def list_orders(
     session: Session = Depends(get_db),
 ) -> OrderListResponse:
     return order_service.list_orders(session, customer_id=user.id, limit=limit, cursor=cursor)
+
+
+@router.post(
+    "/orders/{order_id}/reorder",
+    response_model=ReorderResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(user_rate_limit(10, 60, "reorder"))],
+)
+def reorder_order(
+    order_id: uuid.UUID,
+    user: User = Depends(get_customer),
+    session: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+) -> ReorderResponse:
+    """Print the same job again, while the file is still stored.
+
+    The file is copied, so the new order has its own file and its own
+    retention window. When the file has already been deleted the answer
+    is `FILE_UNAVAILABLE` and the customer uploads it again.
+    """
+    return order_service.reorder(session, storage, order_id=order_id, customer_id=user.id)
 
 
 @router.get(
