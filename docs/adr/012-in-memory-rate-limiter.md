@@ -20,4 +20,8 @@ Ship `app/rate_limit.py`: a small sliding window limiter keyed by client IP, exp
 
 - Single instance only. When the API runs more than one instance, move counters to Redis (already the documented trigger) or accept keying by instance.
 - Counters are per process and reset on restart. Acceptable for brute-force smoothing, not a security boundary.
-- Keying uses `request.client.host`; behind a proxy the proxy address must be trusted (`--proxy-headers`) so the real client IP is used. Caddy and the compose setup are adjusted when production deploys are finalised (Sprint 5 hardening).
+- Keying uses `request.client.host`; behind a proxy the proxy address must be trusted (`--proxy-headers`) so the real client IP is used. The production Compose file passes `--proxy-headers`, and Caddy sets `X-Forwarded-For`.
+
+## Revisit trigger
+
+When the deployment moves to more than one API instance behind a load balancer, move the sliding window counters to Redis. That is the documented scale trigger, and the limiter is behind a small interface so the change stays inside one module.
