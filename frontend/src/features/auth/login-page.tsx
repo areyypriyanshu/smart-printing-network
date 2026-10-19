@@ -4,12 +4,27 @@ import { useForm } from "react-hook-form";
 import { Link, useLocation, useNavigate } from "react-router";
 
 import { Alert, Button, PasswordField, TextField } from "../../components/ui";
+import type { Role } from "../../api/client";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { AuthLayout } from "./auth-layout";
 import { loginSchema, type LoginValues } from "./schemas";
 import { useSession } from "./session";
 
 type LocationState = { registered?: boolean; from?: string } | null;
+
+/**
+ * Where each role lands after signing in.
+ *
+ * An admin who lands on the customer home page has to hunt for the link
+ * to the panel, and a vendor who lands on it is shown a call to action
+ * to order a printout, which is not their shop. The landing page is the
+ * one screen the role is known from, so it should be the right one.
+ */
+const ROLE_HOME: Record<Role, string> = {
+  customer: "/",
+  vendor: "/vendor/rates",
+  admin: "/admin/shops",
+};
 
 export function LoginPage() {
   const { login } = useSession();
@@ -31,8 +46,7 @@ export function LoginPage() {
     setServerError(null);
     try {
       const user = await login(values.email, values.password);
-      const fallback =
-        state?.from ?? (user.role === "vendor" ? "/vendor/rates" : "/");
+      const fallback = state?.from ?? ROLE_HOME[user.role];
       void navigate(fallback, { replace: true });
     } catch (error) {
       const fields = fieldErrorsFor(error);

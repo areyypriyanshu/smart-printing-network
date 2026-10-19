@@ -18,6 +18,14 @@ export const vendorUser: User = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
+export const adminUser: User = {
+  id: "9a1c4e77-2b3d-4c8a-9f1e-7d6c5b4a3e2f",
+  email: "admin@example.com",
+  full_name: "Owner",
+  role: "admin",
+  created_at: "2026-01-01T00:00:00Z",
+};
+
 export const errorResponse = (
   status: number,
   code: string,

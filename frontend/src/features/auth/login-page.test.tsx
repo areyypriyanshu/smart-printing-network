@@ -5,6 +5,7 @@ import { Route, Routes } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import {
+  adminUser,
   customerUser,
   errorResponse,
   vendorUser,
@@ -25,6 +26,7 @@ function renderLoginPage() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<p>Customer home</p>} />
       <Route path="/vendor/rates" element={<p>Vendor rates</p>} />
+      <Route path="/admin/shops" element={<p>Admin shops</p>} />
     </Routes>,
     { route: "/login" },
   );
@@ -116,5 +118,22 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByText("Vendor rates")).toBeInTheDocument();
+  });
+
+  it("sends an admin to the panel after login", async () => {
+    server.use(
+      http.post("/api/v1/auth/login", () =>
+        HttpResponse.json(accessTokenResponse),
+      ),
+      http.get("/api/v1/me", () => HttpResponse.json(adminUser)),
+    );
+    const user = userEvent.setup();
+    renderLoginPage();
+
+    await user.type(await screen.findByLabelText("Email"), "admin@example.com");
+    await user.type(screen.getByLabelText("Password"), "password-123");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByText("Admin shops")).toBeInTheDocument();
   });
 });
