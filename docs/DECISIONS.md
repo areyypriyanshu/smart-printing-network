@@ -121,6 +121,54 @@ time and the reason.
 
 ---
 
+## The file the student actually has
+
+The product says "upload a PDF". The student has a Word document, and
+the old answer was a dead end: "File does not look like a PDF." A dead
+end is a message that does not say what to do, and a customer who hits
+one does not come back.
+
+Two things changed. The first is that every file the platform cannot
+print is now refused with a message that names the fix, because the
+server knows what the file actually was and the client does not. The
+second is that a Word, Excel or PowerPoint file is accepted, converted
+to a PDF on the server, and printed as one.
+
+The conversion is built on what is already in the image: the standard
+library reads the office formats, and PyMuPDF's `Story` engine lays them
+out. No new dependency, no new service, no new image. What it does not
+keep is said plainly in the product: the fonts are substituted, the
+tables are re-laid out, and the headers, footers and columns are gone.
+A converted document is a printable approximation of the document the
+student made, not a copy of it, and the upload screen says so.
+
+Two more decisions came out of the same conversation.
+
+**Printing it again copies the file, it does not share it.** The
+platform promises to delete a customer's file 24 hours after the
+upload. A one-tap reprint has to respect that promise, so it copies the
+object to a new key with a new retention window. After the window, the
+answer is "upload it again", which is the honest one.
+[ADR 017](adr/017-print-it-again.md)
+
+**The pickup code is a bearer token, and saying so is part of the
+feature.** The customer can share it on WhatsApp with a plain `wa.me`
+link, with no business API and no cost. Whoever has the code can
+collect the printout, so the interface says that next to the button
+rather than in a policy page.
+[ADR 018](adr/018-sharing-the-pickup-code.md)
+
+**A login is rate limited per account as well as per address.** Ten
+guesses a minute against one account stops a brute force. Ten logins a
+minute for a whole address locks out a college, because a campus shares
+one address. The end-to-end suite found this by tripping it.
+[ADR 019](adr/019-rate-limiting-a-login-per-account.md)
+
+[ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
+conversion, including the alternatives that were rejected and why.
+
+---
+
 ## How the rules are tested
 
 The rules above are not comments. Each one has a test that fails if the
@@ -139,6 +187,10 @@ rule is broken.
 | A job can run twice | Every job is run twice and the second run has to do nothing. |
 | A backup is real | A dump is restored into a scratch database and the restored data is checked against the price rule. |
 | The API matches its own contract | The API is fuzzed from its own OpenAPI schema. It found a real bug: registering a shop with an email that already existed returned a 500 instead of a 409. |
+| A file that cannot be printed says what to do | Every file kind has a test that the refusal names the fix, not just the problem. |
+| A converted document is a PDF | The stored object is read back and has to start with `%PDF-`, and the shop's download has to be named `report.pdf` for a `report.docx`. |
+| A reprint never breaks the retention promise | The two uploads are shown to have different storage keys and different retention windows, and a reprint after the purge answers `FILE_UNAVAILABLE`. |
+| A shop's phone number is optional and sane | The database is asked to store a number with too few digits, too many digits and letters, and refuses all three. |
 
 ---
 
@@ -173,4 +225,9 @@ Being honest about the edges is part of explaining the design.
 - The queue polls every five seconds. WebSockets arrive in the phase where
   a live board actually needs them.
 - The PDF quality checker and the map view are not built. They are the
-  next phase and they are deliberately the next phase.
+  next phase and they are deliberately the next phase. The list of shops
+  near the customer is built, without the map.
+- A converted Word, Excel or PowerPoint file keeps the text, the
+  headings, the pictures and the table contents. It does not keep the
+  fonts, the exact table widths, the headers, the footers or the
+  columns. A student who needs the exact layout uploads a PDF.

@@ -1,16 +1,19 @@
 # Smart Printing Network
 
 A web platform that connects customers with nearby verified print shops.
-Upload a PDF, choose print options, see the price from the shop's own rate
-card, pay, and collect your order with a short pickup code. Shops work a
-queue of paid orders from a counter screen.
+Upload a PDF, a Word document, an Excel sheet or a PowerPoint deck, choose
+print options, see the price from the shop's own rate card, pay, and
+collect your order with a short pickup code. Shops work a queue of paid
+orders from a counter screen.
 
 > **Status:** Phase 1 is built end to end. A customer can upload, get a
 > price, pay, and collect. A shop can accept, print, mark ready and hand
 > over against the pickup code. The worker expires unpaid orders, rejects
 > orders no shop picked up, retries refunds and deletes old files. An
 > order can be paid online or in cash at the counter, and an admin panel
-> approves the shops that are allowed to take orders.
+> approves the shops that are allowed to take orders. A customer can find
+> the shops near them, share a pickup code on WhatsApp, and print the
+> same job again while the file is still stored.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
@@ -27,7 +30,8 @@ queue of paid orders from a counter screen.
 |---|---|---|
 | 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, payment and signed webhooks, pickup code, vendor queue, refunds, timeouts, file retention. Pickup only. | **Built** |
 | 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
-| 2 | PDF quality checker (effective DPI and blur), geo search of shops, price comparison, map view | Planned |
+| 1.6 | Print the file the customer actually has: Word, Excel and PowerPoint files are converted to PDF and printed. An error that names the fix. Print it again, share the pickup code, a phone number for the shop, and the shops near you. | **Built** |
+| 2 | PDF quality checker (effective DPI and blur), price comparison, map view. The list of shops by distance is built. | Planned |
 | 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
 
 ## What it deliberately does not do
@@ -299,9 +303,11 @@ committed. The decisions are.
   took it, so a settlement can be built later without a data migration.
   See [ADR 013](docs/adr/013-cash-on-collection.md).
 - One shop per vendor account, one order per upload, whole-document printing only (no page ranges, no binding options).
+- A converted Word, Excel or PowerPoint file keeps the text, the headings, the pictures and the table contents. It does not keep the fonts, the exact table widths, the headers, the footers or the columns. A student who needs the exact layout uploads a PDF. See [ADR 016](docs/adr/016-office-file-upload.md).
 - No email verification or password reset.
 - Single-instance deployment. The rate limiter lives in the process, so a
-  second API instance would need Redis.
+  second API instance would need Redis. A login is limited per account
+  and per address, so a campus behind one address is not locked out.
 - The vendor board polls every five seconds. WebSockets arrive in the
   phase where a live board needs them.
 
