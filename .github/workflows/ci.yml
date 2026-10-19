@@ -63,8 +63,24 @@ jobs:
       - name: API tests
         working-directory: backend
         run: uv run pytest tests/api
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=spn \
+            -e MINIO_ROOT_PASSWORD=spn-local-secret \
+            coollabsio/minio:RELEASE.2025-10-15T17-29-55Z server /data
+          for attempt in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become healthy" >&2
+          exit 1
       - name: Integration tests
         working-directory: backend
+        env:
+          SPN_REQUIRE_S3: "1"
         run: uv run pytest tests/integration
 
   frontend:

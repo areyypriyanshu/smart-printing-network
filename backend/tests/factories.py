@@ -1,5 +1,8 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+
 from app import security
-from app.models import Shop, ShopRate, User
+from app.models import Shop, ShopRate, Upload, User
 from fastapi.testclient import TestClient
 from geoalchemy2.elements import WKTElement
 from sqlalchemy.orm import Session
@@ -80,6 +83,27 @@ def create_full_rate_table(
     session.add_all(rates)
     session.commit()
     return rates
+
+
+def create_upload_row(
+    session: Session,
+    *,
+    customer: User,
+    page_count: int = 1,
+    size_bytes: int = 1024,
+) -> Upload:
+    upload = Upload(
+        customer_id=customer.id,
+        file_key=f"uploads/{uuid.uuid4().hex}.pdf",
+        original_filename="fixture.pdf",
+        size_bytes=size_bytes,
+        sha256="0" * 64,
+        page_count=page_count,
+        delete_after=datetime.now(UTC) + timedelta(hours=24),
+    )
+    session.add(upload)
+    session.commit()
+    return upload
 
 
 def login_headers(

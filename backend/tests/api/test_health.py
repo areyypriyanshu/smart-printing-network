@@ -27,4 +27,4 @@ def test_readyz_reports_database_ok(client: TestClient) -> None:
     response = client.get("/readyz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "database": "ok"}
+    assert response.json() == {"status": "ok", "database": "ok", "storage": "ok"}

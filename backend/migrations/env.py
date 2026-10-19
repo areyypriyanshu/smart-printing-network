@@ -26,9 +26,14 @@ def include_name(name: str | None, type_: str, parent_names: dict[str, str | Non
     return True
 
 
+def _database_url() -> str:
+    override: str | None = config.attributes.get("database_url")
+    return override or get_settings().database_url
+
+
 def run_migrations_offline() -> None:
     context.configure(
-        url=get_settings().database_url,
+        url=_database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -41,7 +46,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = get_settings().database_url
+    configuration["sqlalchemy.url"] = _database_url()
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

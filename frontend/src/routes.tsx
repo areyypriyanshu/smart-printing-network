@@ -11,6 +11,7 @@ import {
   RequireRole,
 } from "./features/auth";
 import { HomePage } from "./features/home/home-page";
+import { OrderWizardPage } from "./features/order-wizard";
 
 const VendorRatesPage = lazy(() =>
   import("./features/vendor-rates/rates-page").then((module) => ({
@@ -32,6 +33,16 @@ export function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register-vendor" element={<RegisterVendorPage />} />
+        <Route
+          path="/new"
+          element={
+            <RequireAuth>
+              <RequireRole role="customer">
+                <OrderWizardPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
         <Route
           path="/vendor/rates"
           element={

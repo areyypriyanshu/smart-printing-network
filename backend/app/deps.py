@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import security
 from app.db import get_db
 from app.errors import Forbidden, NotFound, Unauthenticated
+from app.gateways.storage import Storage
 from app.models import Shop, User
 
 _bearer = HTTPBearer(auto_error=False)
@@ -36,6 +37,16 @@ def require_role(*roles: str) -> Callable[..., User]:
 
 
 _vendor_only = require_role("vendor")
+_customer_only = require_role("customer")
+
+
+def get_customer(user: User = Depends(_customer_only)) -> User:
+    return user
+
+
+def get_storage(request: Request) -> Storage:
+    storage: Storage = request.app.state.storage
+    return storage
 
 
 def get_current_shop(

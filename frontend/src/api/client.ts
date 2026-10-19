@@ -16,6 +16,9 @@ export type ShopListResponse = components["schemas"]["ShopListResponse"];
 export type ShopResponse = components["schemas"]["ShopResponse"];
 export type VendorShopResponse = components["schemas"]["VendorShopResponse"];
 export type VendorShopUpdate = components["schemas"]["VendorShopUpdate"];
+export type UploadResponse = components["schemas"]["UploadResponse"];
+export type QuoteRequest = components["schemas"]["QuoteRequest"];
+export type QuoteResponse = components["schemas"]["QuoteResponse"];
 
 export type ApiErrorBody = {
   error?: {
@@ -55,6 +58,10 @@ let onSessionExpired: (() => void) | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+}
+
+export function currentAccessToken(): string | null {
+  return accessToken;
 }
 
 export function setSessionExpiredHandler(handler: (() => void) | null): void {

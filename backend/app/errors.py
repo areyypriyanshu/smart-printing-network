@@ -62,6 +62,46 @@ class RateLimited(AppError):
     status_code = 429
 
 
+class FileNotPDF(AppError):
+    code = "FILE_NOT_PDF"
+    status_code = 400
+
+
+class FileTooLarge(AppError):
+    code = "FILE_TOO_LARGE"
+    status_code = 413
+
+
+class PdfEncrypted(AppError):
+    code = "PDF_ENCRYPTED"
+    status_code = 400
+
+
+class PdfCorrupt(AppError):
+    code = "PDF_CORRUPT"
+    status_code = 400
+
+
+class PdfTooManyPages(AppError):
+    code = "PDF_TOO_MANY_PAGES"
+    status_code = 400
+
+
+class UploadAlreadyUsed(AppError):
+    code = "UPLOAD_ALREADY_USED"
+    status_code = 409
+
+
+class ShopUnavailable(AppError):
+    code = "SHOP_UNAVAILABLE"
+    status_code = 409
+
+
+class RateNotSet(AppError):
+    code = "RATE_NOT_SET"
+    status_code = 409
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "error": {
