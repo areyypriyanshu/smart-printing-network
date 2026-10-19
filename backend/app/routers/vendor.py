@@ -14,6 +14,7 @@ from app.rate_limit import (
     record_pickup_attempt,
     user_rate_limit,
 )
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.order import FileUrlResponse
 from app.schemas.shop import (
     RateItem,
@@ -30,7 +31,7 @@ from app.schemas.vendor import (
 )
 from app.services import shop_service, vendor_service
 
-router = APIRouter(prefix="/vendor", tags=["vendor"])
+router = APIRouter(prefix="/vendor", tags=["vendor"], responses=ERROR_RESPONSES)
 
 
 @router.get("/shop", response_model=VendorShopResponse)

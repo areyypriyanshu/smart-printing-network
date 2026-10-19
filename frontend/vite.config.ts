@@ -6,6 +6,11 @@ const proxyTarget = process.env.VITE_PROXY_TARGET ?? "http://localhost:8000";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    // The manifest lets the bundle size check measure the entry chunk and
+    // the chunks it pulls in, rather than every file in the build.
+    manifest: true,
+  },
   server: {
     proxy: {
       "/api": { target: proxyTarget, changeOrigin: true },

@@ -9,10 +9,11 @@ from app.deps import get_customer, get_storage
 from app.gateways.storage import Storage
 from app.models import Upload, User
 from app.rate_limit import user_rate_limit
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.upload import UploadResponse
 from app.services import upload_service
 
-router = APIRouter(tags=["uploads"])
+router = APIRouter(tags=["uploads"], responses=ERROR_RESPONSES)
 
 
 @router.post(

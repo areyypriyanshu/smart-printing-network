@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import require_role
 from app.models import User
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.shop import ShopListResponse, ShopResponse
 from app.services import shop_service
 
-router = APIRouter(prefix="/shops", tags=["shops"])
+router = APIRouter(prefix="/shops", tags=["shops"], responses=ERROR_RESPONSES)
 
 _customer_only = require_role("customer")
 

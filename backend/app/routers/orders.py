@@ -9,6 +9,7 @@ from app.gateways.payments import PaymentGateway
 from app.gateways.storage import Storage
 from app.models import User
 from app.rate_limit import user_rate_limit
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.order import (
     FileUrlResponse,
     OrderCreateRequest,
@@ -20,7 +21,7 @@ from app.schemas.order import (
 )
 from app.services import order_service
 
-router = APIRouter(tags=["orders"])
+router = APIRouter(tags=["orders"], responses=ERROR_RESPONSES)
 
 
 @router.post(

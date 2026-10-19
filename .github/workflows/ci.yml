@@ -52,7 +52,7 @@ jobs:
         run: uv run lint-imports
       - name: Unit tests
         working-directory: backend
-        run: uv run pytest tests/unit
+        run: uv run pytest tests/unit --cov=app --cov-report=term-missing
       - name: Migration up, down, up
         working-directory: backend
         run: |
@@ -62,7 +62,7 @@ jobs:
           uv run alembic check
       - name: API tests
         working-directory: backend
-        run: uv run pytest tests/api
+        run: uv run pytest tests/api --cov=app --cov-append --cov-report=term-missing
       - name: Start MinIO
         run: |
           docker run -d --name minio -p 9000:9000 \
@@ -77,11 +77,14 @@ jobs:
           done
           echo "MinIO did not become healthy" >&2
           exit 1
-      - name: Integration tests
+      - name: Integration and job tests
         working-directory: backend
         env:
           SPN_REQUIRE_S3: "1"
-        run: uv run pytest tests/integration
+        run: uv run pytest tests/integration tests/jobs --cov=app --cov-append --cov-report=term-missing
+      - name: Coverage floors
+        working-directory: backend
+        run: uv run python scripts/check_coverage.py
 
   frontend:
     runs-on: ubuntu-latest
@@ -105,6 +108,136 @@ jobs:
         run: npm run test
       - name: Build
         run: npm run build
+      - name: Bundle size
+        run: node scripts/check-bundle-size.mjs
+
+  contract:
+    # Fuzzes the API from its own OpenAPI schema. It finds the cases a
+    # hand written test never thinks of, such as a body that is valid
+    # against the schema but that the server refuses.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.6
+        env:
+          POSTGRES_USER: spn
+          POSTGRES_PASSWORD: spn
+          POSTGRES_DB: spn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U spn -d spn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://spn:spn@localhost:5432/spn
+      JWT_SECRET: ci-placeholder-not-a-real-secret-0123456789
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_BUCKET: spn-files
+      S3_ACCESS_KEY: spn
+      S3_SECRET_KEY: spn-local-secret
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.13.1"
+          enable-cache: true
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --frozen
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=spn \
+            -e MINIO_ROOT_PASSWORD=spn-local-secret \
+            coollabsio/minio:RELEASE.2025-10-15T17-29-55Z server /data
+          for attempt in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become healthy" >&2
+          exit 1
+      - name: Prepare the database
+        working-directory: backend
+        run: uv run alembic upgrade head
+      - name: Start the API
+        working-directory: backend
+        run: |
+          uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          for attempt in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/healthz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "The API did not start" >&2
+          exit 1
+      - name: Get a token for the authenticated endpoints
+        working-directory: backend
+        run: |
+          curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"fuzzer@example.com","password":"fuzzer-password-1","full_name":"Fuzzer"}' > /dev/null
+          curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"fuzzer@example.com","password":"fuzzer-password-1"}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])' > token.txt
+      - name: Fuzz the API against its own schema
+        working-directory: backend
+        run: |
+          uv run schemathesis run http://127.0.0.1:8000/openapi.json \
+            --phases examples,fuzzing \
+            --max-time 120 \
+            --workers 4 \
+            --rate-limit 40/m \
+            --auth "Bearer $(cat token.txt)"
+
+  e2e:
+    # Runs the Playwright journeys and the accessibility checks against the
+    # whole stack, the way a person would use it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --frozen
+      - name: Start the stack
+        run: docker compose up -d --build
+      - name: Wait for the app
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf http://localhost:5173/ > /dev/null && curl -sf http://localhost:8000/readyz > /dev/null; then
+              echo "the stack is up"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose logs
+          echo "the stack did not come up" >&2
+          exit 1
+      - name: Prepare the database
+        run: |
+          docker compose run --rm api alembic upgrade head
+          docker compose run --rm api python -m app.cli seed
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chrome
+      - name: Run the end to end tests
+        working-directory: e2e
+        run: npm test
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
 
   openapi:
     runs-on: ubuntu-latest

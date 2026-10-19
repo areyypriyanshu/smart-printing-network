@@ -14,10 +14,11 @@ from app.schemas.auth import (
     RegisterVendorRequest,
     UserResponse,
 )
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.shop import VendorRegistrationResponse
 from app.services import auth_service, shop_service
 
-router = APIRouter(tags=["auth"])
+router = APIRouter(tags=["auth"], responses=ERROR_RESPONSES)
 
 
 @router.post(

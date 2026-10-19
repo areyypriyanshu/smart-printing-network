@@ -163,3 +163,65 @@ def test_register_is_rate_limited(client: TestClient) -> None:
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "RATE_LIMITED"
     assert int(limited.headers["retry-after"]) >= 1
+
+
+REGISTER_VENDOR = "/api/v1/auth/register-vendor"
+
+
+def register_vendor_payload(email: str = "shop@example.com") -> dict[str, object]:
+    return {
+        "email": email,
+        "password": DEFAULT_PASSWORD,
+        "full_name": "Shop Owner",
+        "shop_name": "A Print Shop",
+        "shop_address": "1 Test Street",
+        "latitude": 22.5726,
+        "longitude": 88.3639,
+    }
+
+
+def test_register_vendor_creates_a_shop(client: TestClient) -> None:
+    response = client.post(REGISTER_VENDOR, json=register_vendor_payload())
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["user"]["role"] == "vendor"
+    assert body["shop"]["name"] == "A Print Shop"
+    assert body["shop"]["is_verified"] is False
+
+
+def test_register_vendor_with_a_duplicate_email_is_rejected(
+    client: TestClient, db_session: Session
+) -> None:
+    create_user(db_session, email="taken@example.com")
+
+    response = client.post(REGISTER_VENDOR, json=register_vendor_payload("taken@example.com"))
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "EMAIL_TAKEN"
+
+
+def test_register_vendor_with_a_duplicate_email_is_rejected_case_insensitively(
+    client: TestClient, db_session: Session
+) -> None:
+    create_user(db_session, email="taken@example.com")
+
+    response = client.post(REGISTER_VENDOR, json=register_vendor_payload("TAKEN@example.com"))
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "EMAIL_TAKEN"
+
+
+def test_register_vendor_with_a_duplicate_email_leaves_no_shop_behind(
+    client: TestClient, db_session: Session
+) -> None:
+    from app.models import Shop
+    from sqlalchemy import func, select
+
+    create_user(db_session, email="taken@example.com")
+    before = db_session.scalar(select(func.count()).select_from(Shop))
+
+    client.post(REGISTER_VENDOR, json=register_vendor_payload("taken@example.com"))
+
+    after = db_session.scalar(select(func.count()).select_from(Shop))
+    assert after == before

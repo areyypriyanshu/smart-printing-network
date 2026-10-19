@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
-from app.errors import AppError, exception_handler
+from app.errors import AppError, exception_handler, http_exception_handler
 from app.gateways.payments import build_payment_gateway
 from app.gateways.storage import S3Storage
 from app.logging import RequestIdMiddleware, setup_logging
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     app.add_exception_handler(AppError, exception_handler)
     app.add_exception_handler(RequestValidationError, exception_handler)
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, exception_handler)
     app.include_router(health.router)
     app.include_router(auth.router, prefix=API_PREFIX)
