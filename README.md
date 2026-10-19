@@ -14,7 +14,6 @@ queue of paid orders from a counter screen.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
-Built by Priyanshu Mandal as a portfolio project with three goals:
 **testable**, **deployable**, **explainable**.
 
 [![CI](https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml/badge.svg)](https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml)
@@ -276,5 +275,5 @@ committed. The decisions are.
 
 ## Author
 
-Priyanshu Mandal, final-year B.Tech Information Technology.
+Priyanshu Mandal,
 GitHub: [areyypriyanshu](https://github.com/areyypriyanshu) | LinkedIn: [areyypriyanshu](https://linkedin.com/in/areyypriyanshu)
