@@ -7,12 +7,15 @@ import { PickupDialog } from "./pickup-dialog";
 import { QueueCard } from "./queue-card";
 import { ReasonDialog, type ReasonAction } from "./reason-dialog";
 
-const COLUMNS = [
-  { status: "PAID", title: "New" },
-  { status: "ACCEPTED", title: "Accepted" },
-  { status: "PRINTING", title: "Printing" },
-  { status: "READY", title: "Ready" },
-] as const;
+// The New column holds both kinds of new job: one that has been paid for
+// and one that is reserved to be paid for in cash. They are the same work
+// for the shop.
+const COLUMNS: { statuses: string[]; title: string }[] = [
+  { statuses: ["PAID", "RESERVED"], title: "New" },
+  { statuses: ["ACCEPTED"], title: "Accepted" },
+  { statuses: ["PRINTING"], title: "Printing" },
+  { statuses: ["READY"], title: "Ready" },
+];
 
 const CLOCK_INTERVAL_MS = 15_000;
 
@@ -101,18 +104,18 @@ export function VendorQueuePage() {
         <div className="rounded-lg border border-hairline-soft bg-canvas p-6">
           <p className="text-sm text-ink">Nothing waiting right now.</p>
           <p className="mt-1 text-sm text-steel">
-            New orders appear here as soon as a customer pays.
+            New orders appear here as soon as a customer pays or reserves one.
           </p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {COLUMNS.map((column) => {
-            const columnOrders = items.filter(
-              (item) => item.status === column.status,
+            const columnOrders = items.filter((item) =>
+              column.statuses.includes(item.status),
             );
             return (
               <section
-                key={column.status}
+                key={column.title}
                 aria-label={column.title}
                 className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface p-3"
               >
@@ -179,6 +182,11 @@ export function VendorQueuePage() {
         <PickupDialog
           open
           orderNumber={dialog.order.order_no}
+          cashAmountPaise={
+            dialog.order.payment_method === "at_store"
+              ? dialog.order.price_paise
+              : null
+          }
           pending={action.isPending}
           error={action.error}
           onClose={closeDialog}

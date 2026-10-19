@@ -9,6 +9,8 @@ export type OrderListResponse = components["schemas"]["OrderListResponse"];
 export type PaymentCheckoutResponse =
   components["schemas"]["PaymentCheckoutResponse"];
 
+export type PaymentMethod = "online" | "at_store";
+
 export type OrderCreateBody = {
   upload_id: string;
   shop_id: string;
@@ -17,11 +19,13 @@ export type OrderCreateBody = {
   duplex: boolean;
   copies: number;
   expected_price_paise?: number;
+  payment_method?: PaymentMethod;
 };
 
 export const ORDER_STATUSES = [
   "PENDING_PAYMENT",
   "PAID",
+  "RESERVED",
   "ACCEPTED",
   "PRINTING",
   "READY",
@@ -43,6 +47,7 @@ export const TERMINAL_STATUSES: readonly OrderStatus[] = [
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING_PAYMENT: "Waiting for payment",
   PAID: "Paid, waiting for the shop",
+  RESERVED: "Reserved, waiting for the shop",
   ACCEPTED: "Accepted by the shop",
   PRINTING: "Printing",
   READY: "Ready for pickup",
@@ -58,6 +63,25 @@ export function isTerminalStatus(status: string): boolean {
 
 export function statusLabel(status: string): string {
   return STATUS_LABELS[status as OrderStatus] ?? status;
+}
+
+/**
+ * The label for an order, in words that fit how it is paid for.
+ *
+ * A cash order is not "paid" until it is collected, so it never says so.
+ * The customer must never be told to pay online for an order they are
+ * going to pay for in cash at the counter.
+ */
+export function orderStatusLabel(order: {
+  status: string;
+  payment_method: string;
+}): string {
+  if (order.payment_method === "at_store") {
+    if (order.status === "RESERVED") return "Reserved, waiting for the shop";
+    if (order.status === "READY") return "Ready for pickup, pay at the counter";
+    if (order.status === "COLLECTED") return "Collected and paid in cash";
+  }
+  return statusLabel(order.status);
 }
 
 export function createOrder(

@@ -13,6 +13,14 @@ export const optionsSchema = z.object({
     .max(100, "At most 100 copies"),
 });
 
+export const PAYMENT_METHODS = ["online", "at_store"] as const;
+
+export const paymentMethodSchema = z.enum(PAYMENT_METHODS);
+
+export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
+
+export const PAYMENT_METHOD_DEFAULT: PaymentMethod = "online";
+
 export type OptionsFormValues = z.infer<typeof optionsSchema>;
 export type OptionsFormInput = z.input<typeof optionsSchema>;
 

@@ -36,11 +36,14 @@ export function QueueCard({
   const [fileError, setFileError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
 
-  const minutesWaiting =
-    order.paid_at === null ? 0 : minutesSince(order.paid_at, now);
+  // The countdown is to the auto reject, which starts when the order
+  // entered the queue. A cash order has no paid_at until it is
+  // collected, so it counts down from the reservation time.
+  const queuedAt = order.reserved_at ?? order.paid_at;
+  const minutesWaiting = queuedAt === null ? 0 : minutesSince(queuedAt, now);
   const minutesLeft = acceptTimeoutMinutes - minutesWaiting;
-  const warning =
-    order.status === "PAID" && minutesLeft <= WARNING_WINDOW_MINUTES;
+  const isNew = order.status === "PAID" || order.status === "RESERVED";
+  const warning = isNew && minutesLeft <= WARNING_WINDOW_MINUTES;
 
   const openFile = async () => {
     setFileError(null);
@@ -81,6 +84,18 @@ export function QueueCard({
         {order.duplex ? "Double sided" : "Single sided"}
       </p>
 
+      {order.payment_method === "at_store" && (
+        <p className="inline-flex w-fit items-center rounded-full border border-hairline-strong bg-surface px-2 py-0.5 text-xs font-medium text-ink">
+          Pay at shop
+        </p>
+      )}
+
+      {order.reserved_at !== null && (
+        <p className="text-xs text-steel">
+          Reserved {relativeTime(order.reserved_at, now)}
+        </p>
+      )}
+
       {order.paid_at !== null && (
         <p className="text-xs text-steel">
           Paid {relativeTime(order.paid_at, now)}
@@ -107,7 +122,7 @@ export function QueueCard({
           Open PDF
         </Button>
 
-        {order.status === "PAID" && (
+        {(order.status === "PAID" || order.status === "RESERVED") && (
           <>
             <Button pending={pending} onClick={onAccept}>
               Accept

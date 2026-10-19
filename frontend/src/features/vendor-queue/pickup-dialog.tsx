@@ -2,10 +2,14 @@ import { useState } from "react";
 
 import { Alert, Button, Dialog, Input } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
+import { formatPaise } from "../../lib/money";
 
 type PickupDialogProps = {
   open: boolean;
   orderNumber: number;
+  // A cash order is paid at the counter, so the shop has to know how much
+  // to take.
+  cashAmountPaise: number | null;
   pending: boolean;
   error: unknown;
   onClose: () => void;
@@ -15,6 +19,7 @@ type PickupDialogProps = {
 export function PickupDialog({
   open,
   orderNumber,
+  cashAmountPaise,
   pending,
   error,
   onClose,
@@ -43,7 +48,11 @@ export function PickupDialog({
       open={open}
       onClose={close}
       title="Verify pickup"
-      description={`Order #${orderNumber}. Ask the customer for the code on their order.`}
+      description={
+        cashAmountPaise === null
+          ? `Order #${orderNumber}. Ask the customer for the code on their order.`
+          : `Order #${orderNumber}. Take ${formatPaise(cashAmountPaise)} in cash and ask the customer for the code on their order.`
+      }
       footer={
         <>
           <Button variant="secondary" onClick={close} disabled={pending}>

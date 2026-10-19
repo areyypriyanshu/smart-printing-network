@@ -6,6 +6,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import cast, delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.errors import NotFound, ValidationError
 from app.models import Shop, ShopRate
 from app.schemas.shop import (
@@ -49,7 +50,11 @@ def list_public_shops(session: Session, *, limit: int, cursor: str | None) -> Sh
         for shop, lat, lng in rows
     ]
     next_cursor = _encode_cursor(rows[-1][0]) if has_more and rows else None
-    return ShopListResponse(items=items, next_cursor=next_cursor)
+    return ShopListResponse(
+        items=items,
+        next_cursor=next_cursor,
+        cash_at_store_enabled=get_settings().cash_at_store_enabled,
+    )
 
 
 def get_public_shop(session: Session, shop_id: uuid.UUID) -> ShopResponse:

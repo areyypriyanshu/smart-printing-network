@@ -15,6 +15,7 @@ from app.domain.order_state import (
 from app.domain.pickup_code import generate_pickup_code
 from app.domain.pricing import quote_paise
 from app.errors import (
+    CashPaymentDisabled,
     Conflict,
     Forbidden,
     InvalidTransition,
@@ -25,7 +26,7 @@ from app.errors import (
     ShopUnavailable,
     UploadAlreadyUsed,
 )
-from app.gateways.payments import GatewayError, PaymentGateway
+from app.gateways.payments import AT_STORE, GatewayError, PaymentGateway
 from app.gateways.storage import Storage
 from app.models import Order, OrderEvent, Payment, Shop, ShopRate, Upload
 from app.schemas.order import (
@@ -48,7 +49,15 @@ def create_order(
     request: OrderCreateRequest,
     idempotency_key: str,
     gateway: PaymentGateway,
+    now: datetime | None = None,
 ) -> tuple[Order, Payment]:
+    """Book a print job.
+
+    Two ways to pay, one order. An online order waits in
+    `PENDING_PAYMENT` until the provider says the money arrived. A cash
+    order is booked as `RESERVED` straight away, and the money changes
+    hands at the counter when the customer collects it.
+    """
     existing = session.scalar(
         select(Order).where(
             Order.customer_id == customer_id, Order.idempotency_key == idempotency_key
@@ -59,6 +68,10 @@ def create_order(
         if payment is None:
             raise Conflict("The order exists but its payment is missing")
         return existing, payment
+
+    method = request.payment_method
+    if method == AT_STORE and not get_settings().cash_at_store_enabled:
+        raise CashPaymentDisabled("Paying at the shop is not available right now")
 
     upload = get_upload(session, upload_id=request.upload_id, customer_id=customer_id)
     already_used = session.scalar(select(Order.id).where(Order.upload_id == upload.id))
@@ -91,11 +104,18 @@ def create_order(
             details={"current_price_paise": price_paise},
         )
 
+    current = _now() if now is None else now
+    is_cash = method == AT_STORE
     order = Order(
         customer_id=customer_id,
         shop_id=shop.id,
         upload_id=upload.id,
-        status="PENDING_PAYMENT",
+        # A cash order never sits in PENDING_PAYMENT. It is booked, and
+        # the shop has work to do, from the moment it is placed.
+        status="RESERVED" if is_cash else "PENDING_PAYMENT",
+        payment_method=method,
+        pickup_code=generate_pickup_code() if is_cash else None,
+        reserved_at=current if is_cash else None,
         paper_size=request.paper_size,
         color=request.color,
         duplex=request.duplex,
@@ -112,7 +132,7 @@ def create_order(
         OrderEvent(
             order_id=order.id,
             from_status=None,
-            to_status="PENDING_PAYMENT",
+            to_status=order.status,
             actor_type="customer",
             actor_id=customer_id,
         )
@@ -123,7 +143,10 @@ def create_order(
 
     try:
         gateway_order = gateway.create_order(
-            amount_paise=order.price_paise, receipt=str(order.id), currency="INR"
+            amount_paise=order.price_paise,
+            receipt=str(order.id),
+            currency="INR",
+            method=method,
         )
     except GatewayError as exc:
         logger.error("order_gateway_error", extra={"order_id": str(order.id)})
@@ -185,9 +208,25 @@ def transition(
         "status_reason": reason,
         "updated_at": current,
     }
+    if to_status == "RESERVED":
+        # The customer booked the job and will pay in cash. The code is
+        # issued now, because it is what they show at the counter, and it
+        # never changes after this.
+        values["pickup_code"] = generate_pickup_code()
+        values["reserved_at"] = current
     if to_status == "PAID":
         values["paid_at"] = current
         values["pickup_code"] = generate_pickup_code()
+        # The order entered the shop's queue when it was paid. The queue
+        # is ordered by this, for both payment methods.
+        values["reserved_at"] = current
+    if to_status == "READY":
+        # Starts the clock on the customer not turning up.
+        values["ready_at"] = current
+    if to_status == "COLLECTED" and order.payment_method == AT_STORE:
+        # The money changed hands at the counter. The order is now paid,
+        # which for a cash order is the moment of collection.
+        values["paid_at"] = current
 
     updated_id = session.scalar(
         update(Order)
@@ -197,6 +236,13 @@ def transition(
     )
     if updated_id is None:
         raise Conflict("The order changed while you were working. Refresh and try again")
+
+    if to_status == "COLLECTED" and order.payment_method == AT_STORE:
+        # The capture belongs here and not in the service that asked for
+        # the collection: the status change, the event row and the money
+        # must all commit together, or a collected order could exist with
+        # no record that the customer paid.
+        _capture_cash_payment(session, order_id=order_id, now=current)
 
     if is_terminal(to_status):
         upload = session.get(Upload, order.upload_id)
@@ -329,6 +375,7 @@ def order_response(order: Order) -> OrderResponse:
         min_order_paise=order.min_order_paise,
         price_paise=order.price_paise,
         pickup_code=order.pickup_code,
+        payment_method=order.payment_method,
         paid_at=order.paid_at,
         created_at=order.created_at,
     )
@@ -336,6 +383,27 @@ def order_response(order: Order) -> OrderResponse:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _capture_cash_payment(session: Session, *, order_id: uuid.UUID, now: datetime) -> None:
+    """Record that the customer paid in cash at the counter.
+
+    The shop's collect action is the only record of the transaction, so
+    the payment row goes from CREATED to CAPTURED here, in the same
+    transaction as the order's status change. A collected cash order
+    without this would be a sale that nobody recorded.
+    """
+    payment = session.scalar(select(Payment).where(Payment.order_id == order_id))
+    if payment is None:
+        raise Conflict("The order exists but its payment is missing")
+    if payment.provider != "cash":
+        # An online order was captured by the webhook, not here. If this
+        # ever runs for one, the payment row is already wrong and the
+        # transaction should not pretend otherwise.
+        raise Conflict("This order was not paid in cash")
+    payment.status = "CAPTURED"
+    payment.provider_payment_id = f"cash_payment_{order_id}"
+    payment.updated_at = now
 
 
 def _queue_refund(session: Session, *, order_id: uuid.UUID, now: datetime) -> None:

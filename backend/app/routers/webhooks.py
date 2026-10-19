@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import get_payment_gateway
 from app.errors import Conflict, NotFound, ValidationError
-from app.gateways.payments import FakeGateway, PaymentGateway
+from app.gateways.payments import PaymentGateway, PaymentGatewayRouter
 from app.models import Order, Payment
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.payment import SimulatePaymentRequest
@@ -45,11 +45,11 @@ def razorpay_webhook(
 def simulate_payment(
     body: SimulatePaymentRequest,
     session: Session = Depends(get_db),
-    gateway: PaymentGateway = Depends(get_payment_gateway),
+    gateway: PaymentGatewayRouter = Depends(get_payment_gateway),
 ) -> dict[str, str]:
     if get_settings().env == "production":
         raise NotFound("Not found")
-    if not isinstance(gateway, FakeGateway):
+    if gateway.provider != "fake":
         raise Conflict("The configured payment provider is not the fake gateway")
 
     order = session.get(Order, body.order_id)

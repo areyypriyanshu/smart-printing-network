@@ -65,8 +65,19 @@ class RazorpayGateway:
         )
 
     def create_order(
-        self, *, amount_paise: int, receipt: str, currency: str = "INR"
+        self,
+        *,
+        amount_paise: int,
+        receipt: str,
+        currency: str = "INR",
+        method: str = "online",
     ) -> GatewayOrder:
+        """Create an order at Razorpay.
+
+        Razorpay is the online provider, so `method` is accepted and
+        ignored. A cash order never reaches here: the router sends it to
+        the cash gateway instead.
+        """
         request = self.build_order_request(
             amount_paise=amount_paise, receipt=receipt, currency=currency
         )

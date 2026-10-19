@@ -51,7 +51,9 @@ def create_order(
             provider_order_id=payment.provider_order_id,
             amount_paise=payment.amount_paise,
             currency=payment.currency,
-            key_id=gateway.checkout_key_id,
+            # Only an order that is paid online has a checkout to open. A
+            # cash order is paid at the counter, so it gets no key.
+            key_id=(gateway.checkout_key_id if payment.provider == gateway.provider else None),
         ),
     )
 
