@@ -225,3 +225,37 @@ def test_register_vendor_with_a_duplicate_email_leaves_no_shop_behind(
 
     after = db_session.scalar(select(func.count()).select_from(Shop))
     assert after == before
+
+
+def test_repeated_logins_for_one_account_are_rate_limited(
+    client: TestClient, db_session: Session
+) -> None:
+    """Guessing one password over and over is stopped."""
+    create_user(db_session, email="victim@example.com")
+
+    for _ in range(10):
+        client.post(
+            LOGIN,
+            json={"email": "victim@example.com", "password": "wrong-password"},
+        )
+
+    limited = client.post(LOGIN, json={"email": "victim@example.com", "password": "wrong-password"})
+
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_logins_for_different_accounts_from_one_address_are_allowed(
+    client: TestClient, db_session: Session
+) -> None:
+    """A college puts every student behind one address.
+
+    One student signing in must not lock the rest of the campus out, so
+    the limit for an account and the limit for the whole address are
+    counted separately.
+    """
+    for index in range(6):
+        email = f"student{index}@example.com"
+        create_user(db_session, email=email)
+        response = client.post(LOGIN, json={"email": email, "password": DEFAULT_PASSWORD})
+        assert response.status_code == 200, response.text

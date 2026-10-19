@@ -14,6 +14,11 @@ from app.models import User
 PICKUP_MAX_ATTEMPTS = 5
 PICKUP_WINDOW_SECONDS = 600.0
 
+#: How many times wider the limit for a whole address is than the limit
+#: for one account. The address limit only has to stop a machine
+#: spraying many accounts, so it can be generous.
+ADDRESS_LIMIT_FACTOR = 4
+
 
 class RateLimiter:
     def __init__(self) -> None:
@@ -72,6 +77,41 @@ def rate_limit(times: int, seconds: float, scope: str) -> Callable[[Request], No
                 "Too many requests, try again shortly",
                 headers={"Retry-After": str(math.ceil(retry_after))},
             )
+
+    return dependency
+
+
+def account_rate_limit(
+    times: int, seconds: float, scope: str, account_from: Callable[[Request], str]
+) -> Callable[[Request], None]:
+    """Limit an action per account, with a wider limit for the whole address.
+
+    A login attempt is counted twice: once against the account being
+    tried, and once against the address it came from. Guessing one
+    password over and over is stopped by the account limit, and spraying
+    many passwords at many accounts from one machine is stopped by the
+    address limit.
+
+    The two are separate because a college puts every student behind one
+    address. A limit of ten logins a minute for the whole campus would
+    lock out a class, while ten guesses a minute against one account is
+    what actually stops a brute force.
+    """
+
+    def dependency(request: Request) -> None:
+        limiter: RateLimiter = request.app.state.rate_limiter
+        client = request.client.host if request.client else "unknown"
+        account = account_from(request)
+        for key, limit in (
+            (f"{scope}:account:{account}", times),
+            (f"{scope}:address:{client}", times * ADDRESS_LIMIT_FACTOR),
+        ):
+            retry_after = limiter.check(key, limit, seconds)
+            if retry_after is not None:
+                raise RateLimited(
+                    "Too many requests, try again shortly",
+                    headers={"Retry-After": str(math.ceil(retry_after))},
+                )
 
     return dependency
 

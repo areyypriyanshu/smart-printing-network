@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, Response, status
+from fastapi import APIRouter, Cookie, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -6,7 +6,7 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.errors import Unauthenticated
 from app.models import User
-from app.rate_limit import rate_limit
+from app.rate_limit import account_rate_limit, rate_limit
 from app.schemas.auth import (
     AccessTokenResponse,
     LoginRequest,
@@ -59,13 +59,31 @@ def register_vendor(
     )
 
 
+def _account_from_request(request: Request) -> str:
+    """The account a login is trying to reach.
+
+    The body has already been read by the time this runs, so it is read
+    from the request's cache rather than from the stream.
+    """
+    try:
+        payload = LoginRequest.model_validate_json(request._body)  # noqa: SLF001
+    except (ValueError, AttributeError):
+        return "unknown"
+    return str(payload.email).lower()
+
+
 @router.post(
     "/auth/login",
     response_model=AccessTokenResponse,
-    dependencies=[Depends(rate_limit(10, 60, "login"))],
+    dependencies=[
+        Depends(account_rate_limit(10, 60, "login", _account_from_request)),
+    ],
 )
 def login(
-    body: LoginRequest, response: Response, session: Session = Depends(get_db)
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db),
 ) -> AccessTokenResponse:
     _user, tokens = auth_service.login(session, email=str(body.email), password=body.password)
     _set_refresh_cookie(response, tokens.refresh_token)
