@@ -11,4 +11,11 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
+  {
+    // The build scripts run in Node, not in the browser.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
 );
