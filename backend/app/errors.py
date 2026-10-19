@@ -102,6 +102,16 @@ class RateNotSet(AppError):
     status_code = 409
 
 
+class PriceChanged(AppError):
+    code = "PRICE_CHANGED"
+    status_code = 409
+
+
+class InvalidTransition(AppError):
+    code = "INVALID_TRANSITION"
+    status_code = 409
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "error": {

@@ -1,0 +1,53 @@
+import uuid
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class OrderCreateRequest(BaseModel):
+    upload_id: uuid.UUID
+    shop_id: uuid.UUID
+    paper_size: Literal["A4", "A3"]
+    color: bool
+    duplex: bool
+    copies: int = Field(ge=1, le=100)
+    expected_price_paise: int | None = Field(default=None, ge=1)
+
+
+class OrderResponse(BaseModel):
+    id: uuid.UUID
+    order_no: int
+    status: str
+    status_reason: str | None
+    shop_id: uuid.UUID
+    upload_id: uuid.UUID
+    page_count: int
+    copies: int
+    paper_size: str
+    color: bool
+    duplex: bool
+    rate_paise: int
+    min_order_paise: int
+    price_paise: int
+    pickup_code: str | None
+    paid_at: datetime | None
+    created_at: datetime
+
+
+class OrderEventResponse(BaseModel):
+    from_status: str | None
+    to_status: str
+    actor_type: str
+    reason: str | None
+    at: datetime
+
+
+class OrderDetailResponse(BaseModel):
+    order: OrderResponse
+    events: list[OrderEventResponse]
+
+
+class OrderListResponse(BaseModel):
+    items: list[OrderResponse]
+    next_cursor: int | None

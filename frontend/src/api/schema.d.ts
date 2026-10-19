@@ -106,6 +106,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Orders */
+        get: operations["list_orders_api_v1_orders_get"];
+        put?: never;
+        /** Create Order */
+        post: operations["create_order_api_v1_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Order */
+        get: operations["get_order_api_v1_orders__order_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quotes": {
         parameters: {
             query?: never;
@@ -297,6 +332,110 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** OrderCreateRequest */
+        OrderCreateRequest: {
+            /** Color */
+            color: boolean;
+            /** Copies */
+            copies: number;
+            /** Duplex */
+            duplex: boolean;
+            /** Expected Price Paise */
+            expected_price_paise?: number | null;
+            /**
+             * Paper Size
+             * @enum {string}
+             */
+            paper_size: "A4" | "A3";
+            /**
+             * Shop Id
+             * Format: uuid
+             */
+            shop_id: string;
+            /**
+             * Upload Id
+             * Format: uuid
+             */
+            upload_id: string;
+        };
+        /** OrderDetailResponse */
+        OrderDetailResponse: {
+            /** Events */
+            events: components["schemas"]["OrderEventResponse"][];
+            order: components["schemas"]["OrderResponse"];
+        };
+        /** OrderEventResponse */
+        OrderEventResponse: {
+            /** Actor Type */
+            actor_type: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** From Status */
+            from_status: string | null;
+            /** Reason */
+            reason: string | null;
+            /** To Status */
+            to_status: string;
+        };
+        /** OrderListResponse */
+        OrderListResponse: {
+            /** Items */
+            items: components["schemas"]["OrderResponse"][];
+            /** Next Cursor */
+            next_cursor: number | null;
+        };
+        /** OrderResponse */
+        OrderResponse: {
+            /** Color */
+            color: boolean;
+            /** Copies */
+            copies: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Duplex */
+            duplex: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Min Order Paise */
+            min_order_paise: number;
+            /** Order No */
+            order_no: number;
+            /** Page Count */
+            page_count: number;
+            /** Paid At */
+            paid_at: string | null;
+            /** Paper Size */
+            paper_size: string;
+            /** Pickup Code */
+            pickup_code: string | null;
+            /** Price Paise */
+            price_paise: number;
+            /** Rate Paise */
+            rate_paise: number;
+            /**
+             * Shop Id
+             * Format: uuid
+             */
+            shop_id: string;
+            /** Status */
+            status: string;
+            /** Status Reason */
+            status_reason: string | null;
+            /**
+             * Upload Id
+             * Format: uuid
+             */
+            upload_id: string;
         };
         /** QuoteRequest */
         QuoteRequest: {
@@ -707,6 +846,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+        };
+    };
+    list_orders_api_v1_orders_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_order_api_v1_orders_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_order_api_v1_orders__order_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
