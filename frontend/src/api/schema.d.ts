@@ -288,6 +288,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shops/nearby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Nearby Shops
+         * @description The shops around a point, nearest first.
+         *
+         *     The radius is in metres. A shop further away than the radius is not
+         *     returned, so a customer in a town with no shop is told that rather
+         *     than shown one that is a hundred kilometres away.
+         */
+        get: operations["list_nearby_shops_api_v1_shops_nearby_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shops/{shop_id}": {
         parameters: {
             query?: never;
@@ -996,6 +1020,8 @@ export interface components {
             longitude: number;
             /** Password */
             password: string;
+            /** Phone */
+            phone?: string | null;
             /** Shop Address */
             shop_address: string;
             /** Shop Name */
@@ -1026,6 +1052,8 @@ export interface components {
         ShopResponse: {
             /** Address */
             address: string;
+            /** Distance M */
+            distance_m?: number | null;
             /**
              * Id
              * Format: uuid
@@ -1039,6 +1067,8 @@ export interface components {
             min_order_paise: number;
             /** Name */
             name: string;
+            /** Phone */
+            phone?: string | null;
             /** Rates */
             rates: components["schemas"]["RateItem"][];
         };
@@ -1201,6 +1231,8 @@ export interface components {
             min_order_paise: number;
             /** Name */
             name: string;
+            /** Phone */
+            phone?: string | null;
             /**
              * Updated At
              * Format: date-time
@@ -1211,10 +1243,14 @@ export interface components {
         VendorShopUpdate: {
             /** Accepting Orders */
             accepting_orders?: boolean | null;
+            /** Address */
+            address?: string | null;
             /** Min Order Paise */
             min_order_paise?: number | null;
             /** Name */
             name?: string | null;
+            /** Phone */
+            phone?: string | null;
         };
     };
     responses: never;
@@ -2606,6 +2642,94 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopListResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_nearby_shops_api_v1_shops_nearby_get: {
+        parameters: {
+            query: {
+                latitude: number;
+                longitude: number;
+                radius_m?: number;
+                limit?: number;
             };
             header?: never;
             path?: never;

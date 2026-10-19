@@ -5,6 +5,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.auth import UserResponse
+from app.schemas.phone import Phone
 
 
 class RateItem(BaseModel):
@@ -29,10 +30,14 @@ class ShopResponse(BaseModel):
     id: uuid.UUID
     name: str
     address: str
+    # How to reach the shop, when it has published a number.
+    phone: str | None = None
     latitude: float
     longitude: float
     min_order_paise: int
     rates: list[RateItem]
+    # How far away the shop is, in metres. Only the nearby search sets it.
+    distance_m: int | None = None
 
 
 class ShopListResponse(BaseModel):
@@ -54,6 +59,7 @@ class VendorShopResponse(BaseModel):
     id: uuid.UUID
     name: str
     address: str
+    phone: str | None = None
     latitude: float
     longitude: float
     min_order_paise: int
@@ -70,5 +76,7 @@ class VendorRegistrationResponse(BaseModel):
 
 class VendorShopUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    address: str | None = Field(default=None, min_length=1, max_length=300)
+    phone: Phone | None = None
     min_order_paise: int | None = Field(default=None, ge=0)
     accepting_orders: bool | None = None

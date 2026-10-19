@@ -41,6 +41,7 @@ describe("registerVendorSchema", () => {
     password: "password-123",
     shop_name: "Shop",
     shop_address: "1 Main Road",
+    phone: "",
     latitude: "22.5726",
     longitude: "88.3639",
   };
@@ -61,6 +62,22 @@ describe("registerVendorSchema", () => {
   it("rejects non-numeric coordinates", () => {
     expect(
       registerVendorSchema.safeParse({ ...valid, latitude: "north" }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a phone number", () => {
+    expect(
+      registerVendorSchema.safeParse({ ...valid, phone: "+91 98300 00000" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("rejects a phone number that is not one", () => {
+    expect(
+      registerVendorSchema.safeParse({ ...valid, phone: "call me" }).success,
+    ).toBe(false);
+    expect(
+      registerVendorSchema.safeParse({ ...valid, phone: "12345" }).success,
     ).toBe(false);
   });
 });

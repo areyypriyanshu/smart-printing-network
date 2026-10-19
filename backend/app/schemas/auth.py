@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.email import Email
+from app.schemas.phone import Phone
 
 
 class RegisterRequest(BaseModel):
@@ -16,6 +17,9 @@ class RegisterRequest(BaseModel):
 class RegisterVendorRequest(RegisterRequest):
     shop_name: str = Field(min_length=1, max_length=200)
     shop_address: str = Field(min_length=1, max_length=500)
+    # How a customer reaches the shop. Optional: a shop that would rather
+    # not publish a number can leave it out and add one later.
+    phone: Phone | None = None
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
 

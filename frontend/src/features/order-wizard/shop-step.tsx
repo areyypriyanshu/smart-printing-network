@@ -1,8 +1,10 @@
+import { useState } from "react";
+
 import type { UploadResponse } from "../../api/client";
 import { Alert, Button } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
-import { useShops } from "../shops/api";
+import { useNearbyShops, useShops } from "../shops/api";
 import { useShopQuotes, type ShopQuote } from "./api";
 import { describeOptions, type OptionsFormValues } from "./schemas";
 
@@ -29,6 +31,12 @@ const UNAVAILABLE_MESSAGES: Record<string, string> = {
   SHOP_UNAVAILABLE: "Not taking orders right now.",
 };
 
+/** A distance in metres, in words a person would use. */
+function formatDistance(metres: number): string {
+  if (metres < 1000) return `${metres} m`;
+  return `${(metres / 1000).toFixed(1)} km`;
+}
+
 function rank(quote: ShopQuote): number {
   if (quote.state.status === "ok") return 0;
   if (quote.state.status === "pending") return 1;
@@ -44,10 +52,58 @@ export function ShopStep({
   onBack,
 }: ShopStepProps) {
   const shops = useShops();
-  const quotes = useShopQuotes(upload.id, shops.data?.items ?? [], options);
+  const [position, setPosition] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const nearby = useNearbyShops(
+    position === null
+      ? null
+      : { latitude: position.latitude, longitude: position.longitude },
+  );
+
+  // With a position, the nearby shops come first, nearest first. Without
+  // one, the whole list is shown as it always was.
+  const listed =
+    position === null
+      ? (shops.data?.items ?? [])
+      : (nearby.data?.items ?? shops.data?.items ?? []);
+  const quotes = useShopQuotes(upload.id, listed, options);
+
+  const findMe = () => {
+    setLocationError(null);
+    if (!("geolocation" in navigator)) {
+      setLocationError(
+        "This browser cannot share a location, so here is every shop we have.",
+      );
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (result) => {
+        setPosition({
+          latitude: result.coords.latitude,
+          longitude: result.coords.longitude,
+        });
+      },
+      () => {
+        setLocationError(
+          "We could not find your location, so here is every shop we have. " +
+            "You can still pick one.",
+        );
+      },
+      { timeout: 10_000, maximumAge: 300_000 },
+    );
+  };
 
   const sorted = [...quotes].sort((a, b) => {
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    if (position !== null) {
+      // The shop nearest the customer comes first.
+      const distanceA = a.shop.distance_m ?? Number.MAX_SAFE_INTEGER;
+      const distanceB = b.shop.distance_m ?? Number.MAX_SAFE_INTEGER;
+      if (distanceA !== distanceB) return distanceA - distanceB;
+    }
     if (a.state.status === "ok" && b.state.status === "ok") {
       return a.state.quote.price_paise - b.state.quote.price_paise;
     }
@@ -75,6 +131,30 @@ export function ShopStep({
             </Button>
           </div>
         </div>
+      )}
+
+      {shops.isSuccess && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={findMe}
+            pending={nearby.isFetching}
+            pendingLabel="Looking…"
+          >
+            {position === null ? "Find shops near me" : "Showing shops near me"}
+          </Button>
+          {position !== null && (
+            <Button variant="secondary" onClick={() => setPosition(null)}>
+              Show all shops
+            </Button>
+          )}
+        </div>
+      )}
+
+      {locationError !== null && (
+        <p role="status" className="text-sm text-steel">
+          {locationError}
+        </p>
       )}
 
       {shops.isSuccess && sorted.length === 0 && (
@@ -110,6 +190,24 @@ export function ShopStep({
                   )}
                 </div>
                 <p className="text-sm text-steel">{shop.address}</p>
+
+                {shop.distance_m !== null && shop.distance_m !== undefined && (
+                  <p className="text-xs text-steel">
+                    {formatDistance(shop.distance_m)} away
+                  </p>
+                )}
+
+                {shop.phone != null && (
+                  <p className="text-xs text-steel">
+                    Phone:{" "}
+                    <a
+                      href={`tel:${shop.phone.replace(/[^0-9+]/g, "")}`}
+                      className="font-medium text-ink underline"
+                    >
+                      {shop.phone}
+                    </a>
+                  </p>
+                )}
 
                 {state.status === "pending" && (
                   <p className="text-sm text-steel">Checking price…</p>

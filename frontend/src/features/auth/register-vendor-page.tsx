@@ -18,7 +18,7 @@ import { registerVendorSchema, type RegisterVendorValues } from "./schemas";
 const STEPS = ["Shop", "Location", "Account"];
 
 const STEP_FIELDS: ReadonlyArray<ReadonlyArray<keyof RegisterVendorValues>> = [
-  ["shop_name", "shop_address"],
+  ["shop_name", "shop_address", "phone"],
   ["latitude", "longitude"],
   ["full_name", "email", "password"],
 ];
@@ -49,6 +49,7 @@ export function RegisterVendorPage() {
         password: values.password,
         shop_name: values.shop_name,
         shop_address: values.shop_address,
+        phone: values.phone?.trim() ? values.phone.trim() : null,
         latitude: Number(values.latitude),
         longitude: Number(values.longitude),
       });
@@ -108,8 +109,19 @@ export function RegisterVendorPage() {
               error={errors.shop_address?.message}
               {...register("shop_address")}
             />
+            <TextField
+              label="Phone number (optional)"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+91 98300 00000"
+              error={errors.phone?.message}
+              {...register("phone")}
+            />
             <p className="text-sm text-steel">
-              Customers use this to recognise your shop at pickup.
+              Customers use the address to recognise your shop at pickup. A
+              phone number lets them reach you if they are running late. You can
+              add or change it later in your shop settings.
             </p>
           </>
         )}

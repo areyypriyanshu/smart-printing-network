@@ -25,6 +25,30 @@ def list_shops(
     return shop_service.list_public_shops(session, limit=limit, cursor=cursor)
 
 
+@router.get("/nearby", response_model=ShopListResponse)
+def list_nearby_shops(
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    radius_m: int = Query(default=5000, ge=100, le=50000),
+    limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_db),
+    _user: User = Depends(_customer_only),
+) -> ShopListResponse:
+    """The shops around a point, nearest first.
+
+    The radius is in metres. A shop further away than the radius is not
+    returned, so a customer in a town with no shop is told that rather
+    than shown one that is a hundred kilometres away.
+    """
+    return shop_service.list_nearby_shops(
+        session,
+        latitude=latitude,
+        longitude=longitude,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
 @router.get("/{shop_id}", response_model=ShopResponse)
 def get_shop(
     shop_id: uuid.UUID,

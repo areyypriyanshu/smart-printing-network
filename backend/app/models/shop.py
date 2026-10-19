@@ -24,6 +24,13 @@ class Shop(Base):
     __tablename__ = "shops"
     __table_args__ = (
         CheckConstraint("min_order_paise >= 0", name="ck_shops_min_order_paise"),
+        CheckConstraint(
+            "phone IS NULL OR ("
+            "phone ~ '^[0-9+() .-]{7,25}$' AND "
+            "length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 7 AND 15"
+            ")",
+            name="ck_shops_phone",
+        ),
         Index("shops_location_gix", "location", postgresql_using="gist"),
     )
 
@@ -33,6 +40,8 @@ class Shop(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), unique=True)
     name: Mapped[str] = mapped_column(Text)
     address: Mapped[str] = mapped_column(Text)
+    # How a customer reaches the shop. Optional, and editable afterwards.
+    phone: Mapped[str | None] = mapped_column(Text)
     location: Mapped[WKBElement] = mapped_column(
         Geography(geometry_type="POINT", srid=4326, spatial_index=False)
     )

@@ -11,6 +11,17 @@ import { useUpdateVendorShop, useVendorShop } from "./api";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Enter the shop name").max(200, "Too long"),
+  phone: z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        value === "" ||
+        (/^[0-9+() .-]{7,25}$/.test(value) &&
+          value.replace(/[^0-9]/g, "").length >= 7 &&
+          value.replace(/[^0-9]/g, "").length <= 15),
+      "Enter a phone number with 7 to 15 digits",
+    ),
   minOrderRupees: z
     .string()
     .refine(
@@ -35,13 +46,19 @@ export function VendorSettingsPage() {
     formState: { errors },
   } = useForm<SettingsValues>({
     resolver: zodResolver(settingsSchema),
-    defaultValues: { name: "", minOrderRupees: "", acceptingOrders: true },
+    defaultValues: {
+      name: "",
+      phone: "",
+      minOrderRupees: "",
+      acceptingOrders: true,
+    },
   });
 
   useEffect(() => {
     if (shop.data !== undefined) {
       reset({
         name: shop.data.name,
+        phone: shop.data.phone ?? "",
         minOrderRupees:
           shop.data.min_order_paise === 0
             ? ""
@@ -61,6 +78,7 @@ export function VendorSettingsPage() {
     try {
       await updateShop.mutateAsync({
         name: values.name,
+        phone: values.phone.trim() === "" ? null : values.phone.trim(),
         min_order_paise: minOrderPaise,
         accepting_orders: values.acceptingOrders,
       });
@@ -125,6 +143,19 @@ export function VendorSettingsPage() {
           {...register("name")}
         />
         <p className="text-sm text-steel">{shop.data.address}</p>
+        <TextField
+          label="Phone number (optional)"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="+91 98300 00000"
+          error={errors.phone?.message}
+          {...register("phone")}
+        />
+        <p className="text-sm text-steel">
+          Customers can call this number if they are running late. Leave it
+          empty if you would rather not publish one.
+        </p>
         <TextField
           label="Minimum order (₹, optional)"
           inputMode="decimal"

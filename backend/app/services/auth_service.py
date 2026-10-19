@@ -44,6 +44,7 @@ def register_vendor(
     full_name: str,
     shop_name: str,
     shop_address: str,
+    phone: str | None = None,
     latitude: float,
     longitude: float,
 ) -> tuple[User, Shop]:
@@ -65,6 +66,7 @@ def register_vendor(
             owner_id=user.id,
             name=shop_name,
             address=shop_address,
+            phone=phone,
             location=WKTElement(f"POINT({longitude} {latitude})", srid=4326),
         )
         session.add(shop)

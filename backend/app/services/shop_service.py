@@ -2,7 +2,8 @@ import base64
 import uuid
 from datetime import datetime
 
-from geoalchemy2 import Geometry
+from geoalchemy2 import Geography, Geometry
+from geoalchemy2.elements import WKTElement
 from sqlalchemy import cast, delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
@@ -42,6 +43,7 @@ def list_public_shops(session: Session, *, limit: int, cursor: str | None) -> Sh
             id=shop.id,
             name=shop.name,
             address=shop.address,
+            phone=shop.phone,
             latitude=float(lat),
             longitude=float(lng),
             min_order_paise=shop.min_order_paise,
@@ -53,6 +55,61 @@ def list_public_shops(session: Session, *, limit: int, cursor: str | None) -> Sh
     return ShopListResponse(
         items=items,
         next_cursor=next_cursor,
+        cash_at_store_enabled=get_settings().cash_at_store_enabled,
+    )
+
+
+def list_nearby_shops(
+    session: Session,
+    *,
+    latitude: float,
+    longitude: float,
+    radius_m: int,
+    limit: int,
+) -> ShopListResponse:
+    """The shops within a radius, nearest first.
+
+    The distance is measured on the sphere, in metres, which is what the
+    customer means by "nearby". The shop table has a geography column
+    with a spatial index on it, so the radius search does not scan the
+    table.
+    """
+    point = WKTElement(f"POINT({longitude} {latitude})", srid=4326)
+    distance = func.ST_Distance(cast(Shop.location, Geography), cast(point, Geography))
+    stmt = (
+        select(
+            Shop,
+            func.ST_Y(cast(Shop.location, Geometry)).label("lat"),
+            func.ST_X(cast(Shop.location, Geometry)).label("lng"),
+            distance.label("distance_m"),
+        )
+        .where(
+            Shop.is_verified.is_(True),
+            Shop.accepting_orders.is_(True),
+            func.ST_DWithin(cast(Shop.location, Geography), cast(point, Geography), radius_m),
+        )
+        .order_by(distance.asc(), Shop.name.asc())
+        .limit(limit)
+    )
+    rows = list(session.execute(stmt).all())
+    rates_by_shop = _rates_for(session, [row[0].id for row in rows])
+    items = [
+        ShopResponse(
+            id=shop.id,
+            name=shop.name,
+            address=shop.address,
+            phone=shop.phone,
+            latitude=float(lat),
+            longitude=float(lng),
+            min_order_paise=shop.min_order_paise,
+            rates=rates_by_shop.get(shop.id, []),
+            distance_m=round(float(metres)),
+        )
+        for shop, lat, lng, metres in rows
+    ]
+    return ShopListResponse(
+        items=items,
+        next_cursor=None,
         cash_at_store_enabled=get_settings().cash_at_store_enabled,
     )
 
@@ -72,6 +129,7 @@ def get_public_shop(session: Session, shop_id: uuid.UUID) -> ShopResponse:
         id=shop.id,
         name=shop.name,
         address=shop.address,
+        phone=shop.phone,
         latitude=float(lat),
         longitude=float(lng),
         min_order_paise=shop.min_order_paise,
@@ -89,6 +147,10 @@ def get_vendor_shop(session: Session, owner_id: uuid.UUID) -> Shop:
 def update_vendor_shop(session: Session, shop: Shop, update: VendorShopUpdate) -> Shop:
     if update.name is not None:
         shop.name = update.name
+    if update.address is not None:
+        shop.address = update.address
+    if update.phone is not None:
+        shop.phone = update.phone
     if update.min_order_paise is not None:
         shop.min_order_paise = update.min_order_paise
     if update.accepting_orders is not None:
@@ -131,6 +193,7 @@ def vendor_shop_response(session: Session, shop: Shop) -> VendorShopResponse:
         id=shop.id,
         name=shop.name,
         address=shop.address,
+        phone=shop.phone,
         latitude=float(lat),
         longitude=float(lng),
         min_order_paise=shop.min_order_paise,

@@ -49,6 +49,7 @@ def register_vendor(
         full_name=body.full_name,
         shop_name=body.shop_name,
         shop_address=body.shop_address,
+        phone=body.phone,
         latitude=body.latitude,
         longitude=body.longitude,
     )
