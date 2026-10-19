@@ -6,7 +6,12 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.domain.order_state import can_actor_transition, can_transition, is_terminal
+from app.domain.order_state import (
+    can_actor_transition,
+    can_transition,
+    is_terminal,
+    queues_refund,
+)
 from app.domain.pickup_code import generate_pickup_code
 from app.domain.pricing import quote_paise
 from app.errors import (
@@ -21,15 +26,17 @@ from app.errors import (
     UploadAlreadyUsed,
 )
 from app.gateways.payments import GatewayError, PaymentGateway
+from app.gateways.storage import Storage
 from app.models import Order, OrderEvent, Payment, Shop, ShopRate, Upload
 from app.schemas.order import (
+    FileUrlResponse,
     OrderCreateRequest,
     OrderDetailResponse,
     OrderEventResponse,
     OrderListResponse,
     OrderResponse,
 )
-from app.services.upload_service import get_upload
+from app.services.upload_service import get_upload, presigned_download
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +193,9 @@ def transition(
         if upload is not None:
             upload.delete_after = now + timedelta(hours=get_settings().file_retention_hours)
 
+    if queues_refund(from_status, to_status):
+        _queue_refund(session, order_id=order_id, now=now)
+
     session.add(
         OrderEvent(
             order_id=order_id,
@@ -251,6 +261,47 @@ def get_order_detail(
     )
 
 
+def cancel_order(session: Session, *, order_id: uuid.UUID, customer_id: uuid.UUID) -> OrderResponse:
+    """Cancel an order the customer placed.
+
+    Allowed while the order is still waiting for payment and after it is
+    paid but before the shop accepts it. Once the shop has accepted, the
+    order is the shop's to finish or cancel, so the transition is refused.
+    """
+    order = session.scalar(
+        select(Order).where(Order.id == order_id, Order.customer_id == customer_id)
+    )
+    if order is None:
+        raise NotFound("Order not found")
+    cancelled = transition(
+        session,
+        order_id=order.id,
+        to_status="CANCELLED",
+        actor_type="customer",
+        actor_id=customer_id,
+    )
+    return order_response(cancelled)
+
+
+def customer_file_url(
+    session: Session,
+    storage: Storage,
+    *,
+    order_id: uuid.UUID,
+    customer_id: uuid.UUID,
+) -> FileUrlResponse:
+    """A short-lived download link for the PDF the customer uploaded."""
+    order = session.scalar(
+        select(Order).where(Order.id == order_id, Order.customer_id == customer_id)
+    )
+    if order is None:
+        raise NotFound("Order not found")
+    upload = session.get(Upload, order.upload_id)
+    if upload is None:
+        raise NotFound("This file is no longer available")
+    return presigned_download(storage, upload)
+
+
 def order_response(order: Order) -> OrderResponse:
     return OrderResponse(
         id=order.id,
@@ -275,3 +326,19 @@ def order_response(order: Order) -> OrderResponse:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _queue_refund(session: Session, *, order_id: uuid.UUID, now: datetime) -> None:
+    """Mark the order's payment as awaiting a refund.
+
+    Only a captured payment has money in it. The refund job picks up
+    `REFUND_PENDING` rows, so setting the status here is what turns a
+    rejection or a cancellation into money actually going back to the
+    customer. The status change, the event row and this flag all commit in
+    the same transaction as the order status change.
+    """
+    payment = session.scalar(select(Payment).where(Payment.order_id == order_id))
+    if payment is None or payment.status != "CAPTURED":
+        return
+    payment.status = "REFUND_PENDING"
+    payment.refund_next_attempt_at = now

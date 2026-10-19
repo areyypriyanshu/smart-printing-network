@@ -122,6 +122,11 @@ class WebhookSignatureInvalid(AppError):
     status_code = 400
 
 
+class PickupCodeInvalid(AppError):
+    code = "PICKUP_CODE_INVALID"
+    status_code = 400
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "error": {

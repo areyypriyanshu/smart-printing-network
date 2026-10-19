@@ -2,7 +2,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from app import security
-from app.models import Shop, ShopRate, Upload, User
+from app.gateways.payments import FakeGateway
+from app.models import Order, Shop, ShopRate, Upload, User
+from app.schemas.order import OrderCreateRequest
+from app.services import order_service
 from fastapi.testclient import TestClient
 from geoalchemy2.elements import WKTElement
 from sqlalchemy.orm import Session
@@ -112,3 +115,45 @@ def login_headers(
     response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def create_paid_order(
+    session: Session,
+    *,
+    customer: User,
+    shop: Shop,
+    page_count: int = 1,
+    copies: int = 1,
+    paper_size: str = "A4",
+    color: bool = False,
+    duplex: bool = False,
+) -> Order:
+    """An order that a shop can see: created, then paid through the webhook path.
+
+    Goes through the real service so the order, its payment, its pickup code
+    and its event history look exactly like a paid order in production.
+    """
+    upload = create_upload_row(session, customer=customer, page_count=page_count)
+    order, payment = order_service.create_order(
+        session,
+        customer_id=customer.id,
+        request=OrderCreateRequest(
+            upload_id=upload.id,
+            shop_id=shop.id,
+            paper_size=paper_size,
+            color=color,
+            duplex=duplex,
+            copies=copies,
+        ),
+        idempotency_key=uuid.uuid4().hex,
+        gateway=FakeGateway(),
+    )
+    order_service.transition(session, order_id=order.id, to_status="PAID", actor_type="webhook")
+    # The webhook is what captures the payment, so the factory does too.
+    # Without this the order would be paid but hold no money, and a refund
+    # would have nothing to refund.
+    payment.status = "CAPTURED"
+    payment.provider_payment_id = f"pay_test_{payment.id}"
+    session.commit()
+    session.refresh(order)
+    return order

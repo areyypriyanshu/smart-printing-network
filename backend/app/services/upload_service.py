@@ -20,10 +20,12 @@ from app.errors import (
 )
 from app.gateways.storage import Storage
 from app.models import Upload
+from app.schemas.order import FileUrlResponse
 
 CHUNK_SIZE = 1024 * 1024
 PDF_MAGIC = b"%PDF-"
 MAX_FILENAME_LENGTH = 255
+DOWNLOAD_URL_TTL_SECONDS = 300
 
 
 def create_upload(
@@ -80,6 +82,29 @@ def get_upload(session: Session, *, upload_id: uuid.UUID, customer_id: uuid.UUID
     if upload is None:
         raise NotFound("Upload not found")
     return upload
+
+
+def presigned_download(
+    storage: Storage, upload: Upload, *, expires_seconds: int = DOWNLOAD_URL_TTL_SECONDS
+) -> FileUrlResponse:
+    """A short-lived link to the stored PDF.
+
+    The bucket is private, so this is the only way to read a file. The link
+    is valid for five minutes and the object is fetched as an attachment so
+    it never renders inside the app.
+    """
+    if upload.file_deleted_at is not None:
+        raise NotFound("This file is no longer available")
+    url = storage.presigned_get_url(
+        upload.file_key,
+        expires_seconds=expires_seconds,
+        download_filename=upload.original_filename,
+    )
+    return FileUrlResponse(
+        url=url,
+        expires_in_seconds=expires_seconds,
+        filename=upload.original_filename,
+    )
 
 
 def _inspect_pdf(path: str, max_pages: int) -> int:

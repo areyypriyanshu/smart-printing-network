@@ -16,6 +16,7 @@ from app.domain.order_state import (
     can_transition,
     is_active,
     is_terminal,
+    queues_refund,
 )
 from hypothesis import given
 from hypothesis import strategies as st
@@ -105,3 +106,39 @@ def test_random_transition_attempts_never_reach_an_invalid_state(targets: list[s
         assert status in ALL_STATUSES
     if is_terminal(status):
         assert not any(can_transition(status, target) for target in ALL_STATUSES)
+
+
+def test_only_a_rejection_or_cancellation_of_a_paid_order_queues_a_refund() -> None:
+    assert queues_refund(PAID, REJECTED)
+    assert queues_refund(PAID, CANCELLED)
+    assert queues_refund(ACCEPTED, CANCELLED)
+
+
+def test_cancelling_an_unpaid_order_does_not_queue_a_refund() -> None:
+    assert not queues_refund(PENDING_PAYMENT, CANCELLED)
+    assert not queues_refund(PENDING_PAYMENT, EXPIRED)
+
+
+def test_a_refund_is_never_queued_for_a_transition_that_is_not_a_rejection() -> None:
+    for target in ALL_STATUSES:
+        if target in {REJECTED, CANCELLED}:
+            continue
+        assert not queues_refund(PAID, target)
+        assert not queues_refund(ACCEPTED, target)
+
+
+def test_every_transition_that_queues_a_refund_is_one_the_actors_allow() -> None:
+    for from_status in ALL_STATUSES:
+        for to_status in ALL_STATUSES:
+            if not queues_refund(from_status, to_status):
+                continue
+            assert can_transition(from_status, to_status), (from_status, to_status)
+            assert allowed_actors(from_status, to_status), (from_status, to_status)
+
+
+def test_an_illegal_transition_never_queues_a_refund() -> None:
+    # A shop cannot reject an order it has already started printing, and
+    # that illegal move must not be described as needing a refund.
+    assert not queues_refund(ACCEPTED, REJECTED)
+    assert not queues_refund(PRINTING, REJECTED)
+    assert not queues_refund(PRINTING, CANCELLED)

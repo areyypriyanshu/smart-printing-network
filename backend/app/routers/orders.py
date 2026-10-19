@@ -4,15 +4,18 @@ from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_customer, get_payment_gateway
+from app.deps import get_customer, get_payment_gateway, get_storage
 from app.gateways.payments import PaymentGateway
+from app.gateways.storage import Storage
 from app.models import User
 from app.rate_limit import user_rate_limit
 from app.schemas.order import (
+    FileUrlResponse,
     OrderCreateRequest,
     OrderCreateResponse,
     OrderDetailResponse,
     OrderListResponse,
+    OrderResponse,
     PaymentCheckoutResponse,
 )
 from app.services import order_service
@@ -77,3 +80,30 @@ def get_order(
     session: Session = Depends(get_db),
 ) -> OrderDetailResponse:
     return order_service.get_order_detail(session, order_id=order_id, customer_id=user.id)
+
+
+@router.post(
+    "/orders/{order_id}/cancel",
+    response_model=OrderResponse,
+    dependencies=[Depends(user_rate_limit(20, 60, "orders"))],
+)
+def cancel_order(
+    order_id: uuid.UUID,
+    user: User = Depends(get_customer),
+    session: Session = Depends(get_db),
+) -> OrderResponse:
+    return order_service.cancel_order(session, order_id=order_id, customer_id=user.id)
+
+
+@router.get(
+    "/orders/{order_id}/file",
+    response_model=FileUrlResponse,
+    dependencies=[Depends(user_rate_limit(30, 60, "order_file"))],
+)
+def get_order_file(
+    order_id: uuid.UUID,
+    user: User = Depends(get_customer),
+    session: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+) -> FileUrlResponse:
+    return order_service.customer_file_url(session, storage, order_id=order_id, customer_id=user.id)
