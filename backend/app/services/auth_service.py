@@ -53,16 +53,25 @@ def register_vendor(
         full_name=full_name,
         role="vendor",
     )
-    session.add(user)
-    session.flush()
-    shop = Shop(
-        owner_id=user.id,
-        name=shop_name,
-        address=shop_address,
-        location=WKTElement(f"POINT({longitude} {latitude})", srid=4326),
-    )
-    session.add(shop)
-    _commit_or_email_taken(session)
+    try:
+        session.add(user)
+        # The shop needs the owner's id, so the user row is flushed before
+        # the shop is built. That flush is where the unique email
+        # constraint is hit, so it has to sit inside the same guard as the
+        # commit. Otherwise a duplicate email escapes as a 500 instead of
+        # the 409 the API promises.
+        session.flush()
+        shop = Shop(
+            owner_id=user.id,
+            name=shop_name,
+            address=shop_address,
+            location=WKTElement(f"POINT({longitude} {latitude})", srid=4326),
+        )
+        session.add(shop)
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise EmailTaken("An account with this email already exists") from exc
     return user, shop
 
 

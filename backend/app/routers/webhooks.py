@@ -10,10 +10,11 @@ from app.deps import get_payment_gateway
 from app.errors import Conflict, NotFound, ValidationError
 from app.gateways.payments import FakeGateway, PaymentGateway
 from app.models import Order, Payment
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.payment import SimulatePaymentRequest
 from app.services import payment_service
 
-router = APIRouter(tags=["payments"])
+router = APIRouter(tags=["payments"], responses=ERROR_RESPONSES)
 
 
 async def _raw_body(request: Request) -> bytes:

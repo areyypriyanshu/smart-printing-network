@@ -48,3 +48,32 @@ def test_put_presign_download_delete_round_trip(s3_storage: S3Storage, tmp_path:
     with pytest.raises(urllib.error.HTTPError) as excinfo:
         urllib.request.urlopen(s3_storage.presigned_get_url(key, expires_seconds=60), timeout=10)
     assert excinfo.value.code == 404
+
+
+def test_a_bucket_that_does_not_exist_yet_is_created_and_reported_healthy(
+    s3_storage: S3Storage,
+) -> None:
+    missing = f"tests-missing-{uuid.uuid4().hex}"
+    storage = S3Storage(
+        endpoint_url=get_settings().s3_endpoint_url or None,
+        bucket=missing,
+        access_key=get_settings().s3_access_key,
+        secret_key=get_settings().s3_secret_key,
+    )
+
+    assert storage.health() is True
+    assert storage.client.head_bucket(Bucket=missing)
+    storage.client.delete_bucket(Bucket=missing)
+
+
+def test_a_bucket_that_cannot_be_reached_is_reported_unhealthy(
+    s3_storage: S3Storage,
+) -> None:
+    storage = S3Storage(
+        endpoint_url="http://127.0.0.1:1",
+        bucket="spn-files",
+        access_key=get_settings().s3_access_key,
+        secret_key=get_settings().s3_secret_key,
+    )
+
+    assert storage.health() is False

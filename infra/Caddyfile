@@ -1,0 +1,64 @@
+# Caddy configuration for the single origin.
+#
+# The browser only ever talks to this one host, so there is no CORS to
+# configure and the refresh cookie is always first party. Caddy obtains
+# and renews the certificate on its own.
+#
+# SPN_DOMAIN  the domain to serve. Use localhost for a local run.
+# SPN_TLS     leave empty for ACME (a real domain), set to "internal" for
+#             a local run, where Caddy issues from its own authority.
+
+{
+	# The address Caddy registers the ACME account with. It has to have a
+	# value even when it is never used, because the local run issues its
+	# own certificate and does not talk to ACME at all.
+	email {$ACME_EMAIL:admin@localhost}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$SPN_DOMAIN} {
+	tls {$SPN_TLS}
+
+	encode zstd gzip
+
+	header {
+		# Strict-Transport-Security tells the browser to only come back
+		# over TLS. It is safe because this host is HTTPS only.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		# The policy allows the Razorpay checkout and the web fonts, and
+		# nothing else from a third party. The app itself ships no inline
+		# scripts.
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com; frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com; connect-src 'self' https://api.razorpay.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	# The API answers under /api. The webhook has to be reachable from the
+	# public internet, so it is not behind an extra path check here.
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Health checks for the uptime monitor and for the deploy smoke
+	# check. The readiness check also reports whether the database and the
+	# object storage are reachable, which is operational information and
+	# nothing more.
+	handle /healthz {
+		reverse_proxy api:8000
+	}
+
+	handle /readyz {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

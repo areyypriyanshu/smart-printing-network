@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.errors import ValidationError, WebhookSignatureInvalid
+from app.errors import Conflict, InvalidTransition, ValidationError, WebhookSignatureInvalid
 from app.gateways.payments import PaymentGateway
 from app.models import Order, Payment, WebhookEvent
 from app.services import order_service
@@ -114,7 +114,21 @@ def _handle_order_paid(session: Session, *, payload: dict[str, Any]) -> str:
     if order.status == "PENDING_PAYMENT":
         payment.status = "CAPTURED"
         session.commit()
-        order_service.transition(session, order_id=order.id, to_status="PAID", actor_type="webhook")
+        try:
+            order_service.transition(
+                session, order_id=order.id, to_status="PAID", actor_type="webhook"
+            )
+        except (InvalidTransition, Conflict):
+            # The provider can deliver two different events for the same
+            # payment at the same moment. The first one moved the order to
+            # PAID, so this one has nothing left to do. The money is
+            # captured either way, and the order is paid, which is exactly
+            # what the two deliveries together mean.
+            logger.info(
+                "webhook_order_paid_already_applied",
+                extra={"order_id": str(order.id), "status": order.status},
+            )
+            return "already_paid"
         return "paid"
 
     if order.status in LATE_PAYMENT_STATUSES:

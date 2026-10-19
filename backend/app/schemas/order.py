@@ -64,3 +64,11 @@ class OrderDetailResponse(BaseModel):
 class OrderListResponse(BaseModel):
     items: list[OrderResponse]
     next_cursor: int | None
+
+
+class FileUrlResponse(BaseModel):
+    """A short-lived presigned download link for a stored PDF."""
+
+    url: str
+    expires_in_seconds: int
+    filename: str

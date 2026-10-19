@@ -3,7 +3,7 @@ import uuid
 import pytest
 from app.errors import Forbidden, InvalidTransition, PriceChanged, UploadAlreadyUsed
 from app.gateways.payments import FakeGateway
-from app.models import Order, OrderEvent, ShopRate, Upload
+from app.models import Order, OrderEvent, Payment, ShopRate, Upload
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
 from sqlalchemy import select
@@ -250,3 +250,106 @@ def test_a_failing_event_insert_rolls_back_the_status_change(
     assert stored.pickup_code is None
     events = list(db_session.scalars(select(OrderEvent).where(OrderEvent.order_id == order.id)))
     assert [event.to_status for event in events] == ["PENDING_PAYMENT"]
+
+
+def _capture_payment(db_session: Session, order: Order) -> Payment:
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    payment.status = "CAPTURED"
+    payment.provider_payment_id = f"pay_test_{payment.id}"
+    db_session.commit()
+    return payment
+
+
+def test_rejecting_a_paid_order_queues_a_refund(db_session: Session) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    order = _create(db_session, customer_id, shop_id, upload_id)
+    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
+    _capture_payment(db_session, order)
+
+    order_service.transition(
+        db_session, order_id=order.id, to_status="REJECTED", actor_type="vendor", reason="no"
+    )
+
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "REFUND_PENDING"
+    assert payment.refund_next_attempt_at is not None
+
+
+def test_cancelling_a_paid_order_queues_a_refund(db_session: Session) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    order = _create(db_session, customer_id, shop_id, upload_id)
+    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
+    _capture_payment(db_session, order)
+
+    order_service.transition(
+        db_session, order_id=order.id, to_status="CANCELLED", actor_type="customer"
+    )
+
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "REFUND_PENDING"
+
+
+def test_cancelling_an_unpaid_order_queues_no_refund(db_session: Session) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    order = _create(db_session, customer_id, shop_id, upload_id)
+
+    order_service.transition(
+        db_session, order_id=order.id, to_status="CANCELLED", actor_type="customer"
+    )
+
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "CREATED"
+    assert payment.refund_next_attempt_at is None
+
+
+def test_the_pickup_code_never_changes_after_payment(db_session: Session) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    order = _create(db_session, customer_id, shop_id, upload_id)
+
+    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
+    paid = db_session.get(Order, order.id)
+    assert paid is not None
+    original = paid.pickup_code
+
+    order_service.transition(
+        db_session, order_id=order.id, to_status="ACCEPTED", actor_type="vendor"
+    )
+    order_service.transition(
+        db_session, order_id=order.id, to_status="PRINTING", actor_type="vendor"
+    )
+    order_service.transition(db_session, order_id=order.id, to_status="READY", actor_type="vendor")
+
+    stored = db_session.get(Order, order.id)
+    assert stored is not None
+    assert stored.pickup_code == original
+
+
+def test_the_refund_flag_and_the_status_change_commit_together(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    order = _create(db_session, customer_id, shop_id, upload_id)
+    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
+    _capture_payment(db_session, order)
+
+    def broken_refund(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("refund queueing failed")
+
+    monkeypatch.setattr(order_service, "_queue_refund", broken_refund)
+
+    with pytest.raises(RuntimeError):
+        order_service.transition(
+            db_session, order_id=order.id, to_status="REJECTED", actor_type="vendor"
+        )
+    db_session.rollback()
+
+    stored = db_session.get(Order, order.id)
+    assert stored is not None
+    assert stored.status == "PAID"
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "CAPTURED"

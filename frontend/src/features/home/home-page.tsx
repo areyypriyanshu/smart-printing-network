@@ -25,10 +25,13 @@ export function HomePage() {
           Welcome, {user.full_name}
         </h1>
         <p className="text-steel">
-          Set your rates so customers can see your prices, and keep your shop
-          details up to date.
+          Work the order queue, set your rates so customers can see your prices,
+          and keep your shop details up to date.
         </p>
         <div className="flex flex-wrap gap-3">
+          <Link className="text-primary underline" to="/vendor">
+            Open the queue
+          </Link>
           <Link className="text-primary underline" to="/vendor/rates">
             Manage rates
           </Link>

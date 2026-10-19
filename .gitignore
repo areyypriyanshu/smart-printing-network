@@ -13,6 +13,7 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.json
 coverage.xml
 htmlcov/
 
@@ -33,9 +34,17 @@ playwright-report/
 # Local data
 pgdata/
 miniodata/
+backups/
 
 # Generated artefacts
 openapi.json
+.schemathesis/
 
 # Docs
-docs/
+# The planning documents stay on this machine. The architecture decision
+# records and the decisions page are published, because "explainable" is
+# one of the three goals of this project and a decision nobody can read is
+# not explained.
+docs/*
+!docs/adr/
+!docs/DECISIONS.md

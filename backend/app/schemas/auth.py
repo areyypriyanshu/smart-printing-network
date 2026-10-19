@@ -2,11 +2,13 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.email import Email
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: Email
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=200)
 
@@ -19,7 +21,7 @@ class RegisterVendorRequest(RegisterRequest):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: Email
     password: str = Field(min_length=1, max_length=128)
 
 

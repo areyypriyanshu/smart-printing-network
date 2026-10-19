@@ -15,12 +15,51 @@ _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
+# The attributes every LogRecord already has. Anything else in a record
+# came from an `extra=` argument and belongs in the JSON output.
+_RESERVED_RECORD_KEYS = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
+
 
 def get_request_id() -> str:
     return request_id_var.get()
 
 
 class JsonFormatter(logging.Formatter):
+    """One JSON object per log line.
+
+    Anything a caller passes through `extra=` is included in the object.
+    That is what makes the structured logs useful: the job names, the
+    order ids and the counts all end up in the same line as the message
+    instead of being thrown away. Extras must never carry a secret, a
+    token or any of a customer's file content.
+    """
+
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
@@ -31,6 +70,10 @@ class JsonFormatter(logging.Formatter):
         request_id = request_id_var.get()
         if request_id:
             payload["request_id"] = request_id
+        for key, value in record.__dict__.items():
+            if key in _RESERVED_RECORD_KEYS or key.startswith("_"):
+                continue
+            payload[key] = value
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(payload, default=str)

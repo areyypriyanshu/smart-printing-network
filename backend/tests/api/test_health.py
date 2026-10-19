@@ -28,3 +28,45 @@ def test_readyz_reports_database_ok(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "database": "ok", "storage": "ok"}
+
+
+def test_a_body_that_cannot_be_parsed_uses_the_standard_error_shape(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/auth/login",
+        content=b"\x7f\xfe\x00%",
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "BAD_REQUEST"
+    assert "request_id" in body["error"]
+
+
+def test_an_unknown_route_uses_the_standard_error_shape(client: TestClient) -> None:
+    response = client.get("/api/v1/does-not-exist")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_a_wrong_method_uses_the_standard_error_shape(client: TestClient) -> None:
+    response = client.get("/api/v1/auth/login")
+
+    assert response.status_code == 405
+    assert response.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+
+
+def test_the_upload_contract_says_the_file_is_a_non_empty_pdf(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+
+    part = schema["components"]["schemas"]["Body_create_upload_api_v1_uploads_post"]["properties"][
+        "file"
+    ]
+
+    assert part["contentMediaType"] == "application/pdf"
+    assert part["minLength"] == 1

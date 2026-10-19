@@ -122,6 +122,11 @@ class WebhookSignatureInvalid(AppError):
     status_code = 400
 
 
+class PickupCodeInvalid(AppError):
+    code = "PICKUP_CODE_INVALID"
+    status_code = 400
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "error": {
@@ -131,6 +136,39 @@ def error_body(code: str, message: str, details: dict[str, Any] | None = None) -
             "request_id": get_request_id(),
         }
     }
+
+
+# The code that goes with an HTTP status raised by the framework rather
+# than by the application: a body that could not be parsed, an unknown
+# route, a method that is not allowed.
+HTTP_STATUS_CODES: dict[int, str] = {
+    400: "BAD_REQUEST",
+    401: "UNAUTHENTICATED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
+    429: "RATE_LIMITED",
+}
+
+
+async def http_exception_handler(request: Request, exc: Exception) -> Response:
+    """Give framework errors the same shape as the rest of the API.
+
+    FastAPI answers a body it cannot parse, an unknown route and a wrong
+    method with `{"detail": ...}`. Every other failure in this app uses
+    the standard error body, so a client would otherwise have to handle
+    two shapes. This puts them all in one.
+    """
+    status_code = getattr(exc, "status_code", 500)
+    detail = getattr(exc, "detail", None)
+    message = detail if isinstance(detail, str) else "The request could not be handled"
+    code = HTTP_STATUS_CODES.get(status_code, "HTTP_ERROR")
+    headers = getattr(exc, "headers", None)
+    return JSONResponse(
+        status_code=status_code,
+        content=error_body(code, message),
+        headers=headers,
+    )
 
 
 async def exception_handler(request: Request, exc: Exception) -> Response:

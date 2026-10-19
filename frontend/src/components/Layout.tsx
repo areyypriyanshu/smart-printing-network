@@ -30,10 +30,14 @@ export function Layout() {
   const items: NavItem[] =
     user?.role === "vendor"
       ? [
+          { to: "/vendor", label: "Queue" },
           { to: "/vendor/rates", label: "Rates" },
           { to: "/vendor/settings", label: "Shop settings" },
         ]
-      : [{ to: "/new", label: "New order" }];
+      : [
+          { to: "/new", label: "New order" },
+          { to: "/orders", label: "My orders" },
+        ];
 
   const closeMenu = () => setMenuOpen(false);
 

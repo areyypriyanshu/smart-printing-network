@@ -34,6 +34,36 @@ def _seed(session: Session) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     return customer.id, shop.id, upload.id
 
 
+def _create_order_for(
+    client: TestClient,
+    session: Session,
+    *,
+    email: str,
+    idempotency_key: str,
+) -> dict:
+    """An order for a customer of its own, so two orders can exist at once."""
+    customer = create_user(session, email=email)
+    vendor = create_user(session, email=f"vendor-{email}", role="vendor")
+    shop = create_shop(session, owner=vendor, name=f"Shop for {email}")
+    create_full_rate_table(session, shop, base_paise=BASE_PAISE)
+    upload = create_upload_row(session, customer=customer, page_count=PAGES)
+    headers = login_headers(client, email)
+    response = client.post(
+        ORDERS,
+        headers={**headers, "Idempotency-Key": idempotency_key},
+        json={
+            "upload_id": str(upload.id),
+            "shop_id": str(shop.id),
+            "paper_size": "A4",
+            "color": False,
+            "duplex": False,
+            "copies": COPIES,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def _create_order(client: TestClient, session: Session) -> dict:
     _customer_id, shop_id, upload_id = _seed(session)
     headers = login_headers(client, "customer@example.com")
@@ -53,13 +83,19 @@ def _create_order(client: TestClient, session: Session) -> dict:
     return response.json()
 
 
-def _paid_payload(provider_order_id: str, *, amount: int, currency: str = "INR") -> bytes:
+def _paid_payload(
+    provider_order_id: str,
+    *,
+    amount: int,
+    currency: str = "INR",
+    payment_id: str = "pay_fake_1",
+) -> bytes:
     return json.dumps(
         {
             "event": "order.paid",
             "payload": {
                 "payment": {
-                    "id": "pay_fake_1",
+                    "id": payment_id,
                     "order_id": provider_order_id,
                     "amount": amount,
                     "currency": currency,
@@ -263,3 +299,94 @@ def test_simulate_payment_is_disabled_in_production(
     response = client.post(SIMULATE, json={"order_id": created["order"]["id"]})
 
     assert response.status_code == 404
+
+
+def _refund_payload(provider_payment_id: str, *, refund_id: str = "rfnd_1") -> bytes:
+    return json.dumps(
+        {
+            "event": "refund.processed",
+            "payload": {"refund": {"id": refund_id, "payment_id": provider_payment_id}},
+        }
+    ).encode()
+
+
+def test_refund_processed_marks_the_payment_refunded(
+    client: TestClient, db_session: Session
+) -> None:
+    created = _create_order(client, db_session)
+    provider_order_id = created["payment"]["provider_order_id"]
+    paid = _post_webhook(
+        client, _paid_payload(provider_order_id, amount=PRICE), event_id="evt_paid"
+    )
+    assert paid.status_code == 200
+
+    raw_body = _refund_payload("pay_fake_1")
+    response = _post_webhook(client, raw_body, event_id="evt_refund")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "refunded"
+    payment = db_session.scalar(
+        select(Payment).where(Payment.provider_order_id == provider_order_id)
+    )
+    assert payment is not None
+    assert payment.status == "REFUNDED"
+    assert payment.refund_id == "rfnd_1"
+
+
+def test_refund_processed_for_an_unknown_payment_is_ignored(
+    client: TestClient, db_session: Session
+) -> None:
+    _create_order(client, db_session)
+
+    raw_body = _refund_payload("pay_does_not_exist")
+    response = _post_webhook(client, raw_body, event_id="evt_refund_unknown")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "unknown_payment"
+
+
+def test_a_webhook_with_a_broken_body_is_rejected(client: TestClient, db_session: Session) -> None:
+    _create_order(client, db_session)
+
+    response = _post_webhook(client, b"{not json", event_id="evt_broken")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_a_payment_for_an_unknown_order_is_ignored(client: TestClient, db_session: Session) -> None:
+    _create_order(client, db_session)
+
+    raw_body = _paid_payload("fake_order_does_not_exist", amount=PRICE)
+    response = _post_webhook(client, raw_body, event_id="evt_unknown_order")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "unknown_order"
+
+
+def test_a_second_order_cannot_claim_the_same_provider_payment_id(
+    client: TestClient, db_session: Session
+) -> None:
+    first = _create_order(client, db_session)
+    second = _create_order_for(
+        client, db_session, email="second@example.com", idempotency_key="key-2"
+    )
+    paid = _post_webhook(
+        client,
+        _paid_payload(first["payment"]["provider_order_id"], amount=PRICE),
+        event_id="evt_paid_first",
+    )
+    assert paid.status_code == 200
+
+    # The same provider payment id, but for a different order. The first
+    # order already owns it, so this one must not be captured.
+    raw_body = _paid_payload(
+        second["payment"]["provider_order_id"], amount=PRICE, payment_id="pay_fake_1"
+    )
+    response = _post_webhook(client, raw_body, event_id="evt_paid_second")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "duplicate_payment"
+    second_order = db_session.get(Order, uuid.UUID(second["order"]["id"]))
+    assert second_order is not None
+    assert second_order.status == "PENDING_PAYMENT"

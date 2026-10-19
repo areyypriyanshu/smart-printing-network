@@ -5,10 +5,11 @@ from app.db import get_db
 from app.deps import get_customer
 from app.models import User
 from app.rate_limit import user_rate_limit
+from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.quote import QuoteRequest, QuoteResponse
 from app.services import quote_service
 
-router = APIRouter(tags=["quotes"])
+router = APIRouter(tags=["quotes"], responses=ERROR_RESPONSES)
 
 
 @router.post(

@@ -30,6 +30,8 @@ TERMINAL: Final = frozenset({COLLECTED, REJECTED, CANCELLED, EXPIRED})
 
 REFUNDABLE_FROM: Final = frozenset({PAID, ACCEPTED})
 
+REFUNDABLE_TO: Final = frozenset({REJECTED, CANCELLED})
+
 ALLOWED: Final[dict[str, frozenset[str]]] = {
     PENDING_PAYMENT: frozenset({PAID, EXPIRED, CANCELLED}),
     PAID: frozenset({ACCEPTED, REJECTED, CANCELLED}),
@@ -72,3 +74,15 @@ def is_terminal(status: str) -> bool:
 
 def is_active(status: str) -> bool:
     return status in ACTIVE_STATUSES
+
+
+def queues_refund(frm: str, to: str) -> bool:
+    """True when a transition means the customer must be refunded.
+
+    Only a rejection or a cancellation of an order that was already paid
+    moves money back. Cancelling an unpaid order moves nothing. The
+    transition has to be a legal one, so that this agrees with the
+    transition table rather than describing a move the state machine
+    forbids.
+    """
+    return can_transition(frm, to) and frm in REFUNDABLE_FROM and to in REFUNDABLE_TO

@@ -1,19 +1,19 @@
-name: spn
+name: ${SPN_COMPOSE_PROJECT:-spn}
 
 services:
   db:
     image: postgis/postgis:16-3.6
     platform: linux/amd64
     environment:
-      POSTGRES_USER: spn
-      POSTGRES_PASSWORD: spn
-      POSTGRES_DB: spn
+      POSTGRES_USER: ${POSTGRES_USER:-spn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spn}
+      POSTGRES_DB: ${POSTGRES_DB:-spn}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spn -d spn"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spn} -d ${POSTGRES_DB:-spn}"]
       interval: 5s
       timeout: 5s
       retries: 10
