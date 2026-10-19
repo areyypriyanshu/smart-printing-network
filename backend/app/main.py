@@ -1,5 +1,8 @@
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
@@ -39,7 +42,45 @@ def create_app() -> FastAPI:
     app.include_router(quotes.router, prefix=API_PREFIX)
     app.include_router(orders.router, prefix=API_PREFIX)
     app.include_router(webhooks.router, prefix=API_PREFIX)
+    # Shadowing the method on the instance is the documented way to change
+    # the OpenAPI document FastAPI produces.
+    app.openapi = lambda: build_openapi(app)  # type: ignore[method-assign]
     return app
+
+
+def build_openapi(app: FastAPI) -> dict[str, Any]:
+    """The OpenAPI document, with the upload part described properly.
+
+    FastAPI describes a file part as an opaque binary string. This API
+    only accepts a PDF, and a non empty one, so the contract should say
+    so. The contract fuzzer found the gap: it sent an empty body, which
+    the schema allowed and the server rightly refused.
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    _describe_the_uploaded_pdf(schema)
+    app.openapi_schema = schema
+    return schema
+
+
+def _describe_the_uploaded_pdf(schema: dict[str, Any]) -> None:
+    request = schema.get("paths", {}).get(f"{API_PREFIX}/uploads", {}).get("post", {})
+    content = request.get("requestBody", {}).get("content", {})
+    components = schema.get("components", {}).get("schemas", {})
+    for media in content.values():
+        reference = media.get("schema", {}).get("$ref", "")
+        name = reference.rsplit("/", 1)[-1]
+        part = components.get(name, {}).get("properties", {}).get("file")
+        if part is None:
+            continue
+        part["contentMediaType"] = "application/pdf"
+        part["minLength"] = 1
 
 
 app = create_app()

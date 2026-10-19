@@ -216,6 +216,10 @@ def test_two_different_events_for_the_same_payment_capture_once(race_engine) -> 
 
         assert errors == []
         assert len(outcomes) == 2
+        # One delivery pays the order. The other finds it already paid,
+        # which is what two events for one payment mean together.
+        assert "paid" in outcomes
+        assert "already_paid" in outcomes
         _assert_single_capture(race_engine, order_id)
     finally:
         _cleanup(race_engine, customer_id, order_id, run_id)

@@ -188,11 +188,20 @@ jobs:
       - name: Fuzz the API against its own schema
         working-directory: backend
         run: |
+          # The upload endpoint is left out of the contract run on purpose.
+          # Whether a file is acceptable is decided by its bytes, not by
+          # its shape, and a schema cannot say "these bytes have to be a
+          # PDF". The fuzzer therefore sends a body that matches the
+          # schema and is rightly refused with 400 FILE_NOT_PDF, which the
+          # "schema-valid request rejected" check reads as a failure. The
+          # behaviour is covered by the API tests instead, one for each
+          # way a file can be wrong.
           uv run schemathesis run http://127.0.0.1:8000/openapi.json \
             --phases examples,fuzzing \
             --max-time 120 \
             --workers 4 \
             --rate-limit 40/m \
+            --exclude-path "/api/v1/uploads" \
             --header "Authorization: Bearer $(cat token.txt)"
 
   e2e:
@@ -214,7 +223,9 @@ jobs:
         working-directory: backend
         run: uv sync --frozen
       - name: Start the stack
-        run: docker compose up -d --build
+        run: |
+          cp .env.example .env
+          docker compose up -d --build
       - name: Wait for the app
         run: |
           for attempt in $(seq 1 60); do

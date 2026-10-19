@@ -57,3 +57,16 @@ def test_a_wrong_method_uses_the_standard_error_shape(client: TestClient) -> Non
 
     assert response.status_code == 405
     assert response.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+
+
+def test_the_upload_contract_says_the_file_is_a_non_empty_pdf(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+
+    part = schema["components"]["schemas"]["Body_create_upload_api_v1_uploads_post"]["properties"][
+        "file"
+    ]
+
+    assert part["contentMediaType"] == "application/pdf"
+    assert part["minLength"] == 1
