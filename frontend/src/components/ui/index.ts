@@ -1,5 +1,5 @@
 export { Alert } from "./Alert";
-export { Button } from "./Button";
+export { Button, buttonClassName } from "./Button";
 export { CropMarks } from "./CropMarks";
 export { Icon, type IconName } from "./Icon";
 export { Input } from "./Input";
