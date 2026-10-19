@@ -87,6 +87,8 @@ smart-printing-network/
   .github/workflows/     # ci.yml, deploy.yml
 ```
 
+`docs/` is intentionally local-only: `.gitignore` excludes it and it is never committed. Keep it updated on disk, read it before tasks, and never report it as missing from the repository.
+
 Layering: `routers -> services -> models`, with `services -> domain` and `services -> gateways (interfaces)`. Routers contain no business logic. Services own transactions. See `BACKEND_STRUCTURE.md`.
 
 ## 6. Commands
