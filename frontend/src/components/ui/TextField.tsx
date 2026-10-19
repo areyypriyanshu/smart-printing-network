@@ -12,7 +12,7 @@ export function TextField({ label, name, error, ...rest }: TextFieldProps) {
   const errorId = `${name}-error`;
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={name} className="text-sm font-medium text-slate-800">
+      <label htmlFor={name} className="text-sm font-medium text-ink">
         {label}
       </label>
       <Input

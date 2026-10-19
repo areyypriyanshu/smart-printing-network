@@ -64,7 +64,7 @@ export function VendorRatesPage() {
 
   if (shop.isPending || rates.isPending) {
     return (
-      <p role="status" className="p-6 text-slate-600">
+      <p role="status" className="p-6 text-steel">
         Loading your rates…
       </p>
     );
@@ -73,8 +73,8 @@ export function VendorRatesPage() {
   if (shop.error instanceof ApiError && shop.error.code === "NOT_FOUND") {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Rates</h1>
-        <p className="text-slate-700">
+        <h1 className="text-2xl font-semibold text-ink">Rates</h1>
+        <p className="text-steel">
           This account does not have a shop yet. Register a shop to set rates.
         </p>
       </section>
@@ -85,7 +85,7 @@ export function VendorRatesPage() {
     const error = shop.error ?? rates.error;
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Rates</h1>
+        <h1 className="text-2xl font-semibold text-ink">Rates</h1>
         <Alert>{messageForError(error)}</Alert>
         <Button
           variant="secondary"
@@ -103,8 +103,8 @@ export function VendorRatesPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-slate-900">Rates</h1>
-        <p className="text-slate-700">
+        <h1 className="text-2xl font-semibold text-ink">Rates</h1>
+        <p className="text-steel">
           Prices per page for {shop.data.name}. Leave a row empty if the shop
           does not offer it.
         </p>
@@ -121,11 +121,11 @@ export function VendorRatesPage() {
         <Alert>{errors.root.message}</Alert>
       )}
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
-        <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-md border border-hairline-soft bg-canvas">
           <table className="w-full border-collapse text-sm">
             <caption className="sr-only">Rates per page in rupees</caption>
             <thead>
-              <tr className="border-b border-slate-200 text-left text-slate-600">
+              <tr className="border-b border-hairline-soft text-left text-steel">
                 <th scope="col" className="px-3 py-2 font-medium">
                   Options
                 </th>
@@ -141,11 +141,11 @@ export function VendorRatesPage() {
                 return (
                   <tr
                     key={label}
-                    className="border-b border-slate-100 last:border-b-0"
+                    className="border-b border-hairline-soft last:border-b-0"
                   >
                     <th
                       scope="row"
-                      className="px-3 py-2 text-left font-normal text-slate-800"
+                      className="px-3 py-2 text-left font-normal text-ink"
                     >
                       {label}
                     </th>

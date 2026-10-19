@@ -12,10 +12,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-primary-600 text-white hover:bg-primary-700 disabled:bg-primary-100",
+    "bg-primary text-white enabled:hover:bg-primary-deep disabled:bg-hairline disabled:text-muted",
   secondary:
-    "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50",
-  danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-200",
+    "border border-hairline-strong bg-transparent text-ink enabled:hover:bg-surface",
+  danger: "bg-red-600 text-white enabled:hover:bg-red-700 disabled:bg-red-200",
 };
 
 export function Button({
@@ -33,7 +33,7 @@ export function Button({
       disabled={disabled === true || pending}
       className={cn(
         "inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2 text-sm font-medium",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         "disabled:cursor-not-allowed disabled:opacity-80",
         VARIANTS[variant],
         className,

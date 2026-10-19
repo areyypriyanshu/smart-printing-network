@@ -41,9 +41,7 @@ export function RegisterPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">
-        Create your account
-      </h1>
+      <h1 className="text-2xl font-semibold text-ink">Create your account</h1>
       {serverError !== null && <Alert>{serverError}</Alert>}
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <TextField
@@ -74,9 +72,9 @@ export function RegisterPage() {
           Create account
         </Button>
       </form>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-steel">
         Already have an account?{" "}
-        <Link className="text-primary-600 underline" to="/login">
+        <Link className="text-primary underline" to="/login">
           Sign in
         </Link>
       </p>

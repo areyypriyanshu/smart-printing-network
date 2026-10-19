@@ -51,10 +51,10 @@ export function RegisterVendorPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">
+      <h1 className="text-2xl font-semibold text-ink">
         Register your print shop
       </h1>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-steel">
         Create a vendor account and your shop profile. One of our team members
         verifies new shops before customers can find them.
       </p>
@@ -114,9 +114,9 @@ export function RegisterVendorPage() {
           Register shop
         </Button>
       </form>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-steel">
         Just here to print?{" "}
-        <Link className="text-primary-600 underline" to="/register">
+        <Link className="text-primary underline" to="/register">
           Create a customer account
         </Link>
       </p>

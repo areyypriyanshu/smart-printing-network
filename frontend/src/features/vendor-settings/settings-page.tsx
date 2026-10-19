@@ -72,7 +72,7 @@ export function VendorSettingsPage() {
 
   if (shop.isPending) {
     return (
-      <p role="status" className="p-6 text-slate-600">
+      <p role="status" className="p-6 text-steel">
         Loading your shop…
       </p>
     );
@@ -81,8 +81,8 @@ export function VendorSettingsPage() {
   if (shop.error instanceof ApiError && shop.error.code === "NOT_FOUND") {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Shop settings</h1>
-        <p className="text-slate-700">
+        <h1 className="text-2xl font-semibold text-ink">Shop settings</h1>
+        <p className="text-steel">
           This account does not have a shop yet. Register a shop to manage it
           here.
         </p>
@@ -93,7 +93,7 @@ export function VendorSettingsPage() {
   if (shop.isError) {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Shop settings</h1>
+        <h1 className="text-2xl font-semibold text-ink">Shop settings</h1>
         <Alert>{messageForError(shop.error)}</Alert>
         <Button variant="secondary" onClick={() => void shop.refetch()}>
           Try again
@@ -105,8 +105,8 @@ export function VendorSettingsPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-slate-900">Shop settings</h1>
-        <p className="text-slate-700">
+        <h1 className="text-2xl font-semibold text-ink">Shop settings</h1>
+        <p className="text-steel">
           Keep your shop details and order limits up to date.
         </p>
       </div>
@@ -124,7 +124,7 @@ export function VendorSettingsPage() {
           error={errors.name?.message}
           {...register("name")}
         />
-        <p className="text-sm text-slate-600">{shop.data.address}</p>
+        <p className="text-sm text-steel">{shop.data.address}</p>
         <TextField
           label="Minimum order (₹, optional)"
           inputMode="decimal"
@@ -135,15 +135,15 @@ export function VendorSettingsPage() {
           <Input
             id="acceptingOrders"
             type="checkbox"
-            className="h-5 w-5 accent-primary-600"
+            className="h-5 w-5 accent-primary"
             aria-describedby="acceptingOrders-hint"
             {...register("acceptingOrders")}
           />
-          <label htmlFor="acceptingOrders" className="text-sm text-slate-800">
+          <label htmlFor="acceptingOrders" className="text-sm text-ink">
             Accepting new orders
           </label>
         </div>
-        <p id="acceptingOrders-hint" className="text-sm text-slate-600">
+        <p id="acceptingOrders-hint" className="text-sm text-steel">
           Turn this off to hide your shop from new orders.
         </p>
         <div>

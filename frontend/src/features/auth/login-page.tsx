@@ -48,7 +48,7 @@ export function LoginPage() {
 
   return (
     <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Sign in</h1>
+      <h1 className="text-2xl font-semibold text-ink">Sign in</h1>
       {state?.registered === true && (
         <Alert variant="success">Account created. Sign in to continue.</Alert>
       )}
@@ -72,15 +72,15 @@ export function LoginPage() {
           Sign in
         </Button>
       </form>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-steel">
         New customer?{" "}
-        <Link className="text-primary-600 underline" to="/register">
+        <Link className="text-primary underline" to="/register">
           Create an account
         </Link>
       </p>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-steel">
         Run a print shop?{" "}
-        <Link className="text-primary-600 underline" to="/register-vendor">
+        <Link className="text-primary underline" to="/register-vendor">
           Register your shop
         </Link>
       </p>

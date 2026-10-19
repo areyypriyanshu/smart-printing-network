@@ -21,9 +21,12 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-hairline-soft bg-canvas">
         <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <Link to="/" className="text-base font-semibold text-slate-900">
+          <Link
+            to="/"
+            className="text-base font-semibold tracking-tight text-ink"
+          >
             Smart Printing Network
           </Link>
           <nav
@@ -35,20 +38,20 @@ export function Layout() {
                 {user.role === "vendor" && (
                   <>
                     <Link
-                      className="text-slate-700 hover:text-primary-700"
+                      className="text-ink hover:text-primary"
                       to="/vendor/rates"
                     >
                       Rates
                     </Link>
                     <Link
-                      className="text-slate-700 hover:text-primary-700"
+                      className="text-ink hover:text-primary"
                       to="/vendor/settings"
                     >
                       Shop settings
                     </Link>
                   </>
                 )}
-                <span className="text-slate-500">{user.email}</span>
+                <span className="text-steel">{user.email}</span>
                 <Button
                   variant="secondary"
                   pending={pending}
@@ -60,16 +63,10 @@ export function Layout() {
               </>
             ) : status === "anonymous" ? (
               <>
-                <Link
-                  className="text-slate-700 hover:text-primary-700"
-                  to="/login"
-                >
+                <Link className="text-ink hover:text-primary" to="/login">
                   Sign in
                 </Link>
-                <Link
-                  className="text-slate-700 hover:text-primary-700"
-                  to="/register"
-                >
+                <Link className="text-ink hover:text-primary" to="/register">
                   Create account
                 </Link>
               </>
@@ -80,7 +77,7 @@ export function Layout() {
       <main className="flex-1">
         <Suspense
           fallback={
-            <p role="status" className="p-6 text-slate-600">
+            <p role="status" className="p-6 text-steel">
               Loading…
             </p>
           }
@@ -88,8 +85,9 @@ export function Layout() {
           <Outlet />
         </Suspense>
       </main>
-      <footer className="border-t border-slate-200 bg-white">
-        <p className="mx-auto w-full max-w-4xl px-4 py-3 text-sm text-slate-500">
+      <div className="sunset-stripe h-2" aria-hidden="true" />
+      <footer className="border-t border-beige-deep bg-cream">
+        <p className="mx-auto w-full max-w-4xl px-4 py-3 text-sm text-steel">
           Pick up your prints from a verified shop near you.
         </p>
       </footer>
