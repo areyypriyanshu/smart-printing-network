@@ -13,6 +13,10 @@ class OrderCreateRequest(BaseModel):
     duplex: bool
     copies: int = Field(ge=1, le=100)
     expected_price_paise: int | None = Field(default=None, ge=1)
+    # How the customer is paying. "online" is through a payment provider,
+    # "at_store" is in cash at the counter. The price is the same either
+    # way, so the quote does not mention it.
+    payment_method: Literal["online", "at_store"] = "online"
 
 
 class OrderResponse(BaseModel):
@@ -31,6 +35,7 @@ class OrderResponse(BaseModel):
     min_order_paise: int
     price_paise: int
     pickup_code: str | None
+    payment_method: str
     paid_at: datetime | None
     created_at: datetime
 

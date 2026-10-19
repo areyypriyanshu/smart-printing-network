@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import security
 from app.db import get_db
 from app.errors import Forbidden, NotFound, Unauthenticated
-from app.gateways.payments import PaymentGateway
+from app.gateways.payments import PaymentGatewayRouter
 from app.gateways.storage import Storage
 from app.models import Shop, User
 
@@ -50,8 +50,14 @@ def get_storage(request: Request) -> Storage:
     return storage
 
 
-def get_payment_gateway(request: Request) -> PaymentGateway:
-    gateway: PaymentGateway = request.app.state.payment_gateway
+def get_payment_gateway(request: Request) -> PaymentGatewayRouter:
+    """The gateway the application uses: the online provider and cash.
+
+    It is the concrete router rather than the interface because the local
+    simulate-payment endpoint has to sign a body the way the fake provider
+    does, and only the router knows which implementation is in use.
+    """
+    gateway: PaymentGatewayRouter = request.app.state.payment_gateway
     return gateway
 
 

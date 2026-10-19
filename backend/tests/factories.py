@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from app import security
-from app.gateways.payments import FakeGateway, GatewayOrder, GatewayRefund
+from app.gateways.payments import CashGateway, FakeGateway, GatewayOrder, GatewayRefund
 from app.models import Order, Shop, ShopRate, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -229,5 +229,41 @@ def create_paid_order(
     payment.status = "CAPTURED"
     payment.provider_payment_id = f"pay_test_{payment.id}"
     session.commit()
+    session.refresh(order)
+    return order
+
+
+def create_reserved_order(
+    session: Session,
+    *,
+    customer: User,
+    shop: Shop,
+    reserved_at: datetime | None = None,
+    page_count: int = 1,
+    copies: int = 1,
+) -> Order:
+    """A cash order: booked, waiting for the shop, money due at the counter.
+
+    Goes through the real service, so the order, its payment, its pickup
+    code and its event history look exactly like a cash order in
+    production.
+    """
+    upload = create_upload_row(session, customer=customer, page_count=page_count)
+    order, _payment = order_service.create_order(
+        session,
+        customer_id=customer.id,
+        request=OrderCreateRequest(
+            upload_id=upload.id,
+            shop_id=shop.id,
+            paper_size="A4",
+            color=False,
+            duplex=False,
+            copies=copies,
+            payment_method="at_store",
+        ),
+        idempotency_key=uuid.uuid4().hex,
+        gateway=CashGateway(),
+        now=reserved_at,
+    )
     session.refresh(order)
     return order

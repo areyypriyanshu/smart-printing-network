@@ -20,8 +20,19 @@ class FakeGateway:
         self._secret = webhook_secret.encode()
 
     def create_order(
-        self, *, amount_paise: int, receipt: str, currency: str = "INR"
+        self,
+        *,
+        amount_paise: int,
+        receipt: str,
+        currency: str = "INR",
+        method: str = "online",
     ) -> GatewayOrder:
+        """Start a fake order.
+
+        This gateway is the ONLINE fake. It stands in for Razorpay, so it
+        always behaves like the online path whatever `method` says. The
+        cash path has its own gateway and must not be served by this one.
+        """
         return GatewayOrder(
             provider=self.provider,
             provider_order_id=f"fake_order_{receipt}",

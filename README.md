@@ -25,6 +25,7 @@ Built by Priyanshu Mandal as a portfolio project with three goals:
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, payment and signed webhooks, pickup code, vendor queue, refunds, timeouts, file retention. Pickup only. | **Built** |
+| 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
 | 2 | PDF quality checker (effective DPI and blur), geo search of shops, price comparison, map view | Planned |
 | 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
 
@@ -60,7 +61,7 @@ first party.
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
 - **Data:** PostgreSQL with PostGIS, S3-compatible object storage (MinIO locally)
 - **PDF and images (Phase 2):** PyMuPDF, OpenCV
-- **Payments:** Razorpay (test mode) behind a gateway interface, with a fake gateway for tests
+- **Payments:** Razorpay (test mode) behind a gateway interface, with a fake gateway for tests. A second method, cash at the counter, sits behind the same interface
 - **Infra:** Docker Compose, Caddy, GitHub Actions, single instance with S3
 
 ## Quickstart
@@ -228,11 +229,15 @@ committed. The decisions are.
    the whole money path runs the same way in the tests, locally and in
    the demo.
 6. **Background work is database driven**, with no Redis and no Celery.
-   Four functions, rows claimed with `SKIP LOCKED`, safe to run twice.
+   Five functions, rows claimed with `SKIP LOCKED`, safe to run twice.
 
 ## Known limitations
 
-- Payments are test mode. Vendor payouts are not implemented.
+- Payments are test mode. Vendor payouts are not implemented, and the
+  platform takes no cut of a cash order. It records the amount, the
+  method, the shop, the time the money changed hands and the vendor who
+  took it, so a settlement can be built later without a data migration.
+  See [ADR 013](docs/adr/013-cash-on-collection.md).
 - One shop per vendor account, one order per upload, whole-document printing only (no page ranges, no binding options).
 - No email verification or password reset.
 - Single-instance deployment. The rate limiter lives in the process, so a

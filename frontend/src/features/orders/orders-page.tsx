@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 
-import { listOrders, statusLabel } from "../../api/orders";
+import { listOrders, orderStatusLabel } from "../../api/orders";
 import { Alert, Button } from "../../components/ui";
 import { formatIstDateTime } from "../../lib/dates";
 import { messageForError } from "../../lib/errors";
@@ -85,8 +85,11 @@ export function OrdersPage() {
                   </span>
                 </span>
                 <span className="text-sm text-ink">
-                  {statusLabel(order.status)}
+                  {orderStatusLabel(order)}
                 </span>
+                {order.payment_method === "at_store" && (
+                  <span className="text-xs text-steel">Pay at the counter</span>
+                )}
                 <span className="text-xs text-steel">
                   {order.page_count} page{order.page_count === 1 ? "" : "s"} ·{" "}
                   {order.copies} cop{order.copies === 1 ? "y" : "ies"} ·{" "}

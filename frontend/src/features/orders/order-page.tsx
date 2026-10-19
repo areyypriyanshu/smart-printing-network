@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router";
 import {
   getOrder,
   isTerminalStatus,
+  orderStatusLabel,
   statusLabel,
   type OrderDetailResponse,
 } from "../../api/orders";
@@ -74,7 +75,7 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           Order #{order.order_no}
         </p>
         <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
-          {statusLabel(order.status)}
+          {orderStatusLabel(order)}
         </h1>
       </div>
 
@@ -84,7 +85,9 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           className="flex flex-col gap-2 rounded-xl border border-hairline bg-surface p-6"
         >
           <h2 className="font-display text-base font-semibold text-ink">
-            Show this code at the counter
+            {order.payment_method === "at_store"
+              ? `Show this code and pay ${formatPaise(order.price_paise)} in cash`
+              : "Show this code at the counter"}
           </h2>
           <p className="font-mono text-3xl tracking-[0.3em] text-ink">
             {order.pickup_code}
@@ -109,6 +112,14 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
         </dd>
         <dt className="text-steel">Total</dt>
         <dd className="font-mono text-ink">{formatPaise(order.price_paise)}</dd>
+        <dt className="text-steel">Payment</dt>
+        <dd className="text-ink">
+          {order.payment_method === "at_store"
+            ? order.paid_at === null
+              ? "Cash at the counter"
+              : "Cash paid at the counter"
+            : "Paid online"}
+        </dd>
       </dl>
 
       <section aria-label="History" className="flex flex-col gap-3">

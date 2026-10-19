@@ -30,8 +30,21 @@ class PaymentGateway(Protocol):
     def checkout_key_id(self) -> str | None: ...
 
     def create_order(
-        self, *, amount_paise: int, receipt: str, currency: str = "INR"
-    ) -> GatewayOrder: ...
+        self,
+        *,
+        amount_paise: int,
+        receipt: str,
+        currency: str = "INR",
+        method: str = "online",
+    ) -> GatewayOrder:
+        """Start a payment for `amount_paise`.
+
+        `method` says how the customer intends to pay: "online" through the
+        provider, or "at_store" in cash at the counter. A gateway that only
+        supports one of them may refuse the other rather than quietly
+        doing the wrong thing.
+        """
+        ...
 
     def verify_webhook_signature(self, *, raw_body: bytes, signature: str) -> bool: ...
 

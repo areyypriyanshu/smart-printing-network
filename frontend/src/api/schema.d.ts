@@ -4,6 +4,85 @@
  */
 
 export interface paths {
+    "/api/v1/admin/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Actions
+         * @description The moderation log, newest first.
+         */
+        get: operations["list_actions_api_v1_admin_actions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/shops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Shops
+         * @description The shops the admin can act on, oldest first.
+         *
+         *     `status` is `pending`, `verified` or `all`.
+         */
+        get: operations["list_shops_api_v1_admin_shops_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/shops/{shop_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Shop */
+        post: operations["approve_shop_api_v1_admin_shops__shop_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/shops/{shop_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend Shop
+         * @description Take a shop off the market. Its existing orders are left alone.
+         */
+        post: operations["suspend_shop_api_v1_admin_shops__shop_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -534,6 +613,94 @@ export interface components {
              */
             token_type: "bearer";
         };
+        /** AdminActionListResponse */
+        AdminActionListResponse: {
+            /** Items */
+            items: components["schemas"]["AdminActionResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminActionResponse
+         * @description One entry of the moderation log.
+         */
+        AdminActionResponse: {
+            /** Action */
+            action: string;
+            /** Admin Email */
+            admin_email: string | null;
+            /** Admin Id */
+            admin_id: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Shop Id
+             * Format: uuid
+             */
+            shop_id: string;
+            /** Shop Name */
+            shop_name: string;
+        };
+        /** AdminShopListResponse */
+        AdminShopListResponse: {
+            /** Items */
+            items: components["schemas"]["AdminShopResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminShopResponse
+         * @description A shop as the admin sees it.
+         *
+         *     The owner email and name are here because verifying a shop means
+         *     checking that a real person is behind it. Nothing about a customer's
+         *     orders or money is reachable from this view.
+         */
+        AdminShopResponse: {
+            /** Accepting Orders */
+            accepting_orders: boolean;
+            /** Address */
+            address: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Verified */
+            is_verified: boolean;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Name */
+            name: string;
+            /** Owner Email */
+            owner_email: string;
+            /** Owner Full Name */
+            owner_full_name: string;
+            /** Rate Count */
+            rate_count: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** Body_create_upload_api_v1_uploads_post */
         Body_create_upload_api_v1_uploads_post: {
             /** File */
@@ -617,6 +784,12 @@ export interface components {
              */
             paper_size: "A4" | "A3";
             /**
+             * Payment Method
+             * @default online
+             * @enum {string}
+             */
+            payment_method: "online" | "at_store";
+            /**
              * Shop Id
              * Format: uuid
              */
@@ -689,6 +862,8 @@ export interface components {
             paid_at: string | null;
             /** Paper Size */
             paper_size: string;
+            /** Payment Method */
+            payment_method: string;
             /** Pickup Code */
             pickup_code: string | null;
             /** Price Paise */
@@ -829,8 +1004,22 @@ export interface components {
             /** Shop Name */
             shop_name: string;
         };
-        /** ShopListResponse */
+        /**
+         * ShopListResponse
+         * @description The shops a customer can order from.
+         *
+         *     `cash_at_store_enabled` is a platform setting, not a shop setting. It
+         *     travels with the shop list because this is the response the order
+         *     wizard already has when the customer reaches the payment step, and
+         *     the customer should not be offered a way to pay that the server is
+         *     going to refuse.
+         */
         ShopListResponse: {
+            /**
+             * Cash At Store Enabled
+             * @default false
+             */
+            cash_at_store_enabled: boolean;
             /** Items */
             items: components["schemas"]["ShopResponse"][];
             /** Next Cursor */
@@ -863,6 +1052,14 @@ export interface components {
              * Format: uuid
              */
             order_id: string;
+        };
+        /**
+         * SuspendShopRequest
+         * @description Why a shop was taken offline. Required, so the log is useful later.
+         */
+        SuspendShopRequest: {
+            /** Reason */
+            reason: string;
         };
         /** UploadResponse */
         UploadResponse: {
@@ -946,8 +1143,12 @@ export interface components {
             paid_at: string | null;
             /** Paper Size */
             paper_size: string;
+            /** Payment Method */
+            payment_method: string;
             /** Price Paise */
             price_paise: number;
+            /** Reserved At */
+            reserved_at: string | null;
             /** Status */
             status: string;
             /** Status Reason */
@@ -960,7 +1161,7 @@ export interface components {
         };
         /**
          * VendorQueueResponse
-         * @description Active orders for one shop, oldest payment first.
+         * @description Active orders for one shop, oldest reservation first.
          *
          *     `accept_timeout_minutes` is the server's own setting, sent so the board
          *     can warn about orders that are about to be auto rejected without the
@@ -1027,6 +1228,353 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_actions_api_v1_admin_actions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminActionListResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_shops_api_v1_admin_shops_get: {
+        parameters: {
+            query?: {
+                status?: "pending" | "verified" | "all";
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminShopListResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_shop_api_v1_admin_shops__shop_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminShopResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    suspend_shop_api_v1_admin_shops__shop_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuspendShopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminShopResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;

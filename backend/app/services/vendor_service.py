@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.domain.order_state import ACTIVE_STATUSES
+from app.domain.order_state import ACTIVE_STATUSES, SHOP_VISIBLE_STATUSES
 from app.domain.pickup_code import verify_pickup_code
 from app.errors import NotFound, PickupCodeInvalid
 from app.gateways.storage import Storage
@@ -20,16 +20,18 @@ from app.services.upload_service import presigned_download
 
 
 def list_queue(session: Session, *, shop_id: uuid.UUID, limit: int) -> VendorQueueResponse:
-    """The shop's active orders, oldest payment first.
+    """The shop's active orders, oldest reservation first.
 
-    First paid, first served: the queue is ordered by `paid_at` ascending so
-    the card at the top of the New column is the order that has been waiting
-    longest. It is served by `orders_queue_idx`.
+    First reserved, first served: the queue is ordered by `reserved_at`
+    ascending, so the card at the top of the New column is the order that
+    has been waiting longest. `reserved_at` is set when an order is paid
+    for online and when it is reserved for cash, so the two methods queue
+    the same way. It is served by `orders_queue_idx`.
     """
     orders = session.scalars(
         select(Order)
         .where(Order.shop_id == shop_id, Order.status.in_(ACTIVE_STATUSES))
-        .order_by(Order.paid_at.asc(), Order.order_no.asc())
+        .order_by(Order.reserved_at.asc(), Order.order_no.asc())
         .limit(limit)
     )
     return VendorQueueResponse(
@@ -162,6 +164,10 @@ def collect_order(
     The code is the only proof that the person at the counter is the person
     who paid, so it is compared in constant time and never revealed to the
     shop in any response.
+
+    For a cash order this is also the moment the money changes hands. The
+    capture is part of the transition, not a separate step, so the status
+    change, the event row and the payment record commit together.
     """
     order = _shop_order(session, order_id=order_id, shop_id=shop_id)
     if order.pickup_code is None or not verify_pickup_code(order.pickup_code, code):
@@ -204,21 +210,27 @@ def vendor_order_response(order: Order) -> VendorOrderResponse:
         color=order.color,
         duplex=order.duplex,
         price_paise=order.price_paise,
+        payment_method=order.payment_method,
+        reserved_at=order.reserved_at,
         paid_at=order.paid_at,
         created_at=order.created_at,
     )
 
 
 def _shop_order(session: Session, *, order_id: uuid.UUID, shop_id: uuid.UUID) -> Order:
-    """Load an order that belongs to this shop and has been paid.
+    """Load an order that belongs to this shop.
 
     An order of another shop is reported as missing rather than forbidden,
     so the response never confirms that someone else's order exists. An
-    order of this shop that is still waiting for payment is also hidden:
-    the shop has not agreed to print it yet, and it is not the shop's to
-    look at.
+    order of this shop that the customer has neither paid for nor reserved
+    is also hidden: the shop has not agreed to print it yet, and it is not
+    the shop's to look at.
+
+    A cash order is the shop's from the moment it is reserved, even though
+    no money has changed hands yet, so the guard is about the state of the
+    order and not about whether it has been paid for.
     """
     order = session.scalar(select(Order).where(Order.id == order_id, Order.shop_id == shop_id))
-    if order is None or order.paid_at is None:
+    if order is None or order.status not in SHOP_VISIBLE_STATUSES:
         raise NotFound("Order not found")
     return order

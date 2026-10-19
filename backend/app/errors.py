@@ -127,6 +127,18 @@ class PickupCodeInvalid(AppError):
     status_code = 400
 
 
+class CashPaymentDisabled(AppError):
+    """Paying at the shop is not switched on.
+
+    The feature is off by default, so a deployment that has not been
+    configured for it refuses the request rather than quietly booking a
+    cash order it cannot settle.
+    """
+
+    code = "CASH_PAYMENT_DISABLED"
+    status_code = 409
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "error": {

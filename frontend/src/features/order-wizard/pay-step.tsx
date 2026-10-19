@@ -6,13 +6,18 @@ import {
   getOrder,
   simulatePayment,
   type OrderDetailResponse,
+  type OrderResponse,
 } from "../../api/orders";
 import type { UploadResponse } from "../../api/client";
 import { Alert, Button } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { openCheckout } from "../../lib/razorpay";
-import { describeOptions, type OptionsFormValues } from "./schemas";
+import {
+  describeOptions,
+  type OptionsFormValues,
+  type PaymentMethod,
+} from "./schemas";
 
 type Shop = {
   id: string;
@@ -31,6 +36,12 @@ type PayStepProps = {
   options: OptionsFormValues;
   shop: Shop;
   quote: Quote;
+  paymentMethod: PaymentMethod;
+  // Whether the platform is offering paying at the shop at all. The
+  // server is the authority, so the choice is only shown when the server
+  // says it is on.
+  cashAtStoreEnabled: boolean;
+  onPaymentMethodChange: (method: PaymentMethod) => void;
   onBack: () => void;
   deadlineMs?: number;
 };
@@ -40,6 +51,9 @@ type Phase =
   | { kind: "paying" }
   | { kind: "confirming"; orderId: string }
   | { kind: "paid"; order: OrderDetailResponse }
+  // A cash order is booked straight away. There is no provider to wait
+  // for, so there is nothing to poll and nothing to confirm.
+  | { kind: "reserved"; order: OrderResponse }
   | { kind: "unconfirmed"; orderId: string }
   | { kind: "failed"; message: string };
 
@@ -58,6 +72,9 @@ export function PayStep({
   options,
   shop,
   quote,
+  paymentMethod,
+  cashAtStoreEnabled,
+  onPaymentMethodChange,
   onBack,
   deadlineMs = POLL_DEADLINE_MS,
 }: PayStepProps) {
@@ -112,11 +129,19 @@ export function PayStep({
           duplex: options.duplex,
           copies: options.copies,
           expected_price_paise: quote.price_paise,
+          payment_method: paymentMethod,
         },
         idempotencyKey.current,
       );
       const orderId = created.order.id;
       const payment = created.payment;
+
+      // A cash order is already booked. The money changes hands at the
+      // counter, so there is no checkout to open and nothing to wait for.
+      if (payment.provider === "cash") {
+        setPhase({ kind: "reserved", order: created.order });
+        return;
+      }
 
       const keyId = payment.key_id ?? null;
       if (payment.provider === "razorpay" && keyId !== null) {
@@ -139,6 +164,32 @@ export function PayStep({
       setPhase({ kind: "failed", message: messageForError(error) });
     }
   };
+
+  if (phase.kind === "reserved") {
+    const order = phase.order;
+    return (
+      <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
+        <h2 className="font-display text-xl font-semibold text-ink">
+          Reserved for you
+        </h2>
+        <p className="text-sm text-steel">
+          Order #{order.order_no} is booked. Show this code at the counter and
+          pay {formatPaise(order.price_paise)} in cash when you collect it.
+        </p>
+        <p className="font-mono text-3xl tracking-[0.3em] text-ink">
+          {order.pickup_code}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to={`/orders/${order.id}`}
+            className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-deep"
+          >
+            View order
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   if (phase.kind === "paid") {
     const order = phase.order.order;
@@ -237,6 +288,43 @@ export function PayStep({
         </dl>
       </section>
 
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-ink">
+          How would you like to pay?
+        </legend>
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-hairline-strong bg-canvas px-4 py-2 text-sm text-ink has-checked:border-primary has-checked:bg-cream-deeper">
+          <input
+            type="radio"
+            name="payment-method"
+            value="online"
+            className="accent-primary"
+            checked={paymentMethod === "online"}
+            onChange={() => onPaymentMethodChange("online")}
+          />
+          Pay online by card or UPI
+        </label>
+        {cashAtStoreEnabled && (
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-hairline-strong bg-canvas px-4 py-2 text-sm text-ink has-checked:border-primary has-checked:bg-cream-deeper">
+            <input
+              type="radio"
+              name="payment-method"
+              value="at_store"
+              className="accent-primary"
+              checked={paymentMethod === "at_store"}
+              onChange={() => onPaymentMethodChange("at_store")}
+            />
+            Pay at the shop in cash when you collect
+          </label>
+        )}
+        {paymentMethod === "at_store" && (
+          <p className="text-sm text-steel">
+            You pay {formatPaise(quote.price_paise)} in cash at the counter. The
+            shop gets the order the same way, and the money changes hands when
+            you pick it up.
+          </p>
+        )}
+      </fieldset>
+
       {phase.kind === "confirming" && (
         <p role="status" className="text-sm text-steel">
           Confirming your payment…
@@ -255,7 +343,9 @@ export function PayStep({
           pending={phase.kind === "paying"}
           pendingLabel="Starting payment…"
         >
-          Pay {formatPaise(quote.price_paise)}
+          {paymentMethod === "at_store"
+            ? `Reserve for ${formatPaise(quote.price_paise)}`
+            : `Pay ${formatPaise(quote.price_paise)}`}
         </Button>
         <Button variant="secondary" onClick={onBack}>
           Back

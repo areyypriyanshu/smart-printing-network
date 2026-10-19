@@ -1,6 +1,6 @@
 """The worker process.
 
-Runs the four periodic jobs. The state of every job lives in Postgres,
+Runs the five periodic jobs. The state of every job lives in Postgres,
 so the worker holds nothing in memory between runs: if it is restarted it
 simply picks up where the database says it left off, and a second worker
 running at the same time is safe because the jobs lock the rows they
@@ -25,7 +25,13 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.gateways.payments import PaymentGateway, build_payment_gateway
 from app.gateways.storage import S3Storage, Storage
-from app.jobs import auto_reject, expire_orders, process_refunds, purge_files
+from app.jobs import (
+    auto_reject,
+    expire_no_shows,
+    expire_orders,
+    process_refunds,
+    purge_files,
+)
 from app.logging import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -68,6 +74,7 @@ def run_once(
     jobs: list[tuple[str, Callable[[Session], int]]] = [
         ("expire_orders", lambda session: expire_orders.run(session, now=current)),
         ("auto_reject", lambda session: auto_reject.run(session, now=current)),
+        ("expire_no_shows", lambda session: expire_no_shows.run(session, now=current)),
         (
             "process_refunds",
             lambda session: process_refunds.run(session, now=current, gateway=gateway),

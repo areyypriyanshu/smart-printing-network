@@ -22,14 +22,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
-ACTIVE_STATUS_SQL = "status IN ('PAID','ACCEPTED','PRINTING','READY')"
+ACTIVE_STATUS_SQL = "status IN ('PAID','RESERVED','ACCEPTED','PRINTING','READY')"
 
 
 class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING_PAYMENT','PAID','ACCEPTED','PRINTING','READY',"
+            "status IN ('PENDING_PAYMENT','PAID','RESERVED','ACCEPTED','PRINTING','READY',"
             "'COLLECTED','REJECTED','CANCELLED','EXPIRED')",
             name="ck_orders_status",
         ),
@@ -47,13 +47,43 @@ class Order(Base):
             "pickup_code IS NULL OR pickup_code ~ '^[0-9]{6}$'",
             name="ck_orders_pickup_code",
         ),
+        # An order that is on its way has its pickup code. An order that
+        # has been paid online also has the time the money was taken.
+        #
+        # A cash order has no paid_at until the shop collects it, so the
+        # two methods cannot share one rule. For an online order the rule
+        # is unchanged: paid means paid_at and a pickup code. For a cash
+        # order the code is required from the moment it is reserved, and
+        # paid_at only from the moment it is collected.
         CheckConstraint(
-            "status NOT IN ('PAID','ACCEPTED','PRINTING','READY','COLLECTED') "
-            "OR (paid_at IS NOT NULL AND pickup_code IS NOT NULL)",
+            "NOT ("
+            "payment_method = 'online'"
+            " AND status IN ('PAID','ACCEPTED','PRINTING','READY','COLLECTED')"
+            " AND (paid_at IS NULL OR pickup_code IS NULL)"
+            ")",
             name="ck_orders_paid_has_code",
         ),
         CheckConstraint(
-            "status <> 'REJECTED' OR paid_at IS NOT NULL",
+            "NOT ("
+            "payment_method = 'at_store'"
+            " AND status IN ('RESERVED','ACCEPTED','PRINTING','READY')"
+            " AND pickup_code IS NULL"
+            ")",
+            name="ck_orders_cash_has_code",
+        ),
+        CheckConstraint(
+            "NOT ("
+            "payment_method = 'at_store'"
+            " AND status = 'COLLECTED'"
+            " AND (paid_at IS NULL OR pickup_code IS NULL)"
+            ")",
+            name="ck_orders_cash_collected_paid",
+        ),
+        # A rejected order was paid, so it has to be refunded. A cash
+        # order can be rejected without any money having been taken, so
+        # there is nothing to give back and nothing to record.
+        CheckConstraint(
+            "NOT (payment_method = 'online' AND status = 'REJECTED' AND paid_at IS NULL)",
             name="ck_orders_rejected_paid",
         ),
         UniqueConstraint("upload_id", name="uq_orders_upload_id"),
@@ -63,7 +93,7 @@ class Order(Base):
             "orders_queue_idx",
             "shop_id",
             "status",
-            "paid_at",
+            "reserved_at",
             postgresql_where=text(ACTIVE_STATUS_SQL),
         ),
         Index(
@@ -71,10 +101,19 @@ class Order(Base):
             "created_at",
             postgresql_where=text("status = 'PENDING_PAYMENT'"),
         ),
+        # The queue order and the auto reject cutoff are both `reserved_at`:
+        # it is set when the order is paid online and when it is reserved
+        # for cash, so one index serves both jobs and both methods.
         Index(
             "orders_unaccepted_idx",
-            "paid_at",
-            postgresql_where=text("status = 'PAID'"),
+            "reserved_at",
+            postgresql_where=text("status IN ('PAID','RESERVED')"),
+        ),
+        # A ready order that nobody collected.
+        Index(
+            "orders_no_show_idx",
+            "ready_at",
+            postgresql_where=text("status = 'READY'"),
         ),
     )
 
@@ -99,7 +138,19 @@ class Order(Base):
     price_paise: Mapped[int] = mapped_column(Integer)
     pickup_code: Mapped[str | None] = mapped_column(CHAR(6))
     idempotency_key: Mapped[str] = mapped_column(Text)
+    # How the customer is paying: "online" through a provider, or
+    # "at_store" in cash at the counter.
+    payment_method: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'online'")
+    )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the order entered the shop's queue: when it was paid for
+    # online, or when it was reserved for cash. It is the queue order and
+    # the auto reject cutoff, for both methods.
+    reserved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the order became ready for pickup. It starts the clock on the
+    # customer not turning up.
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -130,7 +181,7 @@ class OrderEvent(Base):
 class Payment(Base):
     __tablename__ = "payments"
     __table_args__ = (
-        CheckConstraint("provider IN ('razorpay','fake')", name="ck_payments_provider"),
+        CheckConstraint("provider IN ('razorpay','fake','cash')", name="ck_payments_provider"),
         CheckConstraint("amount_paise > 0", name="ck_payments_amount_paise"),
         CheckConstraint("currency = 'INR'", name="ck_payments_currency"),
         CheckConstraint(
@@ -138,6 +189,10 @@ class Payment(Base):
             name="ck_payments_status",
         ),
         CheckConstraint("refund_attempts >= 0", name="ck_payments_refund_attempts"),
+        CheckConstraint(
+            "NOT (provider = 'cash' AND status = 'REFUND_PENDING')",
+            name="ck_payments_cash_not_refunded",
+        ),
         Index(
             "payments_refund_idx",
             "refund_next_attempt_at",

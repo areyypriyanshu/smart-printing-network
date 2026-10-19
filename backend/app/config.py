@@ -33,11 +33,17 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
 
+    # Pay at the shop. Off by default in the code, so a deployment that
+    # has never heard of it cannot create a cash order by accident. The
+    # local .env turns it on.
+    cash_at_store_enabled: bool = False
+
     max_upload_mb: int = 50
     max_pages: int = 300
     payment_timeout_min: int = 15
     accept_timeout_min: int = 15
     file_retention_hours: int = 24
+    no_show_timeout_hours: int = 24
 
     google_maps_api_key: str = ""
 

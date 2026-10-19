@@ -27,12 +27,19 @@ class VendorOrderResponse(BaseModel):
     color: bool
     duplex: bool
     price_paise: int
+    # The shop needs to know whether to expect the money online or in cash
+    # at the counter.
+    payment_method: str
+    # When the order entered the shop's queue. The board counts down to
+    # the auto reject from this, and a cash order has no paid_at to count
+    # from until it is collected.
+    reserved_at: datetime | None
     paid_at: datetime | None
     created_at: datetime
 
 
 class VendorQueueResponse(BaseModel):
-    """Active orders for one shop, oldest payment first.
+    """Active orders for one shop, oldest reservation first.
 
     `accept_timeout_minutes` is the server's own setting, sent so the board
     can warn about orders that are about to be auto rejected without the

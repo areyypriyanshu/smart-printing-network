@@ -10,6 +10,7 @@ from app.domain.order_state import (
     PRINTING,
     READY,
     REJECTED,
+    RESERVED,
     TERMINAL,
     allowed_actors,
     can_actor_transition,
@@ -22,11 +23,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 EXPECTED_ALLOWED = {
-    PENDING_PAYMENT: {PAID, EXPIRED, CANCELLED},
+    PENDING_PAYMENT: {PAID, RESERVED, EXPIRED, CANCELLED},
     PAID: {ACCEPTED, REJECTED, CANCELLED},
+    RESERVED: {ACCEPTED, REJECTED, CANCELLED, EXPIRED},
     ACCEPTED: {PRINTING, CANCELLED},
     PRINTING: {READY},
-    READY: {COLLECTED},
+    READY: {COLLECTED, EXPIRED},
 }
 
 
@@ -142,3 +144,61 @@ def test_an_illegal_transition_never_queues_a_refund() -> None:
     assert not queues_refund(ACCEPTED, REJECTED)
     assert not queues_refund(PRINTING, REJECTED)
     assert not queues_refund(PRINTING, CANCELLED)
+
+
+def test_a_reserved_order_is_active_but_not_terminal() -> None:
+    """A cash order is work the shop still has to do."""
+    assert is_active(RESERVED)
+    assert not is_terminal(RESERVED)
+    assert RESERVED in ALL_STATUSES
+
+
+def test_the_only_transition_out_of_reserved_a_customer_can_make_is_cancellation() -> None:
+    """The customer booked the job; they may call it off, nothing else."""
+    for target in ALL_STATUSES:
+        if target == CANCELLED:
+            assert can_actor_transition("customer", RESERVED, target)
+        else:
+            assert not can_actor_transition("customer", RESERVED, target), target
+
+
+def test_a_reserved_order_can_never_reach_a_refunded_state() -> None:
+    """No money was taken, so there is nothing to give back.
+
+    The reserved state is not in `REFUNDABLE_FROM`, so neither a rejection
+    nor a cancellation of a cash order queues a refund.
+    """
+    assert not queues_refund(RESERVED, REJECTED)
+    assert not queues_refund(RESERVED, CANCELLED)
+    assert not queues_refund(RESERVED, EXPIRED)
+    assert not queues_refund(RESERVED, ACCEPTED)
+
+
+def test_the_shop_and_the_system_drive_a_reserved_order_forward() -> None:
+    assert can_actor_transition("vendor", RESERVED, ACCEPTED)
+    assert can_actor_transition("vendor", RESERVED, REJECTED)
+    assert can_actor_transition("vendor", RESERVED, CANCELLED)
+    assert can_actor_transition("system", RESERVED, REJECTED)
+    assert can_actor_transition("system", RESERVED, EXPIRED)
+    assert not can_actor_transition("webhook", RESERVED, ACCEPTED)
+
+
+def test_only_the_customer_can_reserve_an_order() -> None:
+    assert can_actor_transition("customer", PENDING_PAYMENT, RESERVED)
+    for actor in ("vendor", "system", "webhook"):
+        assert not can_actor_transition(actor, PENDING_PAYMENT, RESERVED)
+
+
+def test_a_reserved_order_never_becomes_paid_through_a_webhook() -> None:
+    """Cash money changes hands at the counter, not through a webhook."""
+    assert not can_transition(RESERVED, PAID)
+    assert not can_actor_transition("webhook", RESERVED, PAID)
+
+
+@given(st.sampled_from(sorted(ALL_STATUSES)))
+def test_no_status_other_than_a_captured_one_can_queue_a_refund(target: str) -> None:
+    """A refund needs money in the order. Only a paid or accepted one has it."""
+    if target in {PAID, ACCEPTED}:
+        return
+    for to_status in ALL_STATUSES:
+        assert not queues_refund(target, to_status), (target, to_status)

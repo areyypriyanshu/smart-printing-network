@@ -20,6 +20,8 @@ type QueueItem = {
   color: boolean;
   duplex: boolean;
   price_paise: number;
+  payment_method: string;
+  reserved_at: string | null;
   paid_at: string | null;
   created_at: string;
 };
@@ -37,6 +39,8 @@ function item(overrides: Partial<QueueItem> = {}): QueueItem {
     color: true,
     duplex: false,
     price_paise: 3840,
+    payment_method: "online",
+    reserved_at: new Date(Date.now() - 3 * 60_000).toISOString(),
     paid_at: new Date(Date.now() - 3 * 60_000).toISOString(),
     created_at: new Date().toISOString(),
     ...overrides,
@@ -52,6 +56,37 @@ function useQueueHandlers(items: QueueItem[]) {
 }
 
 describe("VendorQueuePage", () => {
+  it("shows a reserved cash order in the New column with a badge", async () => {
+    useQueueHandlers([
+      item({
+        status: "RESERVED",
+        payment_method: "at_store",
+        paid_at: null,
+      }),
+    ]);
+    renderWithProviders(<VendorQueuePage />, { route: "/vendor" });
+
+    const newColumn = await screen.findByRole("region", { name: "New" });
+    expect(within(newColumn).getByText("Pay at shop")).toBeInTheDocument();
+    expect(
+      within(newColumn).getByRole("button", { name: "Accept" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not say a reserved cash order was paid", async () => {
+    useQueueHandlers([
+      item({
+        status: "RESERVED",
+        payment_method: "at_store",
+        paid_at: null,
+      }),
+    ]);
+    renderWithProviders(<VendorQueuePage />, { route: "/vendor" });
+
+    const newColumn = await screen.findByRole("region", { name: "New" });
+    expect(within(newColumn).queryByText(/^Paid/)).not.toBeInTheDocument();
+  });
+
   it("shows the four columns with their counts", async () => {
     useQueueHandlers([item()]);
     renderWithProviders(<VendorQueuePage />, { route: "/vendor" });
@@ -105,8 +140,13 @@ describe("VendorQueuePage", () => {
   });
 
   it("warns when a new order is close to the auto reject limit", async () => {
+    // The countdown is to the auto reject, which starts when the order
+    // entered the queue.
     useQueueHandlers([
-      item({ paid_at: new Date(Date.now() - 13 * 60_000).toISOString() }),
+      item({
+        paid_at: new Date(Date.now() - 13 * 60_000).toISOString(),
+        reserved_at: new Date(Date.now() - 13 * 60_000).toISOString(),
+      }),
     ]);
     renderWithProviders(<VendorQueuePage />, { route: "/vendor" });
 

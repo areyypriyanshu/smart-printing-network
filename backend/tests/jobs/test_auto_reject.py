@@ -1,18 +1,21 @@
 """Tests for the auto_reject job.
 
-A customer has already paid when an order reaches the queue. If no shop
-takes it, the order is rejected and the money goes back.
+An order reaches the queue once it is paid for online or reserved for
+cash. If no shop takes it, the order is rejected. An online order has
+money in it and the money goes back; a cash order never did, and nothing
+is refunded.
 """
 
 from datetime import UTC, datetime, timedelta
 
 from app.jobs import auto_reject
-from app.models import Order, OrderEvent, Payment
+from app.models import Order, OrderEvent, Payment, Shop, User
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
     create_full_rate_table,
     create_paid_order,
+    create_reserved_order,
     create_shop,
     create_user,
 )
@@ -21,13 +24,21 @@ NOW = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
 PAST = NOW - timedelta(minutes=20)
 
 
-def _paid_order(session: Session, *, minutes_ago: int = 20) -> Order:
+def _customer_and_shop(session: Session) -> tuple[User, Shop]:
     customer = create_user(session, email="customer@example.com")
     vendor = create_user(session, email="vendor@example.com", role="vendor")
     shop = create_shop(session, owner=vendor)
     create_full_rate_table(session, shop)
+    return customer, shop
+
+
+def _paid_order(session: Session, *, minutes_ago: int = 20) -> Order:
+    customer, shop = _customer_and_shop(session)
     order = create_paid_order(session, customer=customer, shop=shop)
+    # `reserved_at` is when the order entered the queue, and it is what
+    # the job reads. For an online order it is the moment it was paid.
     order.paid_at = NOW - timedelta(minutes=minutes_ago)
+    order.reserved_at = NOW - timedelta(minutes=minutes_ago)
     session.commit()
     return order
 
@@ -100,6 +111,7 @@ def test_an_accepted_order_is_never_auto_rejected(db_session: Session) -> None:
         db_session, order_id=order.id, to_status="ACCEPTED", actor_type="vendor"
     )
     order.paid_at = NOW - timedelta(minutes=20)
+    order.reserved_at = NOW - timedelta(minutes=20)
     db_session.commit()
 
     rejected = auto_reject.run(db_session, now=NOW)
@@ -107,3 +119,57 @@ def test_an_accepted_order_is_never_auto_rejected(db_session: Session) -> None:
     assert rejected == 0
     db_session.refresh(order)
     assert order.status == "ACCEPTED"
+
+
+def test_a_reserved_cash_order_past_the_accept_window_is_rejected(
+    db_session: Session,
+) -> None:
+    """A cash order nobody accepted is turned away like any other."""
+    customer, shop = _customer_and_shop(db_session)
+    order = create_reserved_order(
+        db_session,
+        customer=customer,
+        shop=shop,
+        reserved_at=NOW - timedelta(minutes=20),
+    )
+
+    rejected = auto_reject.run(db_session, now=NOW)
+
+    assert rejected == 1
+    db_session.refresh(order)
+    assert order.status == "REJECTED"
+    assert order.status_reason == "shop_timeout"
+
+
+def test_rejecting_a_cash_order_queues_no_refund(db_session: Session) -> None:
+    """No money was taken, so there is nothing to give back."""
+    customer, shop = _customer_and_shop(db_session)
+    order = create_reserved_order(
+        db_session,
+        customer=customer,
+        shop=shop,
+        reserved_at=NOW - timedelta(minutes=20),
+    )
+
+    auto_reject.run(db_session, now=NOW)
+
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "CREATED"
+    assert payment.refund_next_attempt_at is None
+
+
+def test_a_reserved_order_inside_the_window_is_left_alone(db_session: Session) -> None:
+    customer, shop = _customer_and_shop(db_session)
+    order = create_reserved_order(
+        db_session,
+        customer=customer,
+        shop=shop,
+        reserved_at=NOW - timedelta(minutes=5),
+    )
+
+    rejected = auto_reject.run(db_session, now=NOW)
+
+    assert rejected == 0
+    db_session.refresh(order)
+    assert order.status == "RESERVED"

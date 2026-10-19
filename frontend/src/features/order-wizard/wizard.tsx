@@ -9,7 +9,13 @@ import { OptionsStep } from "./options-step";
 import { PayStep } from "./pay-step";
 import { ShopStep, type ShopSelection } from "./shop-step";
 import { UploadStep } from "./upload-step";
-import { OPTION_DEFAULTS, type OptionsFormValues } from "./schemas";
+import { useShops } from "../shops/api";
+import {
+  OPTION_DEFAULTS,
+  PAYMENT_METHOD_DEFAULT,
+  type OptionsFormValues,
+  type PaymentMethod,
+} from "./schemas";
 
 const STEPS = ["Upload", "Options", "Shop and price", "Review and pay"];
 
@@ -24,6 +30,12 @@ export function OrderWizardPage() {
   const [selection, setSelection] = useState<ShopSelection | null>(null);
   const [step, setStep] = useState<number | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    PAYMENT_METHOD_DEFAULT,
+  );
+  // The same query the shop step uses, so the choice is only offered when
+  // the server says it is on.
+  const shops = useShops();
 
   const activeUpload =
     upload ?? (resumeDismissed ? null : (resume.data ?? null));
@@ -140,6 +152,9 @@ export function OrderWizardPage() {
             options={options}
             shop={selection.shop}
             quote={selection.quote}
+            paymentMethod={paymentMethod}
+            cashAtStoreEnabled={shops.data?.cash_at_store_enabled ?? false}
+            onPaymentMethodChange={setPaymentMethod}
             onBack={() => setStep(2)}
           />
         )}
