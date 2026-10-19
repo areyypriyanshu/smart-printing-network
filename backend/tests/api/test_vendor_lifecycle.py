@@ -406,3 +406,15 @@ def test_queue_contains_every_active_status(
 
     assert response.status_code == 200
     assert [item["status"] for item in response.json()["items"]] == [status]
+
+
+def test_the_queue_tells_the_board_when_orders_will_be_auto_rejected(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    headers = login_headers(client, VENDOR_EMAIL)
+
+    response = client.get(QUEUE, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["accept_timeout_minutes"] == 15

@@ -32,9 +32,15 @@ class VendorOrderResponse(BaseModel):
 
 
 class VendorQueueResponse(BaseModel):
-    """Active orders for one shop, oldest payment first."""
+    """Active orders for one shop, oldest payment first.
+
+    `accept_timeout_minutes` is the server's own setting, sent so the board
+    can warn about orders that are about to be auto rejected without the
+    frontend keeping a second copy of the number.
+    """
 
     items: list[VendorOrderResponse]
+    accept_timeout_minutes: int
 
 
 class VendorOrderDetailResponse(BaseModel):

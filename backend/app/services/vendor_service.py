@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.domain.order_state import ACTIVE_STATUSES
 from app.domain.pickup_code import verify_pickup_code
 from app.errors import NotFound, PickupCodeInvalid
@@ -31,7 +32,10 @@ def list_queue(session: Session, *, shop_id: uuid.UUID, limit: int) -> VendorQue
         .order_by(Order.paid_at.asc(), Order.order_no.asc())
         .limit(limit)
     )
-    return VendorQueueResponse(items=[vendor_order_response(order) for order in orders])
+    return VendorQueueResponse(
+        items=[vendor_order_response(order) for order in orders],
+        accept_timeout_minutes=get_settings().accept_timeout_min,
+    )
 
 
 def get_vendor_order(

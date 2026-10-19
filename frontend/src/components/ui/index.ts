@@ -1,8 +1,10 @@
 export { Alert } from "./Alert";
 export { Button, buttonClassName } from "./Button";
 export { CropMarks } from "./CropMarks";
+export { Dialog } from "./Dialog";
 export { Icon, type IconName } from "./Icon";
 export { Input } from "./Input";
 export { PasswordField } from "./PasswordField";
 export { Stepper } from "./Stepper";
 export { TextField } from "./TextField";
+export { Textarea } from "./Textarea";
