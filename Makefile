@@ -1,4 +1,4 @@
-.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe check openapi reset
+.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe check openapi reset e2e
 
 up:
 	@test -f .env || cp .env.example .env
@@ -35,6 +35,9 @@ test-api:
 
 test-fe:
 	cd frontend && npm run test
+
+e2e:
+	cd e2e && npm test
 
 check: lint typecheck arch test-unit test-fe
 
