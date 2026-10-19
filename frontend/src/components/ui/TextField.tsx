@@ -11,7 +11,7 @@ type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
 export function TextField({ label, name, error, ...rest }: TextFieldProps) {
   const errorId = `${name}-error`;
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       <label htmlFor={name} className="text-sm font-medium text-ink">
         {label}
       </label>
@@ -23,7 +23,7 @@ export function TextField({ label, name, error, ...rest }: TextFieldProps) {
         {...rest}
       />
       {error !== undefined && (
-        <p id={errorId} role="alert" className="text-sm text-red-700">
+        <p id={errorId} role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

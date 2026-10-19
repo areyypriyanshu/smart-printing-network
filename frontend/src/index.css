@@ -2,39 +2,100 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "PP Editorial Old", "Times New Roman", Georgia, serif;
+  --font-display:
+    "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --color-primary: #fa520f;
-  --color-primary-deep: #cc3a05;
+  /* Brand orange, 50 to 900. 600 is the action colour (AA with white text). */
+  --color-primary-50: #fff4ec;
+  --color-primary-100: #ffe5d5;
+  --color-primary-200: #ffc8a8;
+  --color-primary-300: #ffa577;
+  --color-primary-400: #f97c42;
+  --color-primary-500: #ec5a18;
+  --color-primary-600: #c9430a;
+  --color-primary-700: #a83706;
+  --color-primary-800: #8a2c05;
+  --color-primary-900: #6c2204;
+  --color-primary: #c9430a;
+  --color-primary-deep: #a83706;
+
+  /* Warm paper neutrals. */
+  --color-canvas: #fbf8f3;
+  --color-surface: #f4efe7;
+  --color-ink: #241f19;
+  --color-steel: #6b6156;
+  --color-stone: #7a7062;
+  --color-muted: #8f8478;
+  --color-hairline: #eae3d7;
+  --color-hairline-soft: #f2ece1;
+  --color-hairline-strong: #948a7c;
+
+  /* Paper tints from the first design pass. */
   --color-cream: #fff8e0;
   --color-cream-soft: #fffaeb;
   --color-cream-deep: #fff0c2;
+  --color-cream-deeper: #f3e4b8;
   --color-beige-deep: #e6d5a8;
   --color-sunshine: #ffb83e;
 
-  --color-ink: #1f1f1f;
-  --color-steel: #6a6a6a;
-  --color-stone: #8a8a8a;
-  --color-muted: #a8a8a8;
-
-  --color-hairline: #e5e5e5;
-  --color-hairline-soft: #ededed;
-  --color-hairline-strong: #c7c7c7;
-  --color-canvas: #ffffff;
-  --color-surface: #fafafa;
+  /* Semantic pairs: text, background, border. All AA on their own pair. */
+  --color-success: #1e6a33;
+  --color-success-bg: #eaf6ec;
+  --color-success-border: #c8e6cf;
+  --color-warning: #7a4a02;
+  --color-warning-bg: #fff6e3;
+  --color-warning-border: #f1dfb4;
+  --color-danger: #a31d1d;
+  --color-danger-bg: #fcedec;
+  --color-danger-border: #f0c9c7;
+  --color-danger-solid: #b42318;
+  --color-info: #1d4e8f;
+  --color-info-bg: #eef3fb;
+  --color-info-border: #cfddf1;
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 
   body {
     margin: 0;
-    min-height: 100vh;
+    min-height: 100dvh;
     background-color: var(--color-canvas);
     color: var(--color-ink);
+    text-wrap: pretty;
   }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: var(--color-primary-100);
+    color: var(--color-ink);
+  }
+}
+
+/* Halftone dot accent for hero and empty states. */
+@utility halftone {
+  background-image: radial-gradient(
+    circle,
+    rgb(36 31 25 / 0.06) 1px,
+    transparent 1.2px
+  );
+  background-size: 10px 10px;
 }
 
 .sunset-stripe {
