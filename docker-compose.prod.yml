@@ -13,11 +13,14 @@
 # For a real deployment set SPN_DOMAIN to the domain and leave SPN_TLS
 # empty so Caddy uses ACME.
 
-name: spn-prod
+name: ${SPN_COMPOSE_PROJECT:-spn-prod}
 
 services:
   caddy:
-    image: caddy:2.10-alpine
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    image: ${SPN_WEB_IMAGE:-ghcr.io/areyypriyanshu/smart-printing-network/web:latest}
     restart: unless-stopped
     ports:
       - "80:80"
@@ -25,7 +28,9 @@ services:
     environment:
       SPN_DOMAIN: ${SPN_DOMAIN:-localhost}
       SPN_TLS: ${SPN_TLS:-internal}
-      ACME_EMAIL: ${ACME_EMAIL:-}
+      # Caddy needs a value for the ACME account address even when it never
+      # talks to ACME, which is the case for a local run.
+      ACME_EMAIL: ${ACME_EMAIL:-admin@localhost}
     volumes:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -37,6 +42,7 @@ services:
   api:
     build:
       context: ./backend
+      dockerfile: Dockerfile.prod
     image: ${SPN_API_IMAGE:-ghcr.io/areyypriyanshu/smart-printing-network/api:latest}
     restart: unless-stopped
     env_file: .env
@@ -61,6 +67,7 @@ services:
   worker:
     build:
       context: ./backend
+      dockerfile: Dockerfile.prod
     image: ${SPN_API_IMAGE:-ghcr.io/areyypriyanshu/smart-printing-network/api:latest}
     restart: unless-stopped
     env_file: .env

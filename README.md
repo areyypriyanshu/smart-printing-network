@@ -1,12 +1,22 @@
 # Smart Printing Network
 
-A web platform that connects customers with nearby verified print shops. Upload a PDF, choose print options, see the price, pay, and collect your order with a short pickup code. Shops get a vendor dashboard to manage their order queue.
+A web platform that connects customers with nearby verified print shops.
+Upload a PDF, choose print options, see the price from the shop's own rate
+card, pay, and collect your order with a short pickup code. Shops work a
+queue of paid orders from a counter screen.
 
-Later phases add a PDF quality checker (flags blurry and low-resolution pages before printing), multi-shop search with price comparison, and live queue and wait estimates built from real order history.
+> **Status:** Phase 1 is built end to end. A customer can upload, get a
+> price, pay, and collect. A shop can accept, print, mark ready and hand
+> over against the pickup code. The worker expires unpaid orders, rejects
+> orders no shop picked up, retries refunds and deletes old files.
+> Payments run in Razorpay **test mode only**. No real money moves and shop
+> payouts are out of scope.
 
-> **Status:** Sprint 0 (foundation) complete: Compose stack, migrations, CI and app skeletons. Sprint 1 (accounts and roles) is next. Payments run in Razorpay **test mode only**. No real money moves and shop payouts are out of scope.
+Built by Priyanshu Mandal as a portfolio project with three goals:
+**testable**, **deployable**, **explainable**.
 
-Built by Priyanshu Mandal as a portfolio project with three goals: **testable**, **deployable**, **explainable**.
+[![CI](https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml/badge.svg)](https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml)
+[![Backend tests](https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml/badge.svg?branch=main&job=backend)](https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml)
 
 ---
 
@@ -14,23 +24,23 @@ Built by Priyanshu Mandal as a portfolio project with three goals: **testable**,
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, Razorpay payment, pickup code, vendor queue, refunds and timeouts. Pickup only. | Planned |
-| 2 | PDF quality checker (effective DPI and blur, PyMuPDF and OpenCV), geo search of shops, price comparison, map view | Planned |
+| 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, payment and signed webhooks, pickup code, vendor queue, refunds, timeouts, file retention. Pickup only. | **Built** |
+| 2 | PDF quality checker (effective DPI and blur), geo search of shops, price comparison, map view | Planned |
 | 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
 
 ## What it deliberately does not do
 
 - No delivery, no delivery tracking, no route optimisation (OR-Tools). Pickup only.
-- No CNN or deep learning. Blur and resolution checks use classical image analysis because it is enough and it is explainable. See `docs/TECH_STACK.md`.
+- No CNN or deep learning. Blur and resolution checks use classical image analysis because it is enough and it is explainable.
 - No "AI price prediction". Price is arithmetic: `pages x copies x shop rate`, with a minimum order amount.
-- No vendor payouts or settlements, no GST invoicing, no email or SMS notifications, no admin UI. These are documented as backlog in `docs/PRD.md`.
+- No vendor payouts or settlements, no GST invoicing, no email or SMS notifications, no admin UI.
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart LR
   B[Browser: React SPA] -->|HTTPS| C[Caddy]
-  C -->|/api, /ws| A[FastAPI API]
+  C -->|/api| A[FastAPI API]
   C -->|static files| F[Built frontend]
   A --> D[(PostgreSQL + PostGIS)]
   A --> S[(S3 / MinIO)]
@@ -41,23 +51,27 @@ flowchart LR
   W -->|refunds| R
 ```
 
-Full detail, sequence diagrams and failure modes: `docs/ARCHITECTURE.md`.
+One origin, one TLS terminator, no CORS, and the refresh cookie is always
+first party.
 
 ## Tech stack
 
-- **Frontend:** React, TypeScript, Vite, TanStack Query, Tailwind CSS
+- **Frontend:** React 19, TypeScript, Vite, TanStack Query, React Hook Form, Zod, Tailwind CSS
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
 - **Data:** PostgreSQL with PostGIS, S3-compatible object storage (MinIO locally)
 - **PDF and images (Phase 2):** PyMuPDF, OpenCV
 - **Payments:** Razorpay (test mode) behind a gateway interface, with a fake gateway for tests
-- **Infra:** Docker Compose, Caddy, GitHub Actions, single AWS instance (Lightsail or EC2) with S3
+- **Infra:** Docker Compose, Caddy, GitHub Actions, single instance with S3
 
 ## Quickstart
 
-Prerequisites: Git, Docker Desktop (Windows or macOS) or Docker Engine (Linux), and `make`.
-On Windows, use WSL2 for `make`, or run the underlying commands from the `Makefile` directly.
-For the fast, native checks (`make check`, `make test-fe`) you additionally need [uv](https://docs.astral.sh/uv/) (it fetches Python 3.12) and Node 22 (`frontend/.nvmrc`), then `uv sync` in `backend/` and `npm ci` in `frontend/`.
-Optional git hooks: install [pre-commit](https://pre-commit.com/) and `gitleaks`, then `pre-commit install`.
+Prerequisites: Git, Docker Desktop (Windows or macOS) or Docker Engine
+(Linux), and `make`. On Windows, use WSL2 for `make`, or run the
+underlying commands from the `Makefile` directly.
+
+For the fast, native checks (`make check`, `make test-fe`) you also need
+[uv](https://docs.astral.sh/uv/) and Node 22 (`frontend/.nvmrc`), then
+`uv sync` in `backend/` and `npm ci` in `frontend/`.
 
 ```bash
 git clone https://github.com/areyypriyanshu/smart-printing-network.git
@@ -65,9 +79,13 @@ cd smart-printing-network
 cp .env.example .env      # local defaults, PAYMENT_PROVIDER=fake
 make up                   # builds and starts api, worker, db, minio, frontend
 make migrate              # applies database migrations
+make seed                 # three verified shops, one customer
 ```
 
-The PostGIS image is published for amd64 only, so `docker-compose.yml` pins the `db` service to `linux/amd64`; on Apple Silicon Docker Desktop runs it through Rosetta emulation automatically. `make up` copies `.env.example` to `.env` if missing.
+The PostGIS image is published for amd64 only, so `docker-compose.yml`
+pins the `db` service to `linux/amd64`; on Apple Silicon Docker Desktop
+runs it through Rosetta emulation automatically. `make up` copies
+`.env.example` to `.env` if missing.
 
 | What | URL |
 |---|---|
@@ -84,63 +102,121 @@ Demo accounts, created by `make seed` (local and CI only, never production):
 | Vendor (shop 2) | vendor2@example.com | spn-demo-password |
 | Vendor (shop 3) | vendor3@example.com | spn-demo-password |
 
-Seeded shops are verified and accepting orders. A vendor that self-registers through the app
-starts unverified; approve it locally with
+Seeded shops are verified and accepting orders. A vendor that
+self-registers through the app starts unverified; approve it locally with
 `docker compose run --rm api python -m app.cli verify-shop <vendor-email>`.
 
-Using real Razorpay test mode instead of the fake gateway: set `PAYMENT_PROVIDER=razorpay` and fill the three `RAZORPAY_*` values in `.env`. Webhooks need a public URL (use a tunnel) pointing at `/api/v1/webhooks/razorpay`.
+### The same stack with HTTPS, the way it is deployed
+
+The production Compose file runs locally too, so the whole path can be
+exercised before there is a domain:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+docker compose -f docker-compose.prod.yml exec -T api python -m app.cli seed
+```
+
+Caddy issues a certificate from its own local authority, so the browser
+warns once. To trust it:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T caddy \
+  cat /data/caddy/pki/authorities/local/root.crt > caddy-ca.crt
+sudo security add-trusted-cert -d -k /Library/Keychains/System.keychain caddy-ca.crt
+```
+
+Then the app is on <https://localhost>.
+
+## Try the whole flow in one command
+
+`infra/scripts/smoke-test.sh` walks the product the way a person would:
+the customer signs in, uploads a PDF, sees a price, pays; the shop finds
+the order in the queue, accepts it, starts printing, marks it ready; the
+customer downloads the file; a wrong pickup code is refused; the right one
+completes the order.
+
+```bash
+make smoke                                   # against the dev stack
+BASE_URL=https://localhost CURL_CA_BUNDLE=./caddy-ca.crt infra/scripts/smoke-test.sh
+```
+
+It checks the answer at every step, so it fails loudly rather than
+printing a summary that looks fine.
 
 ## Common commands
 
 | Command | What it does |
 |---|---|
-| `make check` | Lint, type check, and all fast tests. Run before every commit. |
-| `make test-unit` | Pure domain tests (pricing, state machine). Milliseconds. |
+| `make check` | Lint, type check, import contracts and all fast tests. Run before every commit. |
+| `make test-unit` | Pure domain tests (pricing, state machine, backoff). Milliseconds. |
 | `make test-api` | API and integration tests against a real Postgres. |
+| `make test-jobs` | Background job tests with a frozen clock. |
 | `make test-fe` | Frontend component tests (Vitest). |
-| `make e2e` | Playwright end-to-end tests against the full Compose stack (arrives with the e2e scaffold). |
+| `make coverage` | The whole suite with coverage, then the coverage floors. |
+| `make e2e` | Playwright journeys and accessibility checks against the full stack. |
+| `make smoke` | The end to end product flow against a running stack. |
 | `make openapi` | Exports `backend/openapi.json` and regenerates `frontend/src/api/schema.d.ts`. |
 | `make reset` | Wipes local volumes and rebuilds from scratch. |
 
-## Testing strategy
+## Testing
 
-- **Unit:** pricing and order state machine, including property-based tests (Hypothesis).
-- **API and integration:** real PostgreSQL with PostGIS, fake payment gateway and in-memory storage. Covers webhook replay, concurrent accept, authorization (IDOR) checks, expiry and refund jobs.
-- **End to end:** Playwright runs the happy path and key failure paths. Accessibility checks with axe on key pages.
-- **Contract:** Schemathesis fuzzes the API from its own OpenAPI schema in CI.
-- **CI:** GitHub Actions runs everything on each push and builds images on `main`.
+- **Unit:** the pricing rule, the order state machine and the refund
+  backoff, including property-based tests with Hypothesis.
+- **API and integration:** real PostgreSQL with PostGIS, the fake payment
+  gateway and in-memory storage. Covers webhook replay, parallel webhook
+  delivery, concurrent accept, authorization on every endpoint, and the
+  background jobs.
+- **End to end:** Playwright against the whole Compose stack, plus axe
+  accessibility checks at WCAG 2.1 A and AA.
+- **Contract:** Schemathesis fuzzes the API from its own OpenAPI schema,
+  with a token so the authenticated endpoints are reached too. It found a
+  real bug: registering a shop with an email that already existed returned
+  a 500 instead of a 409.
+- **Coverage floors**, enforced in CI: 90% on `domain`, 90% on `services`,
+  80% overall. Currently 100%, 93% and 92%.
+- **CI:** six jobs, backend, frontend, contract, end to end, OpenAPI drift
+  and a secret scan.
 
 ## Documentation
+
+The planning documents live on the maintainer's machine and are not
+committed. The decisions are.
 
 | Doc | Purpose |
 |---|---|
 | [`AGENTS.md`](AGENTS.md) | Rules and workflow for AI agents and contributors |
-| [`docs/PRD.md`](docs/PRD.md) | Problem, scope, requirements, success metrics |
-| [`docs/APP_FLOW.md`](docs/APP_FLOW.md) | Screens, journeys, order lifecycle, failure paths |
-| [`docs/TECH_STACK.md`](docs/TECH_STACK.md) | Chosen tools, rejected options, revisit triggers |
-| [`docs/FRONTEND_GUIDELINES.md`](docs/FRONTEND_GUIDELINES.md) | Frontend structure, state, UI and testing rules |
-| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md) | Backend layers, endpoints, jobs, errors, config |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | DDL, indexes, migrations policy, key queries |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, sequences, deployment, failure modes |
-| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Entities, invariants, data lifecycle, privacy |
-| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Sprints, acceptance criteria, phase gates, risks |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Start here.** Why the project is built the way it is |
+| [`docs/adr/`](docs/adr/) | One architecture decision record per decision |
 
 ## Engineering decisions worth reading
 
-1. **The webhook, not the browser, decides that an order is paid.** Idempotent, signature-verified, amount-checked.
-2. **One function changes order status.** Illegal transitions are impossible by construction and covered by property tests.
-3. **Classical image analysis instead of a CNN.** Effective DPI plus Laplacian variance, calibrated on a labelled fixture set, with the evaluation committed to the repo.
-4. **Wait estimates are a rolling median from real order events**, benchmarked against a naive baseline. ML is only considered if the rule fails on enough real data.
-5. **Polling before WebSockets.** WebSockets arrive in Phase 3 where they pay off.
-
-Architecture decision records live in `docs/adr/`.
+1. **The webhook, not the browser, decides that an order is paid.** The
+   signature is checked on the raw bytes, the event id deduplicates, and
+   the amount and currency must match. A late payment is refunded.
+2. **One function changes an order's status**, and it does a compare and
+   swap, so two shops clicking Accept at once produce one winner. The
+   status change and its history row commit together.
+3. **The database checks the price.** `price_paise = GREATEST(page_count
+   x copies x rate_paise, min_order_paise)` is a constraint, so a bug in
+   the application cannot store a wrong price.
+4. **The domain layer is pure**, and an import linter contract fails the
+   build if it ever imports a framework.
+5. **The payment provider sits behind an interface** with a real fake, so
+   the whole money path runs the same way in the tests, locally and in
+   the demo.
+6. **Background work is database driven**, with no Redis and no Celery.
+   Four functions, rows claimed with `SKIP LOCKED`, safe to run twice.
 
 ## Known limitations
 
 - Payments are test mode. Vendor payouts are not implemented.
 - One shop per vendor account, one order per upload, whole-document printing only (no page ranges, no binding options).
 - No email verification or password reset.
-- Single-instance deployment. Scaling triggers are documented in `docs/ARCHITECTURE.md`.
+- Single-instance deployment. The rate limiter lives in the process, so a
+  second API instance would need Redis.
+- The vendor board polls every five seconds. WebSockets arrive in the
+  phase where a live board needs them.
 
 ## Author
 

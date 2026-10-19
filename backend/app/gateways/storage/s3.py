@@ -46,9 +46,26 @@ class S3Storage:
         return url
 
     def health(self) -> bool:
+        """Is the object storage reachable and usable?
+
+        A bucket that does not exist yet is not a failure. The bucket is
+        created on first use, and a fresh deployment has to pass its
+        readiness check before anything has been uploaded, so a missing
+        bucket is created here too. A bucket that exists but cannot be
+        reached is a failure.
+        """
         try:
             self.client.head_bucket(Bucket=self._bucket)
-        except (BotoCoreError, ClientError):
+        except ClientError as exc:
+            if not _is_missing_bucket(exc):
+                return False
+            try:
+                self.client.create_bucket(Bucket=self._bucket)
+            except (BotoCoreError, ClientError):
+                return False
+            self._bucket_ready = True
+            return True
+        except BotoCoreError:
             return False
         return True
 
@@ -73,3 +90,9 @@ class S3Storage:
         except ClientError:
             self.client.create_bucket(Bucket=self._bucket)
         self._bucket_ready = True
+
+
+def _is_missing_bucket(exc: ClientError) -> bool:
+    """Is this error "the bucket is not there" rather than "no access"?"""
+    code = str(exc.response.get("Error", {}).get("Code", ""))
+    return code in {"404", "NoSuchBucket", "NotFound"}
