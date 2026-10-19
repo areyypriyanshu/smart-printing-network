@@ -178,6 +178,28 @@ printing a summary that looks fine.
 - **CI:** six jobs, backend, frontend, contract, end to end, OpenAPI drift
   and a secret scan.
 
+## Deploying
+
+The production stack is `docker-compose.prod.yml` with Caddy in front. It
+runs locally, which is the fastest way to see the whole thing.
+
+For a real deployment, push to `main` and the deploy workflow builds the
+image, runs the migrations as a one-off container, deploys, smoke checks
+`/readyz`, and rolls back to the previous image tag if the check fails.
+
+The deploy job is skipped until a target is configured. To set one up:
+
+1. An AWS instance with Docker, a domain pointing at it, and ports 80 and
+   443 open.
+2. Repository secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `POSTGRES_PASSWORD`,
+   `S3_SECRET_KEY`. A repository variable `DEPLOY_ENABLED` set to `true`.
+3. An environment variable `SPN_DOMAIN` on the `production` environment.
+4. `ACME_EMAIL` in the instance's `.env`, so Caddy can register the ACME
+   account.
+
+The migrations are backward compatible with the previous version, so a
+rollback is a redeploy of the previous tag.
+
 ## Documentation
 
 The planning documents live on the maintainer's machine and are not
