@@ -49,6 +49,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: production
+    # Only run when a deployment target is configured. Until then the
+    # images are still built and published on every merge, and the deploy
+    # itself is skipped rather than failing on a machine that does not
+    # exist yet. Set the repository variable DEPLOY_ENABLED to true once
+    # the instance, the domain and the secrets are in place.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
