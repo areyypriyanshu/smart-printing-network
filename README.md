@@ -177,6 +177,29 @@ docker compose run --rm api python -m app.cli activate-admin <email>
 docker compose run --rm api python -m app.cli delete-admin <email>
 ```
 
+### The accounts that were made and never used
+
+An account with no order, no upload and no session since it was created
+is an account that somebody made and then did nothing with: a mistyped
+address, a test, or spam. They are listed, and the operator decides what
+happens to them.
+
+```bash
+# List them. Nothing is changed.
+docker compose run --rm api python -m app.cli prune-unused-accounts
+
+# Deactivate them. The address stays taken, so nobody else can claim it,
+# and the account can be given back with activate-account.
+docker compose run --rm api python -m app.cli prune-unused-accounts --apply
+
+# Give one account back
+docker compose run --rm api python -m app.cli activate-account <email>
+```
+
+Nothing is deleted, because a customer who signed up last week and has
+not printed anything yet looks exactly like an account nobody wants.
+See [ADR 025](docs/adr/025-the-limits-on-creating-an-account.md).
+
 Deactivating is the normal way to remove access, and it is the better
 one. The account is kept, so the decisions it made stay attached to it in
 the moderation log, and the log is the reason the panel exists. A hard

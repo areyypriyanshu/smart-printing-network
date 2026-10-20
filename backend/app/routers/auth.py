@@ -9,7 +9,7 @@ from app.db import SessionLocal, get_db
 from app.deps import get_current_user
 from app.errors import Unauthenticated
 from app.models import User
-from app.rate_limit import account_rate_limit, rate_limit
+from app.rate_limit import account_rate_limit, registration_limit
 from app.schemas.auth import (
     AccessTokenResponse,
     LoginRequest,
@@ -24,11 +24,62 @@ from app.services import auth_service, shop_service
 router = APIRouter(tags=["auth"], responses=ERROR_RESPONSES)
 
 
+def _email_from_body(raw: bytes) -> str | None:
+    """The address a request body carries, if it carries one.
+
+    Both the registration body and the login body carry an address, and
+    either one may be what arrived, so both are tried. The body is
+    validated on the way, which means an address that is not one is
+    never used in a query.
+    """
+    for model in (RegisterRequest, LoginRequest):
+        try:
+            payload = model.model_validate_json(raw)
+        except ValueError:
+            continue
+        return str(payload.email)
+    return None
+
+
+def _account_key(session: Session, email: str) -> str:
+    """The rate-limit key for one account, however the address is spelled.
+
+    The key is the account id the database resolves, so two spellings of one
+    address cannot occupy two rate-limit buckets. An address that does not
+    exist has no id, so it is keyed by a hash of the address itself: the
+    same unknown address still shares one bucket, and a different one gets
+    its own.
+    """
+    user_id = session.scalar(select(User.id).where(User.email == email))
+    if user_id is not None:
+        return f"account:{user_id}"
+    return "unknown:" + hashlib.sha256(email.lower().encode()).hexdigest()
+
+
+def _account_from_request(request: Request) -> str:
+    """The account a request is trying to reach.
+
+    The body has already been read by the time this runs, so it is read
+    from the request's cache rather than from the stream. The key comes
+    from the account the database resolves, not from the spelling the
+    client sent.
+    """
+    try:
+        raw = request._body  # noqa: SLF001
+    except AttributeError:
+        return "unknown"
+    email = _email_from_body(raw)
+    if email is None:
+        return "unknown"
+    with SessionLocal() as session:
+        return _account_key(session, email)
+
+
 @router.post(
     "/auth/register",
     status_code=status.HTTP_201_CREATED,
     response_model=UserResponse,
-    dependencies=[Depends(rate_limit(5, 60, "register"))],
+    dependencies=[Depends(registration_limit(_account_from_request))],
 )
 def register(body: RegisterRequest, session: Session = Depends(get_db)) -> User:
     return auth_service.register_customer(
@@ -40,7 +91,7 @@ def register(body: RegisterRequest, session: Session = Depends(get_db)) -> User:
     "/auth/register-vendor",
     status_code=status.HTTP_201_CREATED,
     response_model=VendorRegistrationResponse,
-    dependencies=[Depends(rate_limit(5, 60, "register"))],
+    dependencies=[Depends(registration_limit(_account_from_request))],
 )
 def register_vendor(
     body: RegisterVendorRequest, session: Session = Depends(get_db)
@@ -60,37 +111,6 @@ def register_vendor(
         user=UserResponse.model_validate(user),
         shop=shop_service.vendor_shop_response(session, shop),
     )
-
-
-def _account_key(session: Session, email: str) -> str:
-    """The rate-limit key for one account, however the address is spelled.
-
-    The key is the account id the database resolves, so two spellings of one
-    address cannot occupy two rate-limit buckets. An address that does not
-    exist has no id, so it is keyed by a hash of the address itself: the
-    same unknown address still shares one bucket, and a different one gets
-    its own.
-    """
-    user_id = session.scalar(select(User.id).where(User.email == email))
-    if user_id is not None:
-        return f"account:{user_id}"
-    return "unknown:" + hashlib.sha256(email.lower().encode()).hexdigest()
-
-
-def _account_from_request(request: Request) -> str:
-    """The account a login is trying to reach.
-
-    The body has already been read by the time this runs, so it is read
-    from the request's cache rather than from the stream. The key comes
-    from the account the database resolves, not from the spelling the
-    client sent.
-    """
-    try:
-        payload = LoginRequest.model_validate_json(request._body)  # noqa: SLF001
-    except (ValueError, AttributeError):
-        return "unknown"
-    with SessionLocal() as session:
-        return _account_key(session, str(payload.email))
 
 
 @router.post(

@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from fastapi import Depends, Request
 
+from app.config import get_settings
 from app.deps import get_current_user
 from app.errors import RateLimited
 from app.models import User
@@ -18,6 +19,12 @@ PICKUP_WINDOW_SECONDS = 600.0
 #: for one account. The address limit only has to stop a machine
 #: spraying many accounts, so it can be generous.
 ADDRESS_LIMIT_FACTOR = 4
+
+#: A minute, and a day, in seconds. The windows the registration limits
+#: are measured in.
+MINUTE = 60.0
+HOUR = 3600.0
+DAY = 86400.0
 
 
 class RateLimiter:
@@ -110,6 +117,71 @@ def account_rate_limit(
             if retry_after is not None:
                 raise RateLimited(
                     "Too many requests, try again shortly",
+                    headers={"Retry-After": str(math.ceil(retry_after))},
+                )
+
+    return dependency
+
+
+def registration_limit(account_from: Callable[[Request], str]) -> Callable[[Request], None]:
+    """The limits on creating an account.
+
+    Registering is the most expensive thing an anonymous caller can ask
+    for. The password is hashed with argon2id, which is CPU work the
+    server cannot refuse once it has started it, and the account is a
+    row that stays. Four limits, one for each way the work can be asked
+    for too many times.
+
+    * **Per address, per minute.** One machine asking for too many
+      accounts at once.
+    * **Per address, per day.** One machine asking for a slow drip of
+      accounts, which the minute limit does not see.
+    * **Per account, per hour.** Many machines asking for the *same*
+      address. This is how somebody else's address gets claimed, and it
+      is the limit that stops it, because the other three are all keyed
+      on the address of the machine.
+    * **Per process, per minute.** The total the deployment will spend
+      on password hashes, whatever the number of machines asking. This
+      is the one that bounds the work rather than the attacker: it is
+      the answer to "can a botnet crash the web by registering".
+    """
+
+    def dependency(request: Request) -> None:
+        settings = get_settings()
+        limiter: RateLimiter = request.app.state.rate_limiter
+        client = request.client.host if request.client else "unknown"
+        account = account_from(request)
+        checks: tuple[tuple[str, int, float, str], ...] = (
+            (
+                f"register:address-minute:{client}",
+                settings.register_address_per_minute,
+                MINUTE,
+                "Too many accounts from this address. Try again shortly.",
+            ),
+            (
+                f"register:address-day:{client}",
+                settings.register_address_per_day,
+                DAY,
+                "Too many accounts from this address today. Try again tomorrow.",
+            ),
+            (
+                f"register:account-hour:{account}",
+                settings.register_account_per_hour,
+                HOUR,
+                "Too many attempts for this email address. Try again later.",
+            ),
+            (
+                "register:global-minute",
+                settings.register_global_per_minute,
+                MINUTE,
+                "The server is busy creating accounts right now. Try again in a minute.",
+            ),
+        )
+        for key, limit, window, message in checks:
+            retry_after = limiter.check(key, limit, window)
+            if retry_after is not None:
+                raise RateLimited(
+                    message,
                     headers={"Retry-After": str(math.ceil(retry_after))},
                 )
 

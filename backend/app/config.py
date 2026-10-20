@@ -55,6 +55,27 @@ class Settings(BaseSettings):
     file_retention_hours: int = 24
     no_show_timeout_hours: int = 24
 
+    # The limits on creating an account. Registering is the most
+    # expensive thing an anonymous caller can ask for, because the
+    # password is hashed with argon2id, and the work cannot be refused
+    # once it has started.
+    #
+    # The per address limits are generous on purpose: a campus puts
+    # every student behind one address, so a limit that rations signups
+    # would lock out the people it is meant to serve. They are here to
+    # stop a machine, not to ration people.
+    register_address_per_minute: int = 5
+    register_address_per_day: int = 100
+    # The limit on one email address. This is what stops many machines
+    # claiming the same address, which is how somebody else's address
+    # gets taken.
+    register_account_per_hour: int = 5
+    # The total the whole deployment will create in a minute. This is
+    # the limit that bounds the work rather than the attacker, and it is
+    # the reason a botnet cannot spend the server's CPU on password
+    # hashes.
+    register_global_per_minute: int = 60
+
     google_maps_api_key: str = ""
 
     @model_validator(mode="after")

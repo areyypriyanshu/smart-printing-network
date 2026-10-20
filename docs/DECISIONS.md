@@ -177,6 +177,13 @@ database still refuses is a 422 rather than a 500, and a 500 carries the
 request id so it can be found in the logs.
 [ADR 024](adr/024-the-boundary-refuses-a-value-the-database-cannot-hold.md)
 
+**The deployment caps the work it will do, not only the attacker's
+share of it.** Creating an account hashes a password, and that is CPU
+the server cannot refuse once it has started it. There are four limits
+on registration, and the last one is per deployment rather than per
+caller: sixty accounts a minute, however many machines are asking.
+[ADR 025](adr/025-the-limits-on-creating-an-account.md)
+
 [ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
 conversion, including the alternatives that were rejected and why.
 
