@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import logging
 import sys
 import uuid
@@ -8,10 +9,12 @@ from typing import TypedDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import SessionLocal
 from app.logging import setup_logging
 from app.models import AdminAction, Order, RefreshToken, Shop, ShopRate, Upload, User
-from app.services import auth_service
+from app.security import validate_password_strength
+from app.services import admin_service, auth_service
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +71,14 @@ SEED_CUSTOMER = {
 
 
 def seed(session: Session) -> None:
+    """Create the demo shops, rates and customer.
+
+    The command is for local development only. It refuses to run against a
+    production configuration, because the accounts it creates have a
+    published password and the shops it creates are on the market.
+    """
+    if get_settings().env == "production":
+        raise SystemExit("the seed command is for local development only")
     for spec in SEED_SHOPS:
         existing = session.scalar(select(User).where(User.email == spec["email"]))
         if existing is not None:
@@ -83,10 +94,15 @@ def seed(session: Session) -> None:
             latitude=spec["latitude"],
             longitude=spec["longitude"],
         )
-        shop.is_verified = True
         shop.min_order_paise = spec["min_order_paise"]
         session.add_all(_full_rate_table(shop.id, spec["base_paise"]))
         session.commit()
+        # The market state and the log entry come from the approval path, so
+        # a seeded shop is approved the same way an approved shop is, and the
+        # moderation log can answer who approved it. admin_id is None because
+        # the shell is the actor, which is what the nullable admin_id column
+        # on admin_actions is for.
+        admin_service.approve_shop(session, shop_id=shop.id, admin_id=None)
         logger.info("seed: created %s (%s)", spec["shop_name"], spec["email"])
 
     customer = session.scalar(select(User).where(User.email == SEED_CUSTOMER["email"]))
@@ -217,7 +233,7 @@ def list_admins(session: Session) -> int:
     )
     if not rows:
         print("There are no admin accounts.")
-        print("Create one with: python -m app.cli create-admin <email> <password>")
+        print("Create one with: python -m app.cli create-admin <email>")
         return 0
     for user, actions in rows:
         state = "active" if user.is_active else "deactivated"
@@ -322,10 +338,8 @@ def _admin_blockers(session: Session, admin_id: uuid.UUID) -> str:
             select(func.count()).select_from(AdminAction).where(AdminAction.admin_id == admin_id)
         )
         or 0,
-        "open session": session.scalar(
-            select(func.count())
-            .select_from(RefreshToken)
-            .where(RefreshToken.user_id == admin_id, RefreshToken.revoked_at.is_(None))
+        "session": session.scalar(
+            select(func.count()).select_from(RefreshToken).where(RefreshToken.user_id == admin_id)
         )
         or 0,
         "order": session.scalar(
@@ -352,9 +366,26 @@ def create_admin(session: Session, email: str, password: str, full_name: str) ->
     if existing is not None:
         print(f"An account with email {email} already exists", file=sys.stderr)
         return 1
+    try:
+        validate_password_strength(password)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     auth_service.register_admin(session, email=email, password=password, full_name=full_name)
     print(f"Created admin account {email}")
     return 0
+
+
+def _read_admin_password(password_stdin: bool) -> str:
+    """Read the admin password without putting it in the shell history.
+
+    A password that is given as an argument ends up in the shell history, in
+    the process list and in the container metadata, where anybody with access
+    to the host can read it.
+    """
+    if password_stdin:
+        return sys.stdin.readline().rstrip("\n")
+    return getpass.getpass("Admin password: ")
 
 
 def _admin_id_for(session: Session, email: str | None) -> uuid.UUID | None:
@@ -408,7 +439,11 @@ def main(
 
     admin_parser = subparsers.add_parser("create-admin", help="create an admin account")
     admin_parser.add_argument("email", help="admin account email")
-    admin_parser.add_argument("password", help="admin password")
+    admin_parser.add_argument(
+        "--password-stdin",
+        action="store_true",
+        help="read the admin password from standard input instead of a prompt",
+    )
     admin_parser.add_argument(
         "--name", default="Administrator", help="the name shown in the admin panel"
     )
@@ -447,7 +482,8 @@ def main(
         if args.command == "list-shops":
             return list_shops(session, pending_only=bool(args.pending))
         if args.command == "create-admin":
-            return create_admin(session, str(args.email), str(args.password), str(args.name))
+            password = _read_admin_password(bool(args.password_stdin))
+            return create_admin(session, str(args.email), password, str(args.name))
         if args.command == "list-admins":
             return list_admins(session)
         if args.command == "deactivate-admin":

@@ -10,6 +10,9 @@ mistakes are the ones that leave the platform with no admin at all, or
 that destroy a moderation log.
 """
 
+import io
+from unittest import mock
+
 import pytest
 from app.cli import main
 from app.errors import Unauthenticated
@@ -39,6 +42,16 @@ class _KeepOpen:
 def run(session: Session, *args: str) -> int:
     """Run a command against the test database."""
     return main(list(args), session_factory=lambda: _KeepOpen(session))
+
+
+def run_create_admin(session: Session, email: str, password: str = "password-123") -> int:
+    """Run create-admin with the password on standard input.
+
+    The password is not an argument, because an argument ends up in the
+    shell history, in the process list and in the container metadata.
+    """
+    with mock.patch("sys.stdin", io.StringIO(f"{password}\n")):
+        return run(session, "create-admin", email, "--password-stdin")
 
 
 def make_admin(session: Session, email: str = "admin@example.com") -> User:
@@ -207,10 +220,10 @@ def test_deleting_the_last_active_admin_is_refused(
 def test_creating_an_admin_twice_is_refused(
     db_session: Session, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert run(db_session, "create-admin", "new@example.com", "password-123") == 0
+    assert run_create_admin(db_session, "new@example.com") == 0
     capsys.readouterr()
 
-    assert run(db_session, "create-admin", "new@example.com", "password-123") == 1
+    assert run_create_admin(db_session, "new@example.com") == 1
 
     assert "already exists" in capsys.readouterr().err
 
@@ -227,7 +240,7 @@ def test_a_deactivated_admin_cannot_be_recreated(
     run(db_session, "deactivate-admin", "admin@example.com")
     capsys.readouterr()
 
-    assert run(db_session, "create-admin", "admin@example.com", "password-123") == 1
+    assert run_create_admin(db_session, "admin@example.com") == 1
 
     assert "already exists" in capsys.readouterr().err
 
