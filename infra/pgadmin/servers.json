@@ -1,0 +1,20 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "spn (local)",
+      "Group": "SPN",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "spn",
+      "Username": "spn",
+      "Shared": false,
+      "PasswordExecCommand": "printenv SPN_DB_PASSWORD",
+      "ConnectionParameters": {
+        "sslmode": "prefer",
+        "connect_timeout": 10
+      }
+    }
+  },
+  "ServersGroups": {},
+  "Databases": {}
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 import { Icon } from "./Icon";
+import { sectionTitleClassName } from "./typography";
 
 type DialogProps = {
   open: boolean;
@@ -53,15 +54,13 @@ export function Dialog({
       }}
       className={cn(
         "m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-hairline",
-        "bg-canvas p-0 text-ink shadow-lg backdrop:bg-ink/40",
+        "bg-canvas p-0 text-ink shadow-4 backdrop:bg-ink/40",
       )}
     >
       <div className="flex flex-col gap-4 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <h2 className="font-display text-lg font-semibold text-ink">
-              {title}
-            </h2>
+            <h2 className={sectionTitleClassName()}>{title}</h2>
             {description !== undefined && (
               <p className="text-sm text-steel">{description}</p>
             )}

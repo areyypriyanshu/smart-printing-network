@@ -10,11 +10,16 @@ import {
   statusLabel,
   type OrderDetailResponse,
 } from "../../api/orders";
-import { Alert, Button } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  buttonClassName,
+  sectionTitleClassName,
+} from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { pickupShareLink } from "../../lib/share";
-import { useShop } from "../shops/api";
+import { useShop } from "../shops";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -102,7 +107,13 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-steel">
           Order #{order.order_no}
         </p>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
+        <h1
+          // The page polls every five seconds, so the status changes on
+          // its own. A live region means a customer is told when the job
+          // is ready instead of having to watch the screen.
+          aria-live="polite"
+          className="font-display text-2xl font-bold tracking-tight text-ink"
+        >
           {orderStatusLabel(order)}
         </h1>
       </div>
@@ -112,7 +123,7 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           aria-label="Pickup code"
           className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface p-6"
         >
-          <h2 className="font-display text-base font-semibold text-ink">
+          <h2 className={sectionTitleClassName()}>
             {order.payment_method === "at_store"
               ? `Show this code and pay ${formatPaise(order.price_paise)} in cash`
               : "Show this code at the counter"}
@@ -133,7 +144,7 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
               })}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
+              className={buttonClassName("secondary")}
             >
               Share the code on WhatsApp
             </a>
@@ -170,7 +181,9 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           {order.duplex ? "Double sided" : "Single sided"}
         </dd>
         <dt className="text-steel">Total</dt>
-        <dd className="font-mono text-ink">{formatPaise(order.price_paise)}</dd>
+        <dd className="font-mono text-base font-medium text-ink">
+          {formatPaise(order.price_paise)}
+        </dd>
         <dt className="text-steel">Payment</dt>
         <dd className="text-ink">
           {order.payment_method === "at_store"
@@ -182,9 +195,7 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
       </dl>
 
       <section aria-label="History" className="flex flex-col gap-3">
-        <h2 className="font-display text-base font-semibold text-ink">
-          History
-        </h2>
+        <h2 className={sectionTitleClassName()}>History</h2>
         <ol className="flex flex-col gap-2 border-l border-hairline pl-4">
           {events.map((event) => (
             <li
@@ -212,17 +223,11 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
             Print this again
           </Button>
         ) : (
-          <Link
-            to="/new"
-            className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
-          >
+          <Link to="/new" className={buttonClassName("secondary")}>
             Upload it again to print it again
           </Link>
         )}
-        <Link
-          to="/new"
-          className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
-        >
+        <Link to="/new" className={buttonClassName("secondary")}>
           Start another order
         </Link>
       </div>

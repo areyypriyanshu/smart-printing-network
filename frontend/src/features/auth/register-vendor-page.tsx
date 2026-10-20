@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router";
 import {
   Alert,
   Button,
+  linkClassName,
   PasswordField,
   Stepper,
   TextField,
@@ -83,11 +84,8 @@ export function RegisterVendorPage() {
       footer={
         <p className="border-t border-hairline pt-6 text-sm text-steel">
           Just here to print?{" "}
-          <Link
-            className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
-            to="/register"
-          >
-            Create a customer account
+          <Link className={linkClassName()} to="/register">
+            Create an account
           </Link>
         </p>
       }

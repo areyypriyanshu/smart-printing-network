@@ -58,7 +58,12 @@ export function SuspendDialog({
           <Button variant="secondary" onClick={close} disabled={pending}>
             Keep the shop
           </Button>
-          <Button variant="danger" pending={pending} onClick={submit}>
+          <Button
+            variant="danger"
+            pending={pending}
+            pendingLabel="Suspending…"
+            onClick={submit}
+          >
             Suspend shop
           </Button>
         </>

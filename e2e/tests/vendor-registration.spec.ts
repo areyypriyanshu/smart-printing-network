@@ -23,5 +23,7 @@ test("vendor completes all three registration steps", async ({ page }) => {
   await page.getByRole("button", { name: "Register shop" }).click();
 
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("alert")).toContainText("Account created");
+  // A confirmation is good news, so it is announced politely rather
+  // than interrupting as an error would.
+  await expect(page.getByRole("status")).toContainText("Account created");
 });

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 
 import { listOrders, orderStatusLabel } from "../../api/orders";
-import { Alert, Button } from "../../components/ui";
+import { Alert, Button, buttonClassName } from "../../components/ui";
 import { formatIstDateTime } from "../../lib/dates";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
@@ -60,10 +60,7 @@ export function OrdersPage() {
             near you.
           </p>
           <div className="mt-4">
-            <Link
-              to="/new"
-              className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-deep"
-            >
+            <Link to="/new" className={buttonClassName("primary")}>
               Start a new order
             </Link>
           </div>
@@ -80,7 +77,7 @@ export function OrdersPage() {
                   <span className="font-mono text-sm font-medium text-ink">
                     #{order.order_no}
                   </span>
-                  <span className="font-mono text-xs text-steel">
+                  <span className="font-mono text-xs font-medium text-steel">
                     {formatPaise(order.price_paise)}
                   </span>
                 </span>

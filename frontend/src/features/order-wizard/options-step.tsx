@@ -94,7 +94,7 @@ export function OptionsStep({
           {...register("copies")}
         />
         {errors.copies?.message !== undefined && (
-          <p id="copies-error" role="alert" className="text-sm text-red-700">
+          <p id="copies-error" role="alert" className="text-sm text-danger">
             {errors.copies.message}
           </p>
         )}

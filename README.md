@@ -98,6 +98,7 @@ runs it through Rosetta emulation automatically. `make up` copies
 | App | http://localhost:5173 |
 | API docs (OpenAPI) | http://localhost:8000/docs |
 | MinIO console | http://localhost:9001 |
+| pgAdmin (database browser) | http://localhost:5050 |
 
 Demo accounts, created by `make seed` (local and CI only, never production):
 
@@ -171,6 +172,58 @@ deactivated or deleted, because that would leave nobody who can undo it
 from the panel; create another one first. And an account that has
 recorded a decision cannot be deleted at all.
 
+### Looking at the data
+
+The database is PostgreSQL 16 with PostGIS. It runs in the `db` container
+and is published on port 5432 of the host, so any Postgres tool on the
+machine can reach it. There are three ways to look at what is in it.
+
+**pgAdmin**, in the browser, is the one that behaves like a MySQL
+workbench: a tree of tables on the left, rows on the right, and a query
+tool for everything else. It is already running as part of `make up` on
+<http://localhost:5050>. Sign in with `admin@example.com` and the password
+`spn` (the local default; set `PGADMIN_EMAIL` and `PGADMIN_PASSWORD` in
+`.env` to change it), then open the `spn (local)` server. The connection
+is configured already, password included, so there is nothing to type.
+
+```bash
+make db-ui                  # start it on its own
+```
+
+The pgAdmin account is created the first time the container starts, so
+changing `PGADMIN_PASSWORD` in `.env` afterwards does not change it.
+Delete the container and its volume to start over, then bring it back:
+
+```bash
+docker compose --profile tools rm -sf pgadmin
+docker volume rm spn_pgadmin_data    # the name carries the Compose project name
+make db-ui
+```
+
+**psql**, in the terminal, when the question is one sentence long:
+
+```bash
+make db-shell               # an interactive session
+```
+
+```
+\dt                                           -- the tables
+\d orders                                     -- the columns, constraints and indexes
+SELECT order_no, status, price_paise FROM orders ORDER BY created_at DESC LIMIT 10;
+\q                                            -- leave
+```
+
+The same thing without the session, for scripts:
+
+```bash
+docker compose exec -T db psql -U spn -d spn -c "SELECT count(*) FROM orders;"
+```
+
+**The schema reference**, `docs/DATABASE_SCHEMA.md`, lists every table,
+column, constraint and index, and the queries that matter. It is the
+answer to "what should this table look like"; the database is the answer
+to "what is in it right now".
+
 ### The same stack with HTTPS, the way it is deployed
 
 The production Compose file runs locally too, so the whole path can be
@@ -222,6 +275,8 @@ printing a summary that looks fine.
 | `make e2e` | Playwright journeys and accessibility checks against the full stack. |
 | `make smoke` | The end to end product flow against a running stack. |
 | `make openapi` | Exports `backend/openapi.json` and regenerates `frontend/src/api/schema.d.ts`. |
+| `make db-shell` | An interactive psql session against the local database. |
+| `make db-ui` | Starts the pgAdmin database browser on <http://localhost:5050>. |
 | `make reset` | Wipes local volumes and rebuilds from scratch. |
 
 ## Testing

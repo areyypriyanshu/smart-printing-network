@@ -12,7 +12,9 @@ type QueueCardProps = {
   order: VendorOrder;
   now: Date;
   acceptTimeoutMinutes: number;
-  pending: boolean;
+  // The order this card's request is about, so only the card that is
+  // working shows a progress label. null when nothing is in flight.
+  pendingOrderId: string | null;
   onAccept: () => void;
   onReject: () => void;
   onStart: () => void;
@@ -25,7 +27,7 @@ export function QueueCard({
   order,
   now,
   acceptTimeoutMinutes,
-  pending,
+  pendingOrderId,
   onAccept,
   onReject,
   onStart,
@@ -35,6 +37,12 @@ export function QueueCard({
 }: QueueCardProps) {
   const [fileError, setFileError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+
+  // This card is the one the shop is waiting on.
+  const busy = pendingOrderId === order.id;
+  // While any request is in flight no card can start another one, so a
+  // shop cannot accept a job and reject it at the same time.
+  const locked = pendingOrderId !== null;
 
   // The countdown is to the auto reject, which starts when the order
   // entered the queue. A cash order has no paid_at until it is
@@ -70,7 +78,7 @@ export function QueueCard({
         <h3 className="font-mono text-sm font-medium text-ink">
           #{order.order_no}
         </h3>
-        <p className="font-mono text-xs text-steel">
+        <p className="font-mono text-xs font-medium text-steel">
           {formatPaise(order.price_paise)}
         </p>
       </header>
@@ -113,21 +121,26 @@ export function QueueCard({
       {fileError !== null && <Alert>{fileError}</Alert>}
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          pending={opening}
-          pendingLabel="Opening…"
-          onClick={() => void openFile()}
-        >
-          Open PDF
-        </Button>
-
         {(order.status === "PAID" || order.status === "RESERVED") && (
           <>
-            <Button pending={pending} onClick={onAccept}>
+            <Button
+              pending={busy}
+              pendingLabel="Accepting…"
+              disabled={locked}
+              onClick={onAccept}
+            >
               Accept
             </Button>
-            <Button variant="secondary" onClick={onReject}>
+            <Button
+              variant="secondary"
+              pending={opening}
+              pendingLabel="Opening…"
+              disabled={locked}
+              onClick={() => void openFile()}
+            >
+              Open PDF
+            </Button>
+            <Button variant="danger" disabled={locked} onClick={onReject}>
               Reject
             </Button>
           </>
@@ -135,25 +148,71 @@ export function QueueCard({
 
         {order.status === "ACCEPTED" && (
           <>
-            <Button pending={pending} onClick={onStart}>
+            <Button
+              pending={busy}
+              pendingLabel="Starting…"
+              disabled={locked}
+              onClick={onStart}
+            >
               Start printing
             </Button>
-            <Button variant="secondary" onClick={onCancel}>
+            <Button
+              variant="secondary"
+              pending={opening}
+              pendingLabel="Opening…"
+              disabled={locked}
+              onClick={() => void openFile()}
+            >
+              Open PDF
+            </Button>
+            <Button variant="danger" disabled={locked} onClick={onCancel}>
               Cancel
             </Button>
           </>
         )}
 
         {order.status === "PRINTING" && (
-          <Button pending={pending} onClick={onReady}>
-            Mark ready
-          </Button>
+          <>
+            <Button
+              pending={busy}
+              pendingLabel="Marking ready…"
+              disabled={locked}
+              onClick={onReady}
+            >
+              Mark ready
+            </Button>
+            <Button
+              variant="secondary"
+              pending={opening}
+              pendingLabel="Opening…"
+              disabled={locked}
+              onClick={() => void openFile()}
+            >
+              Open PDF
+            </Button>
+          </>
         )}
 
         {order.status === "READY" && (
-          <Button pending={pending} onClick={onCollect}>
-            Verify pickup
-          </Button>
+          <>
+            <Button
+              pending={busy}
+              pendingLabel="Verifying…"
+              disabled={locked}
+              onClick={onCollect}
+            >
+              Verify pickup
+            </Button>
+            <Button
+              variant="secondary"
+              pending={opening}
+              pendingLabel="Opening…"
+              disabled={locked}
+              onClick={() => void openFile()}
+            >
+              Open PDF
+            </Button>
+          </>
         )}
       </div>
     </article>

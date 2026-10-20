@@ -58,7 +58,11 @@ export function PickupDialog({
           <Button variant="secondary" onClick={close} disabled={pending}>
             Not yet
           </Button>
-          <Button pending={pending} onClick={submit}>
+          <Button
+            pending={pending}
+            pendingLabel="Handing over…"
+            onClick={submit}
+          >
             Hand over
           </Button>
         </>

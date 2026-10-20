@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
 import { ApiError, type UploadResponse } from "../../api/client";
-import { Alert, Button } from "../../components/ui";
+import { Alert, Button, sectionTitleClassName } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { uploadPdf } from "./api";
 
@@ -134,7 +134,7 @@ export function UploadStep({
     return (
       <div className="flex flex-col gap-4 rounded-lg border border-beige-deep bg-cream p-6">
         <div>
-          <h2 className="text-lg font-medium text-ink">File ready</h2>
+          <h2 className={sectionTitleClassName()}>File ready</h2>
           <p className="mt-1 text-sm text-ink">{upload.original_filename}</p>
           <p className="text-sm text-steel">
             {upload.page_count === 1 ? "1 page" : `${upload.page_count} pages`}{" "}
@@ -142,10 +142,10 @@ export function UploadStep({
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={onContinue}>Continue</Button>
           <Button variant="secondary" onClick={() => setReplacing(true)}>
             Replace file
           </Button>
+          <Button onClick={onContinue}>Continue</Button>
         </div>
       </div>
     );
@@ -158,7 +158,7 @@ export function UploadStep({
         htmlFor={inputId}
         onDrop={onDrop}
         onDragOver={(event) => event.preventDefault()}
-        className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-hairline-strong bg-surface p-10 text-center hover:border-primary"
+        className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-hairline-strong bg-surface p-10 text-center hover:border-primary focus-within:border-primary focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary"
       >
         <span className="text-sm font-medium text-ink">
           Drag a PDF, Word, Excel or PowerPoint file here, or choose a file

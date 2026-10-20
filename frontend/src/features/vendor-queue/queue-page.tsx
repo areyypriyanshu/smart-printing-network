@@ -89,6 +89,13 @@ export function VendorQueuePage() {
 
   const { items, accept_timeout_minutes: acceptTimeoutMinutes } = queue.data;
 
+  // Only the card that the shop is waiting on shows a progress label.
+  // The rest of the board is locked while a request is in flight, so two
+  // actions cannot be fired at once.
+  const pendingOrderId = action.isPending
+    ? (action.variables?.orderId ?? null)
+    : null;
+
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -135,7 +142,7 @@ export function VendorQueuePage() {
                         order={order}
                         now={now}
                         acceptTimeoutMinutes={acceptTimeoutMinutes}
-                        pending={action.isPending}
+                        pendingOrderId={pendingOrderId}
                         onAccept={() => runAction(order, "accept")}
                         onReject={() =>
                           openDialog({

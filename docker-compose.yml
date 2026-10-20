@@ -38,6 +38,41 @@ services:
       retries: 5
       start_period: 20s
 
+  # A database browser for local development, the way phpMyAdmin or a
+  # MySQL workbench shows tables and rows. It is a development tool: it
+  # is not in docker-compose.prod.yml, and it sits behind the "tools"
+  # profile so that CI never pulls or starts it. `make up` enables the
+  # profile, so a developer gets it with the rest of the stack.
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    profiles: ["tools"]
+    environment:
+      # The pgAdmin login. Both are local development defaults; set
+      # PGADMIN_EMAIL and PGADMIN_PASSWORD in .env to change them.
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-spn}
+      # The database password is read from the environment when the
+      # connection is made, so it is never typed into the UI and never
+      # written to a file in the repository.
+      PGADMIN_CONFIG_ENABLE_SERVER_PASS_EXEC_CMD: "True"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_DISABLE_POSTFIX: "1"
+      SPN_DB_PASSWORD: ${POSTGRES_PASSWORD:-spn}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/browser/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build:
       context: ./backend
@@ -102,3 +137,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  pgadmin_data:

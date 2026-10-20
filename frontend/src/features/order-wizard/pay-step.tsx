@@ -9,7 +9,12 @@ import {
   type OrderResponse,
 } from "../../api/orders";
 import type { UploadResponse } from "../../api/client";
-import { Alert, Button } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  buttonClassName,
+  sectionTitleClassName,
+} from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { pickupShareLink } from "../../lib/share";
@@ -170,9 +175,7 @@ export function PayStep({
     const order = phase.order;
     return (
       <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
-        <h2 className="font-display text-xl font-semibold text-ink">
-          Reserved for you
-        </h2>
+        <h2 className={sectionTitleClassName()}>Reserved for you</h2>
         <p className="text-sm text-steel">
           Order #{order.order_no} is booked. Show this code at the counter and
           pay {formatPaise(order.price_paise)} in cash when you collect it.
@@ -187,7 +190,7 @@ export function PayStep({
         <div className="flex flex-wrap gap-3">
           <Link
             to={`/orders/${order.id}`}
-            className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-deep"
+            className={buttonClassName("primary")}
           >
             View order
           </Link>
@@ -199,7 +202,7 @@ export function PayStep({
             })}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
+            className={buttonClassName("secondary")}
           >
             Share the code on WhatsApp
           </a>
@@ -212,9 +215,7 @@ export function PayStep({
     const order = phase.order.order;
     return (
       <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
-        <h2 className="font-display text-xl font-semibold text-ink">
-          Payment received
-        </h2>
+        <h2 className={sectionTitleClassName()}>Payment received</h2>
         <p className="text-sm text-steel">
           Order #{order.order_no} is paid. Show this code at the counter.
         </p>
@@ -224,7 +225,7 @@ export function PayStep({
         <div className="flex flex-wrap gap-3">
           <Link
             to={`/orders/${order.id}`}
-            className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-deep"
+            className={buttonClassName("primary")}
           >
             View order
           </Link>
@@ -236,7 +237,7 @@ export function PayStep({
   if (phase.kind === "unconfirmed") {
     return (
       <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
-        <h2 className="font-display text-xl font-semibold text-ink">
+        <h2 className={sectionTitleClassName()}>
           Still confirming your payment
         </h2>
         <Alert>
@@ -246,7 +247,7 @@ export function PayStep({
         <div className="flex flex-wrap gap-3">
           <Link
             to={`/orders/${phase.orderId}`}
-            className="inline-flex min-h-11 items-center rounded-lg border border-hairline-strong bg-canvas px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface"
+            className={buttonClassName("secondary")}
           >
             Check the order
           </Link>
@@ -258,16 +259,16 @@ export function PayStep({
   if (phase.kind === "failed") {
     return (
       <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
-        <h2 className="font-display text-xl font-semibold text-ink">
+        <h2 className={sectionTitleClassName()}>
           We could not start the payment
         </h2>
         <Alert>{phase.message}</Alert>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={() => setPhase({ kind: "review" })}>
-            Try again
-          </Button>
           <Button variant="secondary" onClick={onBack}>
             Back
+          </Button>
+          <Button onClick={() => setPhase({ kind: "review" })}>
+            Try again
           </Button>
         </div>
       </section>
@@ -280,9 +281,7 @@ export function PayStep({
         aria-label="Your order"
         className="flex flex-col gap-3 rounded-xl border border-hairline bg-canvas p-6"
       >
-        <h2 className="font-display text-xl font-semibold text-ink">
-          Review and pay
-        </h2>
+        <h2 className={sectionTitleClassName()}>Review and pay</h2>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
           <dt className="text-steel">File</dt>
           <dd className="text-ink">
@@ -299,7 +298,7 @@ export function PayStep({
           <dt className="text-steel">Rate</dt>
           <dd className="text-ink">{formatPaise(quote.rate_paise)} per page</dd>
           <dt className="text-steel">Total</dt>
-          <dd className="font-mono text-base text-ink">
+          <dd className="font-mono text-base font-medium text-ink">
             {formatPaise(quote.price_paise)}
           </dd>
         </dl>
@@ -355,6 +354,9 @@ export function PayStep({
       )}
 
       <div className="flex flex-wrap gap-3">
+        <Button variant="secondary" onClick={onBack}>
+          Back
+        </Button>
         <Button
           onClick={() => void startPayment()}
           pending={phase.kind === "paying"}
@@ -363,9 +365,6 @@ export function PayStep({
           {paymentMethod === "at_store"
             ? `Reserve for ${formatPaise(quote.price_paise)}`
             : `Pay ${formatPaise(quote.price_paise)}`}
-        </Button>
-        <Button variant="secondary" onClick={onBack}>
-          Back
         </Button>
       </div>
     </div>

@@ -4,7 +4,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { ApiError } from "../../api/client";
-import { Alert, Button, Input, TextField } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  Input,
+  pageTitleClassName,
+  TextField,
+} from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { isValidRupeesInput, parseRupeesToPaise } from "../../lib/money";
 import { useUpdateVendorShop, useVendorShop } from "./api";
@@ -99,7 +105,7 @@ export function VendorSettingsPage() {
   if (shop.error instanceof ApiError && shop.error.code === "NOT_FOUND") {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-ink">Shop settings</h1>
+        <h1 className={pageTitleClassName()}>Shop settings</h1>
         <p className="text-steel">
           This account does not have a shop yet. Register a shop to manage it
           here.
@@ -111,7 +117,7 @@ export function VendorSettingsPage() {
   if (shop.isError) {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-ink">Shop settings</h1>
+        <h1 className={pageTitleClassName()}>Shop settings</h1>
         <Alert>{messageForError(shop.error)}</Alert>
         <Button variant="secondary" onClick={() => void shop.refetch()}>
           Try again
@@ -123,7 +129,7 @@ export function VendorSettingsPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink">Shop settings</h1>
+        <h1 className={pageTitleClassName()}>Shop settings</h1>
         <p className="text-steel">
           Keep your shop details and order limits up to date.
         </p>

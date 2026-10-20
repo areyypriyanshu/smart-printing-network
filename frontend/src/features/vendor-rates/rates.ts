@@ -6,11 +6,10 @@ import {
   isValidRupeesInput,
   parseRupeesToPaise,
 } from "../../lib/money";
-
-export const PAPER_SIZES = ["A4", "A3"] as const;
+import { PAPER_SIZES, type PaperSize } from "../../lib/paper";
 
 export type RateRow = {
-  paper_size: (typeof PAPER_SIZES)[number];
+  paper_size: PaperSize;
   color: boolean;
   duplex: boolean;
   rupees: string;

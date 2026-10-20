@@ -3,7 +3,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useLocation, useNavigate } from "react-router";
 
-import { Alert, Button, PasswordField, TextField } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  linkClassName,
+  PasswordField,
+  TextField,
+} from "../../components/ui";
 import type { Role } from "../../api/client";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { AuthLayout } from "./auth-layout";
@@ -69,19 +75,13 @@ export function LoginPage() {
         <div className="flex flex-col gap-2 border-t border-hairline pt-6">
           <p className="text-sm text-steel">
             New customer?{" "}
-            <Link
-              className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
-              to="/register"
-            >
+            <Link className={linkClassName()} to="/register">
               Create an account
             </Link>
           </p>
           <p className="text-sm text-steel">
             Run a print shop?{" "}
-            <Link
-              className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
-              to="/register-vendor"
-            >
+            <Link className={linkClassName()} to="/register-vendor">
               Register your shop
             </Link>
           </p>

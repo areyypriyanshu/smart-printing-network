@@ -2,14 +2,19 @@ import { useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
 import type { UploadResponse } from "../../api/client";
-import { Alert, Button, Stepper } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  pageTitleClassName,
+  Stepper,
+} from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { useUpload } from "./api";
 import { OptionsStep } from "./options-step";
 import { PayStep } from "./pay-step";
 import { ShopStep, type ShopSelection } from "./shop-step";
 import { UploadStep } from "./upload-step";
-import { useShops } from "../shops/api";
+import { useShops } from "../shops";
 import {
   OPTION_DEFAULTS,
   PAYMENT_METHOD_DEFAULT,
@@ -86,7 +91,7 @@ export function OrderWizardPage() {
   ) {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
-        <h1 className="text-2xl font-semibold text-ink">New print order</h1>
+        <h1 className={pageTitleClassName()}>New print order</h1>
         <Alert>{messageForError(resume.error)}</Alert>
         <div>
           <Button onClick={startOver}>Start a new order</Button>
@@ -103,7 +108,7 @@ export function OrderWizardPage() {
   ) {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
-        <h1 className="text-2xl font-semibold text-ink">New print order</h1>
+        <h1 className={pageTitleClassName()}>New print order</h1>
         <p role="status" className="text-sm text-steel">
           Loading your upload…
         </p>
@@ -114,7 +119,7 @@ export function OrderWizardPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-ink">New print order</h1>
+        <h1 className={pageTitleClassName()}>New print order</h1>
         <Stepper steps={STEPS} current={currentStep + 1} />
         {currentStep > 0 && activeUpload !== null && (
           <p className="text-sm text-steel">

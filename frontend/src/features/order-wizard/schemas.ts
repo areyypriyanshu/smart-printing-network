@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const PAPER_SIZES = ["A4", "A3"] as const;
+import { PAPER_SIZES } from "../../lib/paper";
+
+export { PAPER_SIZES };
 
 export const optionsSchema = z.object({
   paper_size: z.enum(PAPER_SIZES),

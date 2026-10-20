@@ -1,11 +1,11 @@
-.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down
+.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down db-shell db-ui
 
 up:
 	@test -f .env || cp .env.example .env
-	docker compose up -d --build
+	docker compose --profile tools up -d --build
 
 down:
-	docker compose down
+	docker compose --profile tools down
 
 build:
 	docker compose build
@@ -73,5 +73,14 @@ openapi:
 	cd frontend && npx openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts
 
 reset:
-	docker compose down -v
-	docker compose up -d --build
+	docker compose --profile tools down -v
+	docker compose --profile tools up -d --build
+
+# An interactive psql session against the local database.
+db-shell:
+	docker compose exec db sh -c 'psql -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+
+# The database browser, on http://localhost:5050. It is already part of
+# `make up`; this target is for starting it on its own.
+db-ui:
+	docker compose --profile tools up -d pgadmin

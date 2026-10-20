@@ -1,6 +1,11 @@
 import { useState } from "react";
 
-import { Alert, Button } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  pageTitleClassName,
+  sectionTitleClassName,
+} from "../../components/ui";
 import { formatIstDateTime } from "../../lib/dates";
 import { messageForError } from "../../lib/errors";
 import {
@@ -45,10 +50,16 @@ export function AdminShopsPage() {
     );
   };
 
+  // The shop this request is about, so only that row shows a progress
+  // label instead of every row on the page.
+  const pendingShopId = shopAction.isPending
+    ? (shopAction.variables?.shopId ?? null)
+    : null;
+
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold text-ink">Shops</h1>
+        <h1 className={pageTitleClassName()}>Shops</h1>
         <p className="text-sm text-steel">
           Approve a shop and it can take orders. Suspending one takes it off the
           market without touching the orders it has already accepted.
@@ -138,7 +149,7 @@ export function AdminShopsPage() {
               <div className="flex flex-wrap gap-3">
                 {shop.is_verified ? (
                   <Button
-                    variant="secondary"
+                    variant="danger"
                     onClick={() => setSuspending(shop)}
                     disabled={shopAction.isPending}
                   >
@@ -147,8 +158,12 @@ export function AdminShopsPage() {
                 ) : (
                   <Button
                     onClick={() => approve(shop)}
-                    pending={shopAction.isPending}
+                    // Only the shop being decided shows the progress
+                    // label, and no other shop can be decided at the same
+                    // time.
+                    pending={pendingShopId === shop.id}
                     pendingLabel="Approving…"
+                    disabled={shopAction.isPending}
                   >
                     Approve
                   </Button>
@@ -160,9 +175,7 @@ export function AdminShopsPage() {
       )}
 
       <section className="flex flex-col gap-3" aria-label="Moderation log">
-        <h2 className="font-display text-lg font-semibold text-ink">
-          Moderation log
-        </h2>
+        <h2 className={sectionTitleClassName()}>Moderation log</h2>
         {actions.isPending && (
           <p role="status" className="text-sm text-steel">
             Loading the log…

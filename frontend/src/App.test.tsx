@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
@@ -22,8 +22,12 @@ describe("App", () => {
         name: /print from a shop near you/i,
       }),
     ).toBeInTheDocument();
+    // The call to action in the page, not the one in the header. Both
+    // links are called "Create an account", so the page is picked by
+    // where it is rather than by what it says.
+    const main = screen.getByRole("main");
     expect(
-      screen.getByRole("link", { name: /create an account/i }),
+      within(main).getByRole("link", { name: /create an account/i }),
     ).toBeInTheDocument();
   });
 

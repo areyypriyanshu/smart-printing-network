@@ -1,9 +1,10 @@
 import { Link } from "react-router";
 
 import {
-  buttonClassName,
   CropMarks,
   Icon,
+  buttonClassName,
+  sectionTitleClassName,
   type IconName,
 } from "../../components/ui";
 
@@ -91,7 +92,7 @@ function QuoteCard() {
   return (
     <article
       aria-label="Example quote"
-      className="relative overflow-hidden rounded-xl border border-hairline bg-canvas shadow-[0_1px_2px_rgb(36_31_25/0.06)]"
+      className="relative overflow-hidden rounded-xl border border-hairline bg-canvas shadow-1"
     >
       <div
         className="halftone absolute inset-0 opacity-60"
@@ -216,9 +217,7 @@ export function LandingPage() {
                   </span>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <h3 className="font-display text-lg font-semibold text-ink">
-                    {step.title}
-                  </h3>
+                  <h3 className={sectionTitleClassName()}>{step.title}</h3>
                   <p className="text-sm text-steel">{step.body}</p>
                 </div>
               </li>
@@ -231,10 +230,8 @@ export function LandingPage() {
         <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-14 sm:grid-cols-3 lg:py-20">
           {TRUST_ITEMS.map((item) => (
             <div key={item.title} className="flex flex-col gap-3">
-              <Icon name={item.icon} size={22} className="text-primary" />
-              <h3 className="font-display text-lg font-semibold text-ink">
-                {item.title}
-              </h3>
+              <Icon name={item.icon} size={22} className="text-primary-deep" />
+              <h3 className={sectionTitleClassName()}>{item.title}</h3>
               <p className="text-sm text-steel">{item.body}</p>
             </div>
           ))}

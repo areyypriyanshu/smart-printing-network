@@ -1,4 +1,5 @@
 import { cn } from "../../lib/cn";
+import { Icon } from "./Icon";
 
 type StepperProps = {
   steps: string[];
@@ -19,7 +20,7 @@ export function Stepper({ steps, current }: StepperProps) {
         return (
           <li key={label} className="flex items-center gap-2">
             {index > 0 && (
-              <span aria-hidden="true" className="text-muted">
+              <span aria-hidden="true" className="text-stone">
                 /
               </span>
             )}
@@ -29,11 +30,22 @@ export function Stepper({ steps, current }: StepperProps) {
                 "inline-flex items-center gap-2 rounded-full border px-3 py-1",
                 state === "current" &&
                   "border-primary bg-primary font-medium text-white",
-                state === "done" && "border-hairline bg-cream text-ink",
-                state === "upcoming" && "border-hairline bg-canvas text-steel",
+                // A finished step and a step still to come must not look
+                // the same. The tick and the dashed border carry the
+                // state, so it never depends on the colour alone.
+                state === "done" && "border-hairline-strong bg-canvas text-ink",
+                state === "upcoming" &&
+                  "border-dashed border-hairline-strong bg-canvas text-steel",
               )}
             >
-              <span className="text-xs">{number}</span>
+              {state === "done" ? (
+                <>
+                  <Icon name="check" size={14} className="shrink-0" />
+                  <span className="sr-only">Done:</span>
+                </>
+              ) : (
+                <span className="text-xs">{number}</span>
+              )}
               {label}
             </span>
           </li>

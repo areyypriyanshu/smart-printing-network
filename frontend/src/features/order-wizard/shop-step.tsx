@@ -4,7 +4,7 @@ import type { UploadResponse } from "../../api/client";
 import { Alert, Button } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
-import { useNearbyShops, useShops } from "../shops/api";
+import { useNearbyShops, useShops } from "../shops";
 import { useShopQuotes, type ShopQuote } from "./api";
 import { describeOptions, type OptionsFormValues } from "./schemas";
 
@@ -184,7 +184,7 @@ export function ShopStep({
                     {shop.name}
                   </h3>
                   {state.status === "ok" && (
-                    <p className="text-lg font-medium text-ink">
+                    <p className="font-mono text-lg font-medium text-ink">
                       {formatPaise(state.quote.price_paise)}
                     </p>
                   )}
@@ -294,16 +294,16 @@ export function ShopStep({
               {formatPaise(selected.state.quote.price_paise)}
             </dd>
           </dl>
-          <div>
-            <Button onClick={onContinue}>Continue to payment</Button>
-          </div>
         </section>
       )}
 
-      <div>
+      <div className="flex flex-wrap gap-3">
         <Button variant="secondary" onClick={onBack}>
           Back
         </Button>
+        {selected !== undefined && selected.state.status === "ok" && (
+          <Button onClick={onContinue}>Continue to payment</Button>
+        )}
       </div>
     </div>
   );

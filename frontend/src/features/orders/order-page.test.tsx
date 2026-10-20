@@ -98,6 +98,24 @@ describe("OrderPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Pickup code")).not.toBeInTheDocument();
   });
+
+  it("announces the status politely when it changes", async () => {
+    server.use(
+      http.get("/api/v1/orders/:id", () =>
+        HttpResponse.json({ order, events: [] }),
+      ),
+    );
+
+    renderOrderPage();
+
+    // The page polls every five seconds, so the status changes on its
+    // own. It has to be announced, or a customer never learns that the
+    // job is ready.
+    const heading = await screen.findByRole("heading", {
+      name: "Paid, waiting for the shop",
+    });
+    expect(heading).toHaveAttribute("aria-live", "polite");
+  });
 });
 
 describe("OrderPage extras", () => {

@@ -281,4 +281,49 @@ describe("VendorQueuePage", () => {
       screen.getByRole("button", { name: "Try again" }),
     ).toBeInTheDocument();
   });
+
+  it("shows the progress label only on the order being worked", async () => {
+    useQueueHandlers([
+      item({ id: "a", order_no: 1, status: "PAID" }),
+      item({ id: "b", order_no: 2, status: "PAID" }),
+    ]);
+    server.use(
+      http.post("/api/v1/vendor/orders/:id/accept", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return HttpResponse.json(item({ status: "ACCEPTED" }));
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<VendorQueuePage />, { route: "/vendor" });
+
+    const newColumn = await screen.findByRole("region", { name: "New" });
+    const cards = within(newColumn).getAllByRole("article");
+    await user.click(within(cards[0]).getByRole("button", { name: "Accept" }));
+
+    // Only the card that is being worked says what it is doing.
+    expect(
+      await within(cards[0]).findByRole("button", { name: "Accepting…" }),
+    ).toBeInTheDocument();
+    expect(
+      within(cards[1]).getByRole("button", { name: "Accept" }),
+    ).toBeDisabled();
+  });
+
+  it("locks a destructive action while the same order is being accepted", async () => {
+    useQueueHandlers([item()]);
+    server.use(
+      http.post("/api/v1/vendor/orders/:id/accept", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return HttpResponse.json(item({ status: "ACCEPTED" }));
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<VendorQueuePage />, { route: "/vendor" });
+
+    await user.click(await screen.findByRole("button", { name: "Accept" }));
+
+    // A shop must not be able to accept a job and reject it at the same
+    // time, so the destructive button is locked too.
+    expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
+  });
 });

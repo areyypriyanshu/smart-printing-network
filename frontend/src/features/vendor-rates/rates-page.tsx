@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { ApiError } from "../../api/client";
-import { Alert, Button, Input } from "../../components/ui";
+import { Alert, Button, Input, pageTitleClassName } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { useVendorShop } from "../vendor-settings";
 import { useReplaceVendorRates, useVendorRates } from "./api";
@@ -73,7 +73,7 @@ export function VendorRatesPage() {
   if (shop.error instanceof ApiError && shop.error.code === "NOT_FOUND") {
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-ink">Rates</h1>
+        <h1 className={pageTitleClassName()}>Rates</h1>
         <p className="text-steel">
           This account does not have a shop yet. Register a shop to set rates.
         </p>
@@ -85,7 +85,7 @@ export function VendorRatesPage() {
     const error = shop.error ?? rates.error;
     return (
       <section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
-        <h1 className="text-2xl font-semibold text-ink">Rates</h1>
+        <h1 className={pageTitleClassName()}>Rates</h1>
         <Alert>{messageForError(error)}</Alert>
         <Button
           variant="secondary"
@@ -103,7 +103,7 @@ export function VendorRatesPage() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink">Rates</h1>
+        <h1 className={pageTitleClassName()}>Rates</h1>
         <p className="text-steel">
           Prices per page for {shop.data.name}. Leave a row empty if the shop
           does not offer it.
@@ -158,7 +158,7 @@ export function VendorRatesPage() {
                         {...register(`rows.${index}.rupees`)}
                       />
                       {rowError !== undefined && (
-                        <p role="alert" className="mt-1 text-sm text-red-700">
+                        <p role="alert" className="mt-1 text-sm text-danger">
                           {rowError}
                         </p>
                       )}

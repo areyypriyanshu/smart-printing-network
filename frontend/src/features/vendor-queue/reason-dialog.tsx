@@ -17,19 +17,21 @@ type ReasonDialogProps = {
 
 const COPY: Record<
   ReasonAction,
-  { title: string; description: string; cta: string }
+  { title: string; description: string; cta: string; pending: string }
 > = {
   reject: {
     title: "Reject this order",
     description:
       "The customer is refunded. They see your reason, so keep it short and useful.",
     cta: "Reject order",
+    pending: "Rejecting…",
   },
   cancel: {
     title: "Cancel this order",
     description:
       "You already accepted this one, so the customer is refunded. They see your reason.",
     cta: "Cancel order",
+    pending: "Cancelling…",
   },
 };
 
@@ -72,7 +74,12 @@ export function ReasonDialog({
           <Button variant="secondary" onClick={close} disabled={pending}>
             Keep the order
           </Button>
-          <Button variant="danger" pending={pending} onClick={submit}>
+          <Button
+            variant="danger"
+            pending={pending}
+            pendingLabel={copy.pending}
+            onClick={submit}
+          >
             {copy.cta}
           </Button>
         </>

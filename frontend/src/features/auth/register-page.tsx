@@ -3,7 +3,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 
-import { Alert, Button, PasswordField, TextField } from "../../components/ui";
+import {
+  Alert,
+  Button,
+  linkClassName,
+  PasswordField,
+  TextField,
+} from "../../components/ui";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { registerRequest } from "./api";
 import { AuthLayout } from "./auth-layout";
@@ -42,15 +48,12 @@ export function RegisterPage() {
 
   return (
     <AuthLayout
-      title="Create your account"
+      title="Create an account"
       subtitle="Save your uploads and order prints in a few steps."
       footer={
         <p className="border-t border-hairline pt-6 text-sm text-steel">
           Already have an account?{" "}
-          <Link
-            className="font-medium text-primary underline underline-offset-2 hover:text-primary-deep"
-            to="/login"
-          >
+          <Link className={linkClassName()} to="/login">
             Sign in
           </Link>
         </p>
@@ -82,7 +85,7 @@ export function RegisterPage() {
           pending={pending}
           pendingLabel="Creating account…"
         >
-          Create account
+          Create an account
         </Button>
       </form>
     </AuthLayout>

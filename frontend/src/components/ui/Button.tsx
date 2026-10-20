@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from "react";
 
 import { cn } from "../../lib/cn";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "danger";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
@@ -11,11 +11,12 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const VARIANTS: Record<Variant, string> = {
+  // A disabled primary button keeps its shape but drops the contrast, so
+  // the label stays readable instead of turning into a smudge.
   primary:
-    "bg-primary text-white enabled:hover:bg-primary-deep disabled:bg-hairline disabled:text-muted",
+    "bg-primary text-white enabled:hover:bg-primary-deep disabled:bg-hairline disabled:text-stone",
   secondary:
     "border border-hairline-strong bg-canvas text-ink enabled:hover:border-ink enabled:hover:bg-surface",
-  ghost: "text-ink enabled:hover:bg-surface",
   danger:
     "bg-danger-solid text-white enabled:hover:bg-danger disabled:bg-danger-border disabled:text-danger",
 };
@@ -42,12 +43,17 @@ export function Button({
   className,
   children,
   disabled,
+  type = "button",
   ...rest
 }: ButtonProps) {
   return (
     <button
       {...rest}
+      // A button defaults to submitting its form, which is a trap for a
+      // button that is only ever a button. Submitting is opt in.
+      type={type}
       disabled={disabled === true || pending}
+      aria-busy={pending || undefined}
       className={buttonClassName(variant, className)}
     >
       {pending ? (pendingLabel ?? "Working…") : children}

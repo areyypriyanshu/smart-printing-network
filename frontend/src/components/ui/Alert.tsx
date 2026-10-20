@@ -27,7 +27,9 @@ export function Alert({ variant = "error", children }: AlertProps) {
   const { icon, className } = VARIANTS[variant];
   return (
     <div
-      role="alert"
+      // An error interrupts: role="alert" is assertive. A success or an
+      // information is not an emergency, so it is announced politely.
+      role={variant === "error" ? "alert" : "status"}
       className={cn(
         "flex items-start gap-2 rounded-lg border px-3 py-2 text-sm",
         className,

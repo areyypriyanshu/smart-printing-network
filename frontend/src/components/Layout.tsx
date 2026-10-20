@@ -59,7 +59,7 @@ export function Layout() {
     <div className="flex min-h-screen flex-col">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-canvas focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:outline-2 focus:outline-primary"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-lg focus:bg-canvas focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:outline-2 focus:outline-primary"
       >
         Skip to content
       </a>
@@ -103,7 +103,7 @@ export function Layout() {
                   Sign in
                 </NavLink>
                 <NavLink to="/register" className={desktopLinkClass}>
-                  Create account
+                  Create an account
                 </NavLink>
               </>
             ) : null}
@@ -167,7 +167,7 @@ export function Layout() {
                     className={mobileLinkClass}
                     onClick={closeMenu}
                   >
-                    Create account
+                    Create an account
                   </NavLink>
                 </>
               ) : null}
@@ -202,14 +202,14 @@ export function Layout() {
             <Link
               to="/new"
               onClick={closeMenu}
-              className="text-sm text-ink transition-colors duration-150 hover:text-primary"
+              className="inline-flex min-h-11 items-center text-sm text-ink transition-colors duration-150 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               New order
             </Link>
             <Link
               to="/register-vendor"
               onClick={closeMenu}
-              className="text-sm text-ink transition-colors duration-150 hover:text-primary"
+              className="inline-flex min-h-11 items-center text-sm text-ink transition-colors duration-150 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               For print shops
             </Link>
@@ -217,7 +217,7 @@ export function Layout() {
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-ink transition-colors duration-150 hover:text-primary"
+              className="inline-flex min-h-11 items-center text-sm text-ink transition-colors duration-150 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               GitHub
             </a>
