@@ -6,6 +6,7 @@ import {
 } from "@playwright/test";
 
 import {
+  API_URL,
   SEEDED_PASSWORD,
   signIn as signInHelper,
   signInAsCustomer,
@@ -32,12 +33,12 @@ async function printedFileLink(
   request: APIRequestContext,
   orderId: string,
 ): Promise<string> {
-  const login = await request.post("http://localhost:8000/api/v1/auth/login", {
+  const login = await request.post(`${API_URL}/api/v1/auth/login`, {
     data: { email: VENDOR_EMAIL, password: SEEDED_PASSWORD },
   });
   const token = (await login.json()).access_token as string;
   const link = await request.get(
-    `http://localhost:8000/api/v1/vendor/orders/${orderId}/file`,
+    `${API_URL}/api/v1/vendor/orders/${orderId}/file`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   return (await link.json()).url as string;
