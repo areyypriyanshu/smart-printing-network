@@ -77,7 +77,12 @@ class Settings(BaseSettings):
         if self.env == "production" and self.payment_provider != "razorpay":
             raise ValueError("PAYMENT_PROVIDER must be razorpay when ENV=production")
         if self.payment_provider == "fake" and not self.fake_webhook_secret:
-            raise ValueError("FAKE_WEBHOOK_SECRET is required when PAYMENT_PROVIDER=fake")
+            raise ValueError(
+                "FAKE_WEBHOOK_SECRET is required when PAYMENT_PROVIDER=fake. "
+                "The webhook route is public, so the key that signs its "
+                "deliveries has to be one the operator chose. Set it in .env, "
+                "or run `make up`, which generates one."
+            )
         return self
 
 

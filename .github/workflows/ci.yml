@@ -32,6 +32,11 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://spn:spn@localhost:5432/spn
       JWT_SECRET: ci-placeholder-not-a-real-secret-0123456789
+      # The key the fake payment gateway signs its webhooks with. The
+      # application refuses to start without one, because the webhook
+      # route is public and a key in the repository is a key everybody
+      # knows. This one is thrown away with the runner.
+      FAKE_WEBHOOK_SECRET: ci-only-fake-webhook-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.3.0
@@ -133,6 +138,11 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://spn:spn@localhost:5432/spn
       JWT_SECRET: ci-placeholder-not-a-real-secret-0123456789
+      # The key the fake payment gateway signs its webhooks with. The
+      # application refuses to start without one, because the webhook
+      # route is public and a key in the repository is a key everybody
+      # knows. This one is thrown away with the runner.
+      FAKE_WEBHOOK_SECRET: ci-only-fake-webhook-secret-0123456789abcdef
       S3_ENDPOINT_URL: http://localhost:9000
       S3_BUCKET: spn-files
       S3_ACCESS_KEY: spn
@@ -256,6 +266,12 @@ jobs:
 
   openapi:
     runs-on: ubuntu-latest
+    env:
+      # The key the fake payment gateway signs its webhooks with. The
+      # application refuses to start without one, because the webhook
+      # route is public and a key in the repository is a key everybody
+      # knows. This one is thrown away with the runner.
+      FAKE_WEBHOOK_SECRET: ci-only-fake-webhook-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.3.0

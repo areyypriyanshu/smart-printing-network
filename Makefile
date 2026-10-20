@@ -28,13 +28,22 @@ typecheck:
 arch:
 	cd backend && uv run lint-imports
 
+# The unit tests need the two secrets the application refuses to start
+# without. They are set here so the suite does not depend on a .env file,
+# and so a value the developer has changed locally cannot change what the
+# tests are about.
 test-unit:
-	cd backend && uv run pytest tests/unit
+	cd backend && \
+		JWT_SECRET=test-only-jwt-secret \
+		FAKE_WEBHOOK_SECRET=test-only-fake-webhook-secret \
+		uv run pytest tests/unit
 
 test-api:
+	@test -f .env || cp .env.example .env
 	docker compose run --rm api pytest tests/api tests/integration
 
 test-jobs:
+	@test -f .env || cp .env.example .env
 	docker compose run --rm api pytest tests/jobs
 
 test-fe:
@@ -67,10 +76,11 @@ check: lint typecheck arch test-unit test-fe
 # overall. The whole suite runs in one container so the coverage data
 # file survives to the check.
 coverage:
+	@test -f .env || cp .env.example .env
 	docker compose run --rm api sh -c "pytest tests --cov=app --cov-report=term-missing && python scripts/check_coverage.py"
 
 openapi:
-	cd backend && uv run python scripts/export_openapi.py
+	cd backend && FAKE_WEBHOOK_SECRET=test-only-fake-webhook-secret uv run python scripts/export_openapi.py
 	cd frontend && npx openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts
 
 reset:
