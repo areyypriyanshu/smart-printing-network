@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
+    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
     create_paid_order,
     create_shop,
@@ -181,7 +182,7 @@ def test_an_unpaid_order_has_no_pickup_code(client: TestClient, db_session: Sess
             copies=1,
         ),
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(),
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
     headers = login_headers(client, CUSTOMER_EMAIL)
 

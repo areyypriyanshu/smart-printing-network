@@ -11,8 +11,30 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
+from tests.factories import FAKE_WEBHOOK_SECRET
 
 TEST_DATABASE = "spn_test"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def fake_gateway_is_keyed() -> Iterator[None]:
+    """The fake gateway is keyed with the test secret, and the testing
+    surface is on.
+
+    The fake gateway takes no default secret, because a key that lives in
+    the application package is a key that ships in the repository. The
+    application and the test gateways have to agree on the key, so it is set
+    here for the whole session, and the testing routes are switched on the
+    same way the cash-at-store feature is.
+    """
+    settings = get_settings()
+    original_secret = settings.fake_webhook_secret
+    original_testing = settings.testing_endpoints_enabled
+    settings.fake_webhook_secret = FAKE_WEBHOOK_SECRET
+    settings.testing_endpoints_enabled = True
+    yield
+    settings.fake_webhook_secret = original_secret
+    settings.testing_endpoints_enabled = original_testing
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -97,5 +119,39 @@ def client(db_session: Session) -> Iterator[TestClient]:
     app.state.storage = MemoryStorage()
     app.dependency_overrides[get_db] = lambda: db_session
     with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_that_reports_failures(db_session: Session) -> Iterator[TestClient]:
+    """A client that answers a server error instead of raising it.
+
+    The default test client re-raises an exception that escaped a route,
+    which is useful for most tests and useless for the ones that check
+    that a route answers 5xx. A payment provider retries a delivery it
+    was told failed, so "the route answers 5xx" is a behaviour worth
+    testing on its own.
+    """
+    app = create_app()
+    app.state.storage = MemoryStorage()
+    app.dependency_overrides[get_db] = lambda: db_session
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def https_client(db_session: Session) -> Iterator[TestClient]:
+    """A client whose requests arrive over TLS.
+
+    Whether the refresh cookie is marked Secure is decided by the
+    transport the request arrived on, so the test has to be able to make
+    a request that arrived over TLS.
+    """
+    app = create_app()
+    app.state.storage = MemoryStorage()
+    app.dependency_overrides[get_db] = lambda: db_session
+    with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client
     app.dependency_overrides.clear()

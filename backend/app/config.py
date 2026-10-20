@@ -32,11 +32,21 @@ class Settings(BaseSettings):
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
+    # The key the fake gateway signs its webhooks with. There is no default:
+    # the webhook route is public, so a key that is written in the repository
+    # is a key that anybody who has read the repository can use. The local
+    # .env sets one; a deployment sets its own.
+    fake_webhook_secret: str = ""
 
     # Pay at the shop. Off by default in the code, so a deployment that
     # has never heard of it cannot create a cash order by accident. The
     # local .env turns it on.
     cash_at_store_enabled: bool = False
+
+    # The testing surface (POST /testing/simulate-payment). Off by default in
+    # the code, so a deployment that has not heard of it cannot expose it by
+    # accident. The local .env turns it on; a production deployment must not.
+    testing_endpoints_enabled: bool = False
 
     max_upload_mb: int = 50
     max_pages: int = 300
@@ -49,6 +59,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_environment(self) -> Self:
+        if self.env not in {"local", "test", "production"}:
+            raise ValueError(f"ENV must be local, test or production, not {self.env!r}")
+        if self.testing_endpoints_enabled and self.env == "production":
+            raise ValueError("the testing endpoints cannot be enabled when ENV=production")
         if self.env == "production" and (
             not self.jwt_secret or self.jwt_secret == PLACEHOLDER_JWT_SECRET
         ):
@@ -60,6 +74,10 @@ class Settings(BaseSettings):
                 "RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET "
                 "are required when PAYMENT_PROVIDER=razorpay"
             )
+        if self.env == "production" and self.payment_provider != "razorpay":
+            raise ValueError("PAYMENT_PROVIDER must be razorpay when ENV=production")
+        if self.payment_provider == "fake" and not self.fake_webhook_secret:
+            raise ValueError("FAKE_WEBHOOK_SECRET is required when PAYMENT_PROVIDER=fake")
         return self
 
 

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
+    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
     create_paid_order,
     create_shop,
@@ -380,7 +381,7 @@ def _create_unpaid_order(session: Session, *, customer: object, shop: object) ->
             copies=1,
         ),
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(),
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
     return order
 

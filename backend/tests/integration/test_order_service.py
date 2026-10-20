@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tests.factories import (
+    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
     create_shop,
     create_upload_row,
@@ -52,7 +53,7 @@ def _create(
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="key-1",
-        gateway=FakeGateway(),
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
     return order
 
@@ -104,7 +105,7 @@ def test_duplicate_idempotency_key_returns_the_same_order(db_session: Session) -
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="key-1",
-        gateway=FakeGateway(),
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
 
     assert second.id == first.id
@@ -121,7 +122,7 @@ def test_expected_price_mismatch_raises_price_changed(db_session: Session) -> No
             customer_id=customer_id,
             request=_request(upload_id, shop_id, expected_price_paise=EXPECTED_PRICE + 1),
             idempotency_key="key-1",
-            gateway=FakeGateway(),
+            gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
         )
 
     assert error.value.details["current_price_paise"] == EXPECTED_PRICE
@@ -159,7 +160,7 @@ def test_second_order_for_the_same_upload_is_rejected(db_session: Session) -> No
             customer_id=customer_id,
             request=_request(upload_id, shop_id),
             idempotency_key="key-2",
-            gateway=FakeGateway(),
+            gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
         )
 
 

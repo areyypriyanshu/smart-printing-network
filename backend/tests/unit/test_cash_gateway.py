@@ -15,6 +15,7 @@ from app.gateways.payments import (
     GatewayError,
     PaymentGatewayRouter,
 )
+from tests.factories import FAKE_WEBHOOK_SECRET
 
 
 def test_cash_orders_are_recorded_but_not_captured() -> None:
@@ -53,7 +54,7 @@ def test_cash_never_refunds() -> None:
 
 
 def test_the_router_sends_a_cash_order_to_the_cash_gateway() -> None:
-    online = FakeGateway()
+    online = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET)
     router = PaymentGatewayRouter(online=online)
 
     order = router.create_order(amount_paise=2000, receipt="order-1", method=AT_STORE)
@@ -62,7 +63,7 @@ def test_the_router_sends_a_cash_order_to_the_cash_gateway() -> None:
 
 
 def test_the_router_sends_an_online_order_to_the_online_gateway() -> None:
-    online = FakeGateway()
+    online = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET)
     router = PaymentGatewayRouter(online=online)
 
     order = router.create_order(amount_paise=2000, receipt="order-1", method=ONLINE)
@@ -71,7 +72,7 @@ def test_the_router_sends_an_online_order_to_the_online_gateway() -> None:
 
 
 def test_the_router_defaults_to_the_online_gateway() -> None:
-    router = PaymentGatewayRouter(online=FakeGateway())
+    router = PaymentGatewayRouter(online=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET))
 
     order = router.create_order(amount_paise=2000, receipt="order-1")
 
@@ -79,7 +80,7 @@ def test_the_router_defaults_to_the_online_gateway() -> None:
 
 
 def test_the_router_refuses_an_unknown_method() -> None:
-    router = PaymentGatewayRouter(online=FakeGateway())
+    router = PaymentGatewayRouter(online=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET))
 
     with pytest.raises(GatewayError):
         router.create_order(amount_paise=2000, receipt="order-1", method="cheque")
@@ -87,23 +88,24 @@ def test_the_router_refuses_an_unknown_method() -> None:
 
 def test_the_router_names_the_online_provider() -> None:
     """The webhook handler records it, and only the online provider sends one."""
-    router = PaymentGatewayRouter(online=FakeGateway())
+    router = PaymentGatewayRouter(online=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET))
 
     assert router.provider == "fake"
 
 
 def test_the_router_checks_the_signature_with_the_online_gateway() -> None:
     """A cash order has no provider, so only the online one can sign."""
-    router = PaymentGatewayRouter(online=FakeGateway())
+    router = PaymentGatewayRouter(online=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET))
     body = b'{"event":"order.paid"}'
 
-    assert router.verify_webhook_signature(raw_body=body, signature=FakeGateway().sign(body))
+    gateway = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET)
+    assert router.verify_webhook_signature(raw_body=body, signature=gateway.sign(body))
 
 
 def test_the_router_refunds_through_the_online_gateway() -> None:
     """A cash payment is never queued for a refund, and this is the last line
     of defence if one ever were."""
-    router = PaymentGatewayRouter(online=FakeGateway())
+    router = PaymentGatewayRouter(online=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET))
 
     refund = router.refund(
         provider_payment_id="pay_1", amount_paise=2000, idempotency_note="note-1"
@@ -114,10 +116,10 @@ def test_the_router_refunds_through_the_online_gateway() -> None:
 
 def test_the_router_signs_a_body_with_the_online_gateway() -> None:
     """The local simulate-payment endpoint needs a signed body."""
-    router = PaymentGatewayRouter(online=FakeGateway())
+    router = PaymentGatewayRouter(online=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET))
     body = b'{"event":"order.paid"}'
 
-    assert router.sign(body) == FakeGateway().sign(body)
+    assert router.sign(body) == FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET).sign(body)
 
 
 def test_the_router_cannot_sign_with_a_provider_that_cannot() -> None:

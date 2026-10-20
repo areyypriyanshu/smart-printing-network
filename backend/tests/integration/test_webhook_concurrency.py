@@ -32,9 +32,9 @@ from app.services import order_service, payment_service
 from sqlalchemy import create_engine, delete, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
-from tests.factories import create_full_rate_table, create_shop, create_user
+from tests.factories import FAKE_WEBHOOK_SECRET, create_full_rate_table, create_shop, create_user
 
-GATEWAY = FakeGateway()
+GATEWAY = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET)
 PAGES = 3
 COPIES = 1
 BASE_PAISE = 200

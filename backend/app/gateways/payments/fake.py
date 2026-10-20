@@ -4,8 +4,6 @@ import uuid
 
 from app.gateways.payments.base import GatewayOrder, GatewayRefund
 
-DEFAULT_WEBHOOK_SECRET = "fake-webhook-secret"
-
 
 class FakeGateway:
     """Local gateway used in development, tests and the simulate-payment endpoint."""
@@ -16,7 +14,16 @@ class FakeGateway:
     def checkout_key_id(self) -> str | None:
         return None
 
-    def __init__(self, *, webhook_secret: str = DEFAULT_WEBHOOK_SECRET) -> None:
+    def __init__(self, *, webhook_secret: str) -> None:
+        """The fake gateway is keyed by a secret the operator chose.
+
+        There is deliberately no default. The webhook route is public, so a
+        key that is written in the repository is a key that anybody who has
+        read the repository can use to mark an order paid. The caller has to
+        supply the secret, so it cannot come from the source tree.
+        """
+        if not webhook_secret:
+            raise ValueError("the fake gateway needs an explicit webhook secret")
         self._secret = webhook_secret.encode()
 
     def create_order(

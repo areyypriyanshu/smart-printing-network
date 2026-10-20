@@ -2,6 +2,7 @@
 
 up:
 	@test -f .env || cp .env.example .env
+	@./infra/scripts/generate-dev-secrets.sh
 	docker compose --profile tools up -d --build
 
 down:

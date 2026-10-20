@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session
 
 DEFAULT_PASSWORD = "password-123"
 
+# The key the fake gateway signs its webhooks with in the test suite.
+# The fake gateway takes no default on purpose: a key that lives in the
+# application package is a key that ships in the repository. The test
+# secret lives here, with the other test-only values.
+FAKE_WEBHOOK_SECRET = "test-only-fake-webhook-secret"
+
 
 class RecordingGateway:
     """A payment gateway double that records what it was asked to do.
@@ -186,7 +192,7 @@ def create_unpaid_order(
             copies=copies,
         ),
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(),
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
     return order
 
@@ -220,7 +226,7 @@ def create_paid_order(
             copies=copies,
         ),
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(),
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
     order_service.transition(session, order_id=order.id, to_status="PAID", actor_type="webhook")
     # The webhook is what captures the payment, so the factory does too.
