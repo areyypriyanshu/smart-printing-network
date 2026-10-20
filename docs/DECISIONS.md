@@ -28,6 +28,11 @@ on an expired order is refunded automatically.
 [ADR 004](adr/004-webhook-is-the-source-of-truth.md),
 [ADR 005](adr/005-text-and-check-constraints.md)
 
+The event and the effect it causes are one transaction, so a delivery
+that failed is not spent and a capture is never left behind without an
+order.
+[ADR 022](adr/022-the-webhook-event-and-its-effect-are-one-transaction.md)
+
 ### 2. One function changes an order's status, and the database checks the price
 
 `order_service.transition()` is the only place in the application that
@@ -202,9 +207,11 @@ rule is broken.
 | Database | PostgreSQL with PostGIS | The data is relational and money related, and needs transactions, constraints and a spatial index. |
 | Object storage | S3, with MinIO locally | The bucket is private, so every download is a five minute presigned link. |
 | Frontend | React, TypeScript, Vite, TanStack Query | Server state in one place, types generated from the API contract rather than written by hand. |
+| Dialogs | The native `<dialog>` element | Focus trapping, Escape, an inert background and the top layer come from the browser, so there is no library to depend on. See [ADR 021](adr/021-native-dialog-element.md). |
 | Jobs | A worker container polling Postgres | Four periodic jobs do not need a broker. |
 | Contracts | `openapi-typescript`, a drift check in CI, and a fuzzer | The frontend cannot silently drift from the backend. |
 | Deploy | One instance, Docker Compose, Caddy | Cheap, understandable, and it makes the whole path inspectable. |
+| Local database browser | pgAdmin in Compose, behind a profile | A reviewer can open the tables and the rows without installing a client. It is a development tool: it is never deployed, and CI never pulls it. See [ADR 015](adr/015-database-browser-for-local-development.md). |
 
 The reasoning and the rejected alternatives for each of these are in
 [`adr/`](adr/) and in the technology stack document.
