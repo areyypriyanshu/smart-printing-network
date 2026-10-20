@@ -10,6 +10,25 @@ from app.errors import Unauthenticated
 
 _password_hasher = PasswordHasher()
 
+#: The password policy, in one place, so that every path that creates an
+#: account holds the same rule.
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 128
+
+
+def validate_password_strength(password: str) -> str:
+    """One password policy for every path that creates an account.
+
+    The password is returned unchanged. This is used as a Pydantic
+    AfterValidator, and an AfterValidator's return value replaces the field
+    value, so a validator that returned None would store None.
+    """
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"the password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise ValueError(f"the password must be at most {MAX_PASSWORD_LENGTH} characters")
+    return password
+
 
 def hash_password(password: str) -> str:
     return _password_hasher.hash(password)

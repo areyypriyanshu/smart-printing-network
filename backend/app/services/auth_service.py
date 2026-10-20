@@ -16,6 +16,14 @@ from app.models import RefreshToken, Shop, User
 
 REFRESH_COOKIE = "spn_refresh"
 
+#: The hash of a value nobody knows. It is used to spend the same work on a
+#: login for an address that does not exist as on one that does, so that the
+#: response time does not disclose which addresses are registered.
+_UNKNOWN_ACCOUNT_HASH = (
+    "$argon2id$v=19$m=65536,t=3,p=4$m1R/gA8/zB8YG8kwQeYrkA"
+    "$FT3/czf63PVKxdDPJi8b9TrQQBc/vwIUYwUeo53R9Sk"
+)
+
 
 @dataclass(frozen=True)
 class TokenBundle:
@@ -86,6 +94,7 @@ def register_admin(session: Session, *, email: str, password: str, full_name: st
     first. Admin accounts are created from the command line by the
     operator, who already has the server.
     """
+    security.validate_password_strength(password)
     user = User(
         email=email,
         password_hash=security.hash_password(password),
@@ -99,7 +108,14 @@ def register_admin(session: Session, *, email: str, password: str, full_name: st
 
 def login(session: Session, *, email: str, password: str) -> tuple[User, TokenBundle]:
     user = session.scalar(select(User).where(User.email == email))
-    if user is None or not security.verify_password(password, user.password_hash):
+    if user is None:
+        # Spend the same work on an address that does not exist as on one
+        # that does, so the response time does not say which addresses are
+        # registered. The hash is of a value nobody knows, so the check
+        # always fails and the error is the same one.
+        security.verify_password(password, _UNKNOWN_ACCOUNT_HASH)
+        raise Unauthenticated("Invalid email or password")
+    if not security.verify_password(password, user.password_hash):
         raise Unauthenticated("Invalid email or password")
     if not user.is_active:
         raise Unauthenticated("Account is disabled")

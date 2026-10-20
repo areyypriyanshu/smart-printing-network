@@ -1,8 +1,11 @@
+import hashlib
+
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.deps import get_current_user
 from app.errors import Unauthenticated
 from app.models import User
@@ -59,17 +62,35 @@ def register_vendor(
     )
 
 
+def _account_key(session: Session, email: str) -> str:
+    """The rate-limit key for one account, however the address is spelled.
+
+    The key is the account id the database resolves, so two spellings of one
+    address cannot occupy two rate-limit buckets. An address that does not
+    exist has no id, so it is keyed by a hash of the address itself: the
+    same unknown address still shares one bucket, and a different one gets
+    its own.
+    """
+    user_id = session.scalar(select(User.id).where(User.email == email))
+    if user_id is not None:
+        return f"account:{user_id}"
+    return "unknown:" + hashlib.sha256(email.lower().encode()).hexdigest()
+
+
 def _account_from_request(request: Request) -> str:
     """The account a login is trying to reach.
 
     The body has already been read by the time this runs, so it is read
-    from the request's cache rather than from the stream.
+    from the request's cache rather than from the stream. The key comes
+    from the account the database resolves, not from the spelling the
+    client sent.
     """
     try:
         payload = LoginRequest.model_validate_json(request._body)  # noqa: SLF001
     except (ValueError, AttributeError):
         return "unknown"
-    return str(payload.email).lower()
+    with SessionLocal() as session:
+        return _account_key(session, str(payload.email))
 
 
 @router.post(
@@ -86,12 +107,13 @@ def login(
     session: Session = Depends(get_db),
 ) -> AccessTokenResponse:
     _user, tokens = auth_service.login(session, email=str(body.email), password=body.password)
-    _set_refresh_cookie(response, tokens.refresh_token)
+    _set_refresh_cookie(response, tokens.refresh_token, request)
     return AccessTokenResponse(access_token=tokens.access_token, expires_in=tokens.expires_in)
 
 
 @router.post("/auth/refresh", response_model=AccessTokenResponse)
 def refresh(
+    request: Request,
     response: Response,
     refresh_token: str | None = Cookie(default=None, alias=auth_service.REFRESH_COOKIE),
     session: Session = Depends(get_db),
@@ -99,19 +121,20 @@ def refresh(
     if refresh_token is None:
         raise Unauthenticated("No refresh token")
     _user, tokens = auth_service.refresh(session, refresh_token)
-    _set_refresh_cookie(response, tokens.refresh_token)
+    _set_refresh_cookie(response, tokens.refresh_token, request)
     return AccessTokenResponse(access_token=tokens.access_token, expires_in=tokens.expires_in)
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
+    request: Request,
     response: Response,
     refresh_token: str | None = Cookie(default=None, alias=auth_service.REFRESH_COOKIE),
     session: Session = Depends(get_db),
 ) -> None:
     if refresh_token is not None:
         auth_service.logout(session, refresh_token)
-    _clear_refresh_cookie(response)
+    _clear_refresh_cookie(response, request)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -119,7 +142,19 @@ def me(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-def _set_refresh_cookie(response: Response, token: str) -> None:
+def _is_secure(request: Request) -> bool:
+    """Whether the request arrived over TLS.
+
+    The Secure attribute of the refresh cookie is a statement about the
+    transport the cookie travels over, so it is decided by the transport and
+    not by a configuration string. A configuration string can be mis-set;
+    the scheme cannot. The origin sets the forwarded scheme itself, so a
+    client cannot talk the cookie into being sent in the clear.
+    """
+    return request.url.scheme == "https"
+
+
+def _set_refresh_cookie(response: Response, token: str, request: Request) -> None:
     settings = get_settings()
     response.set_cookie(
         auth_service.REFRESH_COOKIE,
@@ -127,17 +162,16 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         max_age=settings.refresh_token_days * 86400,
         httponly=True,
         samesite="lax",
-        secure=settings.env == "production",
+        secure=_is_secure(request),
         path="/api/v1/auth",
     )
 
 
-def _clear_refresh_cookie(response: Response) -> None:
-    settings = get_settings()
+def _clear_refresh_cookie(response: Response, request: Request) -> None:
     response.delete_cookie(
         auth_service.REFRESH_COOKIE,
         path="/api/v1/auth",
         httponly=True,
         samesite="lax",
-        secure=settings.env == "production",
+        secure=_is_secure(request),
     )

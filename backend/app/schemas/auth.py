@@ -1,16 +1,21 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.schemas.email import Email
 from app.schemas.phone import Phone
+from app.security import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, validate_password_strength
+
+#: The password policy, shared with the operator CLI, so the two paths
+#: cannot drift apart.
+Password = Annotated[str, AfterValidator(validate_password_strength)]
 
 
 class RegisterRequest(BaseModel):
     email: Email
-    password: str = Field(min_length=8, max_length=128)
+    password: Password = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
     full_name: str = Field(min_length=1, max_length=200)
 
 
