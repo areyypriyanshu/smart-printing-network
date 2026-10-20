@@ -206,7 +206,11 @@ jobs:
           # "schema-valid request rejected" check reads as a failure. The
           # behaviour is covered by the API tests instead, one for each
           # way a file can be wrong.
-          uv run schemathesis run http://127.0.0.1:8000/openapi.json \
+          #
+          # The cursors are the same kind of problem and are handled in
+          # schemathesis.toml, one operation at a time.
+          uv run schemathesis --config-file schemathesis.toml run \
+            http://127.0.0.1:8000/openapi.json \
             --phases examples,fuzzing \
             --max-time 120 \
             --workers 4 \

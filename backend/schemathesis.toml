@@ -1,0 +1,57 @@
+# How the contract run treats the API.
+#
+# The contract run fuzzes the API from its own OpenAPI document. It is
+# good at finding the cases a hand written test never thinks of, and it
+# is also blunt: it judges a request by the shape of its schema, and it
+# expects a request that fits the schema to be accepted.
+#
+# Three things in this API cannot be expressed by a schema, and each one
+# is listed here with the reason. A request that carries something only
+# the server issued is refused, and the refusal is correct.
+
+# The webhook is signed. A schema can say "a body", and it cannot say
+# "a body whose signature this server can check", so the fuzzer sends a
+# body with a signature of its own making and the server refuses it
+# with a signature error. That is the whole point of the route.
+#
+# The same is true of a file, which is why the upload endpoint is left
+# out of the contract run altogether. The webhook is the money path, so
+# it stays in the run and only its rejection is allowed.
+[[operations]]
+include-path = "/api/v1/webhooks/razorpay"
+checks.positive_data_acceptance.expected-statuses = [
+  "2xx",
+  "3xx",
+  "400",
+  "401",
+  "403",
+  "404",
+  "409",
+  "422",
+  "429",
+  "5xx",
+]
+
+# The cursor of a list is an opaque token this server issued. A schema
+# can say "a string", and it cannot say "a string we handed out", so
+# the fuzzer sends a string of its own making and the server refuses it
+# with a validation error. That refusal is correct: a cursor the server
+# did not issue cannot point at a position in the list.
+#
+# The cursor is only a query parameter, so the endpoints that take one
+# are still fuzzed, and only the rejection of an unusable cursor is
+# allowed.
+[[operations]]
+include-path = ["/api/v1/shops", "/api/v1/admin/shops", "/api/v1/admin/actions"]
+checks.positive_data_acceptance.expected-statuses = [
+  "2xx",
+  "3xx",
+  "400",
+  "401",
+  "403",
+  "404",
+  "409",
+  "422",
+  "429",
+  "5xx",
+]

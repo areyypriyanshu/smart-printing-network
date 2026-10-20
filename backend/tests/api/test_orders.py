@@ -317,3 +317,32 @@ def test_order_events_are_written_only_by_the_service(db_session: Session) -> No
     db_session.commit()
 
     assert list(db_session.scalars(select(OrderEvent))) == []
+
+
+def test_a_cursor_above_the_bigint_range_is_refused(
+    client: TestClient, db_session: Session
+) -> None:
+    """A cursor the database cannot hold is refused at the edge.
+
+    The cursor is an order number, and the column is a bigint. A cursor
+    above the range of a bigint used to be handed to the database, which
+    answered with a server error, so any client could produce one.
+    """
+    create_user(db_session, email="customer@example.com")
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(f"{ORDERS}?cursor=8137899453232152163230154752", headers=headers)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_a_cursor_inside_the_bigint_range_is_accepted(
+    client: TestClient, db_session: Session
+) -> None:
+    create_user(db_session, email="customer@example.com")
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(f"{ORDERS}?cursor=9223372036854775807", headers=headers)
+
+    assert response.status_code == 200, response.text

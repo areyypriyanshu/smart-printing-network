@@ -462,3 +462,34 @@ def test_a_second_order_cannot_claim_the_same_provider_payment_id(
     second_order = db_session.get(Order, uuid.UUID(second["order"]["id"]))
     assert second_order is not None
     assert second_order.status == "PENDING_PAYMENT"
+
+
+def test_a_delivery_without_an_event_id_is_refused(client: TestClient, db_session: Session) -> None:
+    """A delivery that cannot be deduplicated is not accepted.
+
+    The event id is required, and the contract says so, so a delivery
+    without one is a validation error rather than something the route
+    has to notice for itself.
+    """
+    response = client.post(
+        WEBHOOK,
+        content=b'{"event":"order.paid"}',
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_a_delivery_with_an_empty_event_id_is_refused(
+    client: TestClient, db_session: Session
+) -> None:
+    """An event id that is there but empty is the same as none at all."""
+    response = client.post(
+        WEBHOOK,
+        content=b'{"event":"order.paid"}',
+        headers={"Content-Type": "application/json", "X-Razorpay-Event-Id": ""},
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"

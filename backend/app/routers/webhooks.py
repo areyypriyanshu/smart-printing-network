@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user, get_payment_gateway
-from app.errors import Conflict, NotFound, ValidationError
+from app.errors import Conflict, NotFound
 from app.gateways.payments import PaymentGateway, PaymentGatewayRouter
 from app.models import Order, Payment, User
 from app.schemas.errors import ERROR_RESPONSES
@@ -25,12 +25,18 @@ async def _raw_body(request: Request) -> bytes:
 def razorpay_webhook(
     raw_body: bytes = Depends(_raw_body),
     signature: str = Header(default="", alias="X-Razorpay-Signature"),
-    event_id: str = Header(default="", alias="X-Razorpay-Event-Id"),
+    event_id: str = Header(..., min_length=1, alias="X-Razorpay-Event-Id"),
     session: Session = Depends(get_db),
     gateway: PaymentGateway = Depends(get_payment_gateway),
 ) -> dict[str, str]:
-    if event_id == "":
-        raise ValidationError("Missing X-Razorpay-Event-Id header")
+    """Take a delivery from the payment provider.
+
+    The event id is required and it cannot be empty, and the contract
+    says so: a delivery without one cannot be deduplicated, and the
+    provider always sends one. The signature is not required in the
+    contract, because a delivery without one is refused with a signature
+    error, which is a better answer than a validation error.
+    """
     outcome = payment_service.handle_webhook(
         session,
         raw_body=raw_body,

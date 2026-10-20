@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_customer, get_payment_gateway, get_storage
+from app.deps import get_customer, get_payment_gateway, get_storage, require_verified_email
 from app.gateways.payments import PaymentGateway
 from app.gateways.storage import Storage
 from app.models import User
@@ -24,6 +24,12 @@ from app.services import order_service
 
 router = APIRouter(tags=["orders"], responses=ERROR_RESPONSES)
 
+#: The largest number a bigint column can hold. The cursor of this list is
+#: an order number, and the column is a bigint, so a cursor above this is
+#: refused at the edge rather than being handed to the database, which
+#: answers with a server error instead of a rejection.
+MAX_CURSOR = 2**63 - 1
+
 
 @router.post(
     "/orders",
@@ -34,7 +40,7 @@ router = APIRouter(tags=["orders"], responses=ERROR_RESPONSES)
 def create_order(
     body: OrderCreateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200),
-    user: User = Depends(get_customer),
+    user: User = Depends(require_verified_email),
     session: Session = Depends(get_db),
     gateway: PaymentGateway = Depends(get_payment_gateway),
 ) -> OrderCreateResponse:
@@ -66,7 +72,7 @@ def create_order(
 )
 def list_orders(
     limit: int = Query(default=20, ge=1, le=100),
-    cursor: int | None = Query(default=None, ge=1),
+    cursor: int | None = Query(default=None, ge=1, le=MAX_CURSOR),
     user: User = Depends(get_customer),
     session: Session = Depends(get_db),
 ) -> OrderListResponse:
