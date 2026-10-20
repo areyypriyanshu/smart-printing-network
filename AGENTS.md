@@ -32,6 +32,34 @@ Prefer boring, simple, correct code over clever code. A smaller change that is f
 
 Before starting a task, identify the requirement ID (for example FR-8) and the sprint it belongs to. If you cannot, the task may be out of scope.
 
+### Session start: read the knowledge graph first
+
+`graphify-out/` holds a knowledge graph of this repository: a node for every module, function, class, ADR and concept, and the edges between them. It answers "what depends on what" faster than grep, and it is how a new session should get its bearings.
+
+**It is a map, not a source of truth.** The code and the documents win. If the graph disagrees with them, trust the code and say so.
+
+At the start of every session, before the first substantive action:
+
+```bash
+make graph-check     # has the code moved on since the graph was built?
+make graph           # if it has: re-extract (AST only, no LLM, about a minute)
+```
+
+Then read `graphify-out/GRAPH_REPORT.md` for the shape of the system, and pull the part of the graph the task touches:
+
+```bash
+graphify query "how does an order become paid" --budget 1500
+graphify path "OrderService" "PaymentGateway"
+graphify explain "pricing"
+```
+
+Rules for using the graph:
+
+- Use it to find *where* something lives and *what it touches*. Always open the real file before changing it.
+- `make graph` re-extracts code with the AST parser only. The documents and ADRs are extracted once by an LLM pass and kept in the cache; a full rebuild is `graphify extract .`, which costs tokens and is only done when asked.
+- `graphify-out/` is generated and git-ignored. If it is missing, `make graph` recreates the code part of it.
+- A stale graph is worse than no graph. If `make graph-check` reports drift, refresh before trusting an answer that came from the graph.
+
 ## 3. Non-negotiable rules
 
 Violating any of these is a defect, even if tests pass.
@@ -178,6 +206,7 @@ Rules:
 
 ## 10. How to work (agent workflow)
 
+0. **Load the knowledge graph** (`make graph-check`, then `make graph` if it has drifted, then read `graphify-out/GRAPH_REPORT.md`). Do this first, in every session, before the first substantive action. See "Session start" in section 2.
 1. **Restate the task** in one or two sentences with the requirement ID and sprint. Confirm it is in scope.
 2. **Plan before coding** when the change touches more than three files, or any schema, money, authentication, authorization, payment, or privacy logic. Write the plan: files, approach, tests, risks. If an ambiguity affects those areas, ask before building.
 3. **Build the thinnest vertical slice** that proves the behaviour. For domain logic, write tests first.

@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app import security
 from app.db import get_db
-from app.errors import Forbidden, NotFound, Unauthenticated
+from app.errors import EmailNotVerified, Forbidden, NotFound, Unauthenticated
+from app.gateways.email import EmailSender
 from app.gateways.payments import PaymentGatewayRouter
 from app.gateways.storage import Storage
 from app.models import Shop, User
@@ -48,6 +49,56 @@ def get_customer(user: User = Depends(_customer_only)) -> User:
 def get_storage(request: Request) -> Storage:
     storage: Storage = request.app.state.storage
     return storage
+
+
+def get_email_sender(request: Request) -> EmailSender:
+    """The sender the application uses.
+
+    It is on the application rather than built per request, because
+    building it opens no connection: the connection is opened when a
+    message is sent and closed again straight away.
+    """
+    sender: EmailSender = request.app.state.email_sender
+    return sender
+
+
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    session: Session = Depends(get_db),
+) -> User | None:
+    """The caller, if there is one.
+
+    Some routes are for everybody and behave differently for a signed in
+    caller. Starting a sign in with a provider is one: the address it
+    sends the browser to is the same either way, and the only thing
+    that changes is whether the account it comes back to is connected to
+    the one the caller is already signed in to.
+    """
+    if credentials is None:
+        return None
+    try:
+        user_id, _role = security.decode_access_token(credentials.credentials)
+    except Unauthenticated:
+        return None
+    user = session.get(User, user_id)
+    if user is None or not user.is_active:
+        return None
+    return user
+
+
+def require_verified_email(user: User = Depends(get_customer)) -> User:
+    """A customer whose address has been proved.
+
+    The account works without it. This is for the one thing that needs
+    the address to be real, because the address is what the printout
+    and the pickup code are tied to.
+    """
+    if not user.email_verified:
+        raise EmailNotVerified(
+            "Confirm your email address before you order a print. "
+            "We sent a link to it when you signed up."
+        )
+    return user
 
 
 def get_payment_gateway(request: Request) -> PaymentGatewayRouter:

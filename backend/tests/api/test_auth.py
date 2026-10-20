@@ -1,3 +1,5 @@
+import pytest
+from app.config import get_settings
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from tests.factories import DEFAULT_PASSWORD, create_user
@@ -49,6 +51,52 @@ def test_register_rejects_invalid_email(client: TestClient) -> None:
     response = client.post(REGISTER, json=payload)
 
     assert response.status_code == 422
+
+
+def test_register_rejects_a_nul_byte_in_the_email(client: TestClient) -> None:
+    """The database cannot store a NUL byte, so it is refused at the door.
+
+    It used to be accepted by the shape of the address and then refused
+    by the insert, which the client saw as a 500.
+    """
+    payload = register_payload("bad\x00@example.com")
+
+    response = client.post(REGISTER, json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_register_rejects_a_nul_byte_in_the_name(client: TestClient) -> None:
+    payload = register_payload()
+    payload["full_name"] = "New\x00User"
+
+    response = client.post(REGISTER, json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_register_rejects_a_character_that_reverses_the_text(client: TestClient) -> None:
+    """A name that reads backwards says something other than what it says."""
+    payload = register_payload()
+    payload["full_name"] = "New‮User"
+
+    response = client.post(REGISTER, json=payload)
+
+    assert response.status_code == 422
+
+
+def test_login_with_a_nul_byte_in_the_email_is_a_validation_error(
+    client: TestClient,
+) -> None:
+    """The address was used in a lookup, so it used to be a 500 as well."""
+    response = client.post(
+        LOGIN, json={"email": "bad\x00@example.com", "password": DEFAULT_PASSWORD}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_login_returns_token_and_sets_httponly_refresh_cookie(
@@ -163,6 +211,56 @@ def test_register_is_rate_limited(client: TestClient) -> None:
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "RATE_LIMITED"
     assert int(limited.headers["retry-after"]) >= 1
+
+
+def test_claiming_one_address_again_and_again_is_rate_limited(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The address limits are keyed on the machine, so one address is counted apart.
+
+    Every attempt on one address shares one bucket, however many
+    machines it comes from, so the attempt that is refused is refused
+    because of the address and not because of the machine.
+    """
+    settings = get_settings()
+    monkeypatch.setattr(settings, "register_address_per_minute", 100)
+    monkeypatch.setattr(settings, "register_address_per_day", 100)
+    monkeypatch.setattr(settings, "register_account_per_hour", 2)
+    monkeypatch.setattr(settings, "register_global_per_minute", 100)
+
+    statuses: list[int] = []
+    for _ in range(5):
+        response = client.post(REGISTER, json=register_payload("claimed@example.com"))
+        statuses.append(response.status_code)
+        if response.status_code == 429:
+            break
+
+    assert 429 in statuses
+    assert "email address" in response.json()["error"]["message"]
+
+
+def test_the_whole_deployment_cannot_create_more_accounts_than_it_can_afford(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The limit that bounds the work rather than the attacker.
+
+    A password hash is CPU the server cannot refuse once it has started
+    it, so the amount of it is capped however many machines ask.
+    """
+    settings = get_settings()
+    monkeypatch.setattr(settings, "register_address_per_minute", 100)
+    monkeypatch.setattr(settings, "register_address_per_day", 100)
+    monkeypatch.setattr(settings, "register_account_per_hour", 100)
+    monkeypatch.setattr(settings, "register_global_per_minute", 2)
+
+    for index in range(2):
+        response = client.post(REGISTER, json=register_payload(f"global-{index}@example.com"))
+        assert response.status_code == 201
+
+    blocked = client.post(REGISTER, json=register_payload("global-2@example.com"))
+
+    assert blocked.status_code == 429
+    assert "busy" in blocked.json()["error"]["message"]
 
 
 REGISTER_VENDOR = "/api/v1/auth/register-vendor"

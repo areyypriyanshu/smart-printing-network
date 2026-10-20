@@ -5,8 +5,9 @@ from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from sqlalchemy.exc import DataError
 
-from app.logging import get_request_id
+from app.logging import REQUEST_ID_HEADER, get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,89 @@ class Conflict(AppError):
 class EmailTaken(AppError):
     code = "EMAIL_TAKEN"
     status_code = 409
+
+
+class EmailNotVerified(AppError):
+    """The address has not been proved yet.
+
+    The customer is signed in and the account works. This one thing
+    needs the address to be real, because the address is what the
+    printout and the pickup code are tied to.
+    """
+
+    code = "EMAIL_NOT_VERIFIED"
+    status_code = 403
+
+
+class InvalidVerificationToken(AppError):
+    """The link is not one this server sent, or it is too old to use.
+
+    The answer does not say which of the three it was, so that a link
+    cannot be probed to find out whether it was ever valid.
+    """
+
+    code = "INVALID_VERIFICATION_TOKEN"
+    status_code = 400
+
+
+class PasswordMismatch(AppError):
+    """The password that was given is not the one on the account.
+
+    It is a 422 and not a 401 on purpose. The session is perfectly
+    good; it is one field of the request that is wrong, and a 401
+    would log the customer out for it.
+    """
+
+    code = "PASSWORD_MISMATCH"
+    status_code = 422
+
+
+class OAuthProviderUnavailable(AppError):
+    """There is no provider with that name, or it is not configured.
+
+    A deployment that has not set the client id and the client secret
+    simply does not offer the provider. The front end hides the button,
+    and this is the answer for anybody who asks anyway.
+    """
+
+    code = "OAUTH_PROVIDER_UNAVAILABLE"
+    status_code = 400
+
+
+class OAuthStateInvalid(AppError):
+    """The sign in did not start where it says it did.
+
+    Either the state does not match the one that was sent, or the
+    cookie that carried it is missing or was not written by this
+    server. The answer says the same thing for all three, so that a
+    sign in cannot be probed to find out which part was wrong.
+    """
+
+    code = "OAUTH_STATE_INVALID"
+    status_code = 400
+
+
+class OAuthAccountExists(AppError):
+    """The address the provider gave is already an account here.
+
+    The provider says somebody owns that address over there. It says
+    nothing about who owns it here, and linking the two without asking
+    is how accounts are taken over.
+    """
+
+    code = "OAUTH_ACCOUNT_EXISTS"
+    status_code = 409
+
+
+class OAuthProviderError(AppError):
+    """The provider could not be reached, or would not say who it is.
+
+    It is a 502 because nothing about it is the caller's fault, and
+    the caller is told to try again.
+    """
+
+    code = "OAUTH_PROVIDER_ERROR"
+    status_code = 502
 
 
 class RateLimited(AppError):
@@ -172,15 +256,47 @@ class CashPaymentDisabled(AppError):
     status_code = 409
 
 
-def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
+def error_body(
+    code: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+    request_id: str | None = None,
+) -> dict[str, Any]:
     return {
         "error": {
             "code": code,
             "message": message,
             "details": details or {},
-            "request_id": get_request_id(),
+            "request_id": request_id if request_id is not None else get_request_id(),
         }
     }
+
+
+def _request_id(request: Request) -> str:
+    """The id of the request being answered.
+
+    The context variable is the usual source, but it is empty by the
+    time an unhandled exception reaches the outermost handler, because
+    the middleware that set it has already unwound. The scope keeps a
+    copy of the id, so a 500 can still name the request that caused it.
+    """
+    state = request.scope.get("state") or {}
+    scoped = state.get("request_id")
+    if scoped:
+        return str(scoped)
+    return get_request_id()
+
+
+def _headers(request: Request, headers: dict[str, str] | None) -> dict[str, str]:
+    """The headers of an error answer, including the request id.
+
+    The request id is on the answer as well as in the body, so a client
+    can quote it without reading the body, and so a 500 that the
+    middleware never saw still carries one.
+    """
+    merged = dict(headers or {})
+    merged[REQUEST_ID_HEADER] = _request_id(request)
+    return merged
 
 
 # The code that goes with an HTTP status raised by the framework rather
@@ -212,8 +328,8 @@ async def http_exception_handler(request: Request, exc: Exception) -> Response:
     headers = getattr(exc, "headers", None)
     return JSONResponse(
         status_code=status_code,
-        content=error_body(code, message),
-        headers=headers,
+        content=error_body(code, message, request_id=_request_id(request)),
+        headers=_headers(request, headers),
     )
 
 
@@ -221,8 +337,8 @@ async def exception_handler(request: Request, exc: Exception) -> Response:
     if isinstance(exc, AppError):
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_body(exc.code, exc.message, exc.details),
-            headers=exc.headers,
+            content=error_body(exc.code, exc.message, exc.details, request_id=_request_id(request)),
+            headers=_headers(request, exc.headers),
         )
     if isinstance(exc, RequestValidationError):
         return JSONResponse(
@@ -231,10 +347,37 @@ async def exception_handler(request: Request, exc: Exception) -> Response:
                 "VALIDATION_ERROR",
                 "Request validation failed",
                 {"fields": jsonable_encoder(exc.errors())},
+                request_id=_request_id(request),
             ),
+            headers=_headers(request, None),
         )
-    logger.exception("unhandled_exception", exc_info=exc)
+    if isinstance(exc, DataError):
+        # The database refused a value. In this app that is a value from
+        # the request that the column cannot hold, most often a NUL byte.
+        # The boundary is meant to catch that before it gets here, so this
+        # is the net under the net: the caller gets a 422 and a message
+        # that says what to fix, rather than a 500 and a stack trace.
+        logger.warning(
+            "database_rejected_value",
+            exc_info=exc,
+            extra={"request_id": _request_id(request)},
+        )
+        return JSONResponse(
+            status_code=422,
+            content=error_body(
+                "VALIDATION_ERROR",
+                "The request contained a value that could not be stored",
+                request_id=_request_id(request),
+            ),
+            headers=_headers(request, None),
+        )
+    logger.exception(
+        "unhandled_exception", exc_info=exc, extra={"request_id": _request_id(request)}
+    )
     return JSONResponse(
         status_code=500,
-        content=error_body("INTERNAL_ERROR", "An unexpected error occurred"),
+        content=error_body(
+            "INTERNAL_ERROR", "An unexpected error occurred", request_id=_request_id(request)
+        ),
+        headers=_headers(request, None),
     )

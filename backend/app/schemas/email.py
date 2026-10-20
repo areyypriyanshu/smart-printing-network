@@ -4,6 +4,8 @@ from typing import Annotated
 from pydantic import AfterValidator
 from pydantic.json_schema import WithJsonSchema
 
+from app.schemas.text import single_line
+
 # A syntactically plausible address: something, an at sign, and a domain
 # with at least one dot in it.
 #
@@ -19,7 +21,19 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
 
 
 def _looks_like_an_email(value: str) -> str:
-    if len(value) > 254 or not EMAIL_PATTERN.fullmatch(value):
+    if len(value) > 254:
+        raise ValueError("value is not a valid email address")
+    # The pattern below rejects spaces and newlines, but not the control
+    # characters that are invisible. One of them is the NUL byte, which
+    # the database cannot store, so an address that carries it has to be
+    # refused here rather than at the insert.
+    try:
+        single_line(value)
+    except ValueError as exc:
+        raise ValueError(
+            "value contains a character that is not allowed in an email address"
+        ) from exc
+    if not EMAIL_PATTERN.fullmatch(value):
         raise ValueError("value is not a valid email address")
     return value
 

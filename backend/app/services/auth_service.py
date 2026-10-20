@@ -36,6 +36,7 @@ def register_customer(session: Session, *, email: str, password: str, full_name:
     user = User(
         email=email,
         password_hash=security.hash_password(password),
+        has_password=True,
         full_name=full_name,
         role="customer",
     )
@@ -59,6 +60,7 @@ def register_vendor(
     user = User(
         email=email,
         password_hash=security.hash_password(password),
+        has_password=True,
         full_name=full_name,
         role="vendor",
     )
@@ -98,6 +100,7 @@ def register_admin(session: Session, *, email: str, password: str, full_name: st
     user = User(
         email=email,
         password_hash=security.hash_password(password),
+        has_password=True,
         full_name=full_name,
         role="admin",
     )
@@ -119,9 +122,36 @@ def login(session: Session, *, email: str, password: str) -> tuple[User, TokenBu
         raise Unauthenticated("Invalid email or password")
     if not user.is_active:
         raise Unauthenticated("Account is disabled")
+    return user, sign_in(session, user)
+
+
+def sign_in(session: Session, user: User) -> TokenBundle:
+    """The tokens for an account that has just been proved.
+
+    The login uses it, and so does a sign in with a provider: in both
+    cases the account is known and the work of checking it is already
+    done. The family is new every time, so a token that was stolen
+    cannot be used beside the one the owner has.
+    """
     bundle = _issue_tokens(session, user, family_id=uuid.uuid4())
     session.commit()
-    return user, bundle
+    return bundle
+
+
+def set_password(session: Session, *, user: User, password: str) -> User:
+    """Give a provider-only account a password while it is authenticated.
+
+    A Google-only account is not a dead end: it can add a local password
+    without changing its verified email or disconnecting the provider.
+    The account must not overwrite an existing password through this path;
+    changing one belongs to password reset, which remains out of scope.
+    """
+    if user.has_password:
+        raise Unauthenticated("This account already has a password")
+    user.password_hash = security.hash_password(password)
+    user.has_password = True
+    session.commit()
+    return user
 
 
 def refresh(session: Session, refresh_token: str) -> tuple[User, TokenBundle]:

@@ -74,13 +74,21 @@ def create_user(
     role: str = "customer",
     full_name: str = "Test User",
     is_active: bool = True,
+    email_verified: bool = True,
 ) -> User:
+    """An account to test with.
+
+    It is proved by default, because a test that is about something
+    else should not have to prove an address first. The tests that are
+    about the proof itself ask for an unproved one.
+    """
     user = User(
         email=email,
         password_hash=security.hash_password(password),
         full_name=full_name,
         role=role,
         is_active=is_active,
+        email_verified=email_verified,
     )
     session.add(user)
     session.commit()

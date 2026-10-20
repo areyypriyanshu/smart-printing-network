@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 
-import { useSession } from "../features/auth";
+import { UnverifiedBanner, useSession } from "../features/auth";
 import { cn } from "../lib/cn";
 import { Button, Icon } from "./ui";
 
@@ -54,6 +54,10 @@ export function Layout() {
   };
 
   const signedIn = status === "authenticated" && user !== null;
+  // A customer whose address is not proved can do everything except
+  // order a print, so they are told about it wherever they are.
+  const unverifiedCustomer =
+    signedIn && user.role === "customer" && !user.email_verified;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -175,6 +179,9 @@ export function Layout() {
           </nav>
         )}
       </header>
+      {unverifiedCustomer && user !== null && (
+        <UnverifiedBanner email={user.email} />
+      )}
       <main id="main-content" className="flex-1">
         <Suspense
           fallback={

@@ -169,6 +169,37 @@ minute for a whole address locks out a college, because a campus shares
 one address. The end-to-end suite found this by tripping it.
 [ADR 019](adr/019-rate-limiting-a-login-per-account.md)
 
+**A value the database cannot hold is refused at the door.** A NUL byte
+in an email, a name or a file name used to reach the insert and be
+refused by PostgreSQL, which the person typing saw as a 500. Every
+string written to the database is checked at the boundary, a value the
+database still refuses is a 422 rather than a 500, and a 500 carries the
+request id so it can be found in the logs.
+[ADR 024](adr/024-the-boundary-refuses-a-value-the-database-cannot-hold.md)
+
+**The deployment caps the work it will do, not only the attacker's
+share of it.** Creating an account hashes a password, and that is CPU
+the server cannot refuse once it has started it. There are four limits
+on registration, and the last one is per deployment rather than per
+caller: sixty accounts a minute, however many machines are asking.
+[ADR 025](adr/025-the-limits-on-creating-an-account.md)
+
+**An email address is a claim until it is proved.** A link is sent to
+the address, and opening it proves it. The account works while it is
+unproved, but it cannot order a print, because the printout and the
+pickup code are tied to the address. A customer who typed the address
+wrong can put the right one there, which is the only way out of a
+mistyped address.
+[ADR 026](adr/026-the-email-address-has-to-be-proved.md)
+
+**A provider never takes over an account here.** Signing in with
+Google is the authorization code flow with PKCE, the state lives in a
+signed cookie and nowhere else, and the tokens of the provider are used
+once and thrown away. An address the provider says is proved is not a
+claim on an account that somebody else claimed here: the customer signs
+in with their password and connects the provider themselves.
+[ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md)
+
 [ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
 conversion, including the alternatives that were rejected and why.
 

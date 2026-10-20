@@ -99,6 +99,11 @@ class RequestIdMiddleware:
         incoming = Headers(scope=scope).get(REQUEST_ID_HEADER, "")
         request_id = incoming if _REQUEST_ID_PATTERN.fullmatch(incoming) else str(uuid.uuid4())
         token = request_id_var.set(request_id)
+        # The id is kept in the scope as well as in the context variable.
+        # The context variable is unwound when this middleware returns,
+        # and an unhandled exception is answered by a handler that sits
+        # outside it, so a 500 would otherwise have no id to report.
+        scope.setdefault("state", {})["request_id"] = request_id
 
         async def send_with_request_id(message: Message) -> None:
             if message["type"] == "http.response.start":

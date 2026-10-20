@@ -5,11 +5,14 @@ import { Layout } from "./components/Layout";
 import { NotFoundPage } from "./components/StatusPages";
 import { AdminShopsPage } from "./features/admin";
 import {
+  ChangeEmailPage,
+  CheckEmailPage,
   LoginPage,
   RegisterPage,
   RegisterVendorPage,
   RequireAuth,
   RequireRole,
+  VerifyEmailPage,
 } from "./features/auth";
 import { HomePage } from "./features/home/home-page";
 import { OrderPage, OrdersPage } from "./features/orders";
@@ -36,6 +39,18 @@ export function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register-vendor" element={<RegisterVendorPage />} />
+        <Route path="/check-your-email" element={<CheckEmailPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route
+          path="/account/email"
+          element={
+            <RequireAuth>
+              <RequireRole role="customer">
+                <ChangeEmailPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
         <Route
           path="/new"
           element={

@@ -11,15 +11,24 @@ that destroy a moderation log.
 """
 
 import io
+import uuid
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 import pytest
 from app.cli import main
-from app.errors import Unauthenticated
-from app.models import AdminAction, User
+from app.errors import EmailTaken, Unauthenticated
+from app.models import AdminAction, RefreshToken, User
+from app.services import auth_service
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tests.factories import DEFAULT_PASSWORD, create_shop, create_user
+from tests.factories import (
+    DEFAULT_PASSWORD,
+    create_full_rate_table,
+    create_shop,
+    create_unpaid_order,
+    create_user,
+)
 
 
 class _KeepOpen:
@@ -261,3 +270,100 @@ def test_the_admin_id_attribution_survives_a_deactivation(
     action = db_session.scalar(select(AdminAction))
     assert action is not None
     assert action.admin_id == admin.id
+
+
+def _make_old_customer(session: Session, email: str, days: int = 40) -> User:
+    """A customer account that was made long ago and never used."""
+    user = create_user(session, email=email)
+    user.created_at = datetime.now(UTC) - timedelta(days=days)
+    session.commit()
+    return user
+
+
+def test_pruning_lists_the_accounts_that_were_never_used(
+    db_session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Nothing is deactivated until the operator says so."""
+    _make_old_customer(db_session, "unused@example.com")
+
+    assert run(db_session, "prune-unused-accounts") == 0
+
+    output = capsys.readouterr().out
+    assert "unused@example.com" in output
+    assert "--apply" in output
+
+
+def test_pruning_leaves_the_accounts_alone_until_it_is_asked(
+    db_session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    user = _make_old_customer(db_session, "unused@example.com")
+
+    run(db_session, "prune-unused-accounts")
+    capsys.readouterr()
+
+    db_session.refresh(user)
+    assert user.is_active is True
+
+
+def test_pruning_deactivates_the_accounts_when_it_is_asked(
+    db_session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Deactivated, not deleted: the address is still spoken for."""
+    user = _make_old_customer(db_session, "unused@example.com")
+
+    assert run(db_session, "prune-unused-accounts", "--apply") == 0
+
+    db_session.refresh(user)
+    assert user.is_active is False
+
+
+def test_a_deactivated_account_keeps_its_address(
+    db_session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Otherwise somebody else could take the address of a closed account."""
+    _make_old_customer(db_session, "unused@example.com")
+
+    assert run(db_session, "deactivate-account", "unused@example.com") == 0
+
+    with pytest.raises(EmailTaken):
+        auth_service.register_customer(
+            db_session,
+            email="unused@example.com",
+            password=DEFAULT_PASSWORD,
+            full_name="Test User",
+        )
+
+
+def test_an_account_that_came_back_is_not_unused(
+    db_session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A session since the account was made says a person was there."""
+    user = _make_old_customer(db_session, "returning@example.com")
+    db_session.add(
+        RefreshToken(
+            user_id=user.id,
+            family_id=uuid.uuid4(),
+            token_hash="a" * 64,
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
+    )
+    db_session.commit()
+
+    assert run(db_session, "prune-unused-accounts") == 0
+
+    assert "returning@example.com" not in capsys.readouterr().out
+
+
+def test_an_account_that_ordered_is_not_unused(
+    db_session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    customer = _make_old_customer(db_session, "ordered@example.com")
+    shop_owner = create_user(db_session, email="shop@example.com", role="vendor")
+    shop = create_shop(db_session, owner=shop_owner)
+    db_session.add_all(create_full_rate_table(db_session, shop))
+    db_session.commit()
+    create_unpaid_order(db_session, customer=customer, shop=shop)
+
+    assert run(db_session, "prune-unused-accounts") == 0
+
+    assert "ordered@example.com" not in capsys.readouterr().out

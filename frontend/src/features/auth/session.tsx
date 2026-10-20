@@ -26,6 +26,8 @@ type SessionContextValue = {
   user: User | null;
   login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
+  /** Read the account again, for when something about it has changed. */
+  refreshUser: () => Promise<User>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -88,9 +90,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setState({ status: "anonymous", user: null });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const user = await meRequest();
+    setState({ status: "authenticated", user });
+    return user;
+  }, []);
+
   const value = useMemo(
-    () => ({ status: state.status, user: state.user, login, logout }),
-    [state.status, state.user, login, logout],
+    () => ({
+      status: state.status,
+      user: state.user,
+      login,
+      logout,
+      refreshUser,
+    }),
+    [state.status, state.user, login, logout, refreshUser],
   );
 
   return (

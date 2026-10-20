@@ -55,7 +55,59 @@ class Settings(BaseSettings):
     file_retention_hours: int = 24
     no_show_timeout_hours: int = 24
 
+    # The limits on creating an account. Registering is the most
+    # expensive thing an anonymous caller can ask for, because the
+    # password is hashed with argon2id, and the work cannot be refused
+    # once it has started.
+    #
+    # The per address limits are generous on purpose: a campus puts
+    # every student behind one address, so a limit that rations signups
+    # would lock out the people it is meant to serve. They are here to
+    # stop a machine, not to ration people.
+    register_address_per_minute: int = 5
+    register_address_per_day: int = 100
+    # The limit on one email address. This is what stops many machines
+    # claiming the same address, which is how somebody else's address
+    # gets taken.
+    register_account_per_hour: int = 5
+    # The total the whole deployment will create in a minute. This is
+    # the limit that bounds the work rather than the attacker, and it is
+    # the reason a botnet cannot spend the server's CPU on password
+    # hashes.
+    register_global_per_minute: int = 60
+
     google_maps_api_key: str = ""
+
+    # Email. The console sender writes the message to the log, which is
+    # what a local development machine uses and what a deployment must
+    # not use: a verification message carries a link that proves an
+    # address, and that link is a secret.
+    email_provider: str = "console"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@spn.local"
+    # Whether the SMTP connection is encrypted from the first byte, which
+    # is the usual arrangement on port 465. The usual arrangement on port
+    # 587 is to start in the clear and upgrade with STARTTLS, and that
+    # is what happens when this is off.
+    smtp_use_tls: bool = False
+    # Where the link in a verification message points. It is the address
+    # a person opens in a browser, so it is the front end and not the
+    # API.
+    app_base_url: str = "http://localhost:5173"
+    # How long a verification link is good for.
+    email_verification_ttl_minutes: int = 1440
+
+    # Sign in with Google. The button is only offered when these are
+    # set, and the client secret never leaves the server.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # Where the provider sends the browser back to. It is the API and
+    # not the front end, because the server is the one that exchanges
+    # the code for a token.
+    api_base_url: str = "http://localhost:8000"
 
     @model_validator(mode="after")
     def _validate_environment(self) -> Self:
@@ -82,6 +134,14 @@ class Settings(BaseSettings):
                 "The webhook route is public, so the key that signs its "
                 "deliveries has to be one the operator chose. Set it in .env, "
                 "or run `make up`, which generates one."
+            )
+        if self.email_provider == "smtp" and not self.smtp_host:
+            raise ValueError("SMTP_HOST is required when EMAIL_PROVIDER=smtp")
+        if self.env == "production" and self.email_provider == "console":
+            raise ValueError(
+                "EMAIL_PROVIDER=console is not allowed when ENV=production. "
+                "It writes the verification link to the log, and that link is "
+                "a secret. Use SMTP."
             )
         return self
 

@@ -4,6 +4,7 @@ import logging
 import sys
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 from sqlalchemy import func, select
@@ -107,13 +108,18 @@ def seed(session: Session) -> None:
 
     customer = session.scalar(select(User).where(User.email == SEED_CUSTOMER["email"]))
     if customer is None:
-        auth_service.register_customer(
+        customer = auth_service.register_customer(
             session,
             email=SEED_CUSTOMER["email"],
             password=SEED_PASSWORD,
             full_name=SEED_CUSTOMER["full_name"],
         )
         logger.info("seed: created customer %s", SEED_CUSTOMER["email"])
+    # The demo accounts are proved, because a demo that cannot order a
+    # print because of a mail box nobody has is not a demo.
+    if not customer.email_verified:
+        customer.email_verified = True
+        session.commit()
 
     print("Seed complete. Local credentials (password for all):", SEED_PASSWORD)
     for spec in SEED_SHOPS:
@@ -376,6 +382,100 @@ def create_admin(session: Session, email: str, password: str, full_name: str) ->
     return 0
 
 
+def prune_unused_accounts(session: Session, older_than_days: int, apply: bool) -> int:
+    """The accounts that were made and never used.
+
+    An account with no order, no upload and no session since it was
+    created is an account that somebody made and then did nothing with:
+    a mistyped address, a test, or spam. They are listed rather than
+    deleted, and the operator decides, because the same shape covers a
+    customer who signed up last week and has not printed anything yet.
+
+    With --apply the accounts are deactivated rather than deleted. A
+    deactivated account keeps its address, so the address cannot be
+    claimed by somebody else, and it can be given back with
+    activate-account. Deleting would take the row, and with it the
+    guarantee that the address is still spoken for.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    rows = list(
+        session.scalars(
+            select(User)
+            .where(
+                User.role == "customer",
+                User.is_active.is_(True),
+                User.created_at < cutoff,
+                # No order, no upload and no session since the account was
+                # made. The subqueries are used rather than joins so that
+                # the query is about the accounts, not about the rows the
+                # joins happen to produce.
+                ~User.id.in_(select(Order.customer_id)),
+                ~User.id.in_(select(Upload.customer_id)),
+                ~User.id.in_(select(RefreshToken.user_id)),
+            )
+            .order_by(User.created_at.asc())
+        ).all()
+    )
+    if not rows:
+        print("No unused accounts.")
+        return 0
+    for user in rows:
+        print(f"{user.id}  {user.email}  {user.full_name}  created {user.created_at.isoformat()}")
+    if not apply:
+        print(f"{len(rows)} unused account(s). Deactivate them with --apply.")
+        return 0
+    for user in rows:
+        user.is_active = False
+    session.commit()
+    print(f"Deactivated {len(rows)} unused account(s). The addresses are still taken.")
+    return 0
+
+
+def set_account_active(session: Session, email: str, active: bool) -> int:
+    """Give a customer account back, or take it away.
+
+    Deactivating is the way an account is closed without losing the
+    address it holds. The account itself is kept, so the address cannot
+    be claimed by somebody else, and it can be given back.
+    """
+    user = session.scalar(select(User).where(User.email == email, User.role == "customer"))
+    if user is None:
+        print(f"No customer account with email {email}", file=sys.stderr)
+        return 1
+    if user.is_active == active:
+        state = "already active" if active else "already deactivated"
+        print(f"{email} is {state}.")
+        return 0
+    user.is_active = active
+    session.commit()
+    if active:
+        print(f"Reactivated account {email}")
+    else:
+        print(f"Deactivated account {email}. The address is still taken.")
+    return 0
+
+
+def verify_email(session: Session, email: str) -> int:
+    """Mark an address as proved, without sending anything.
+
+    The operator does this for the demo accounts and for a customer who
+    cannot receive mail at the address they gave. It is the same
+    decision the shop verification makes: the person who holds the
+    server decides.
+    """
+    user = session.scalar(select(User).where(User.email == email))
+    if user is None:
+        print(f"No account with email {email}", file=sys.stderr)
+        return 1
+    if user.email_verified:
+        print(f"{email} is already verified.")
+        return 0
+    user.email_verified = True
+    session.commit()
+    print(f"Verified {email}")
+    return 0
+
+
 def _read_admin_password(password_stdin: bool) -> str:
     """Read the admin password without putting it in the shell history.
 
@@ -465,6 +565,37 @@ def main(
     )
     delete_parser.add_argument("email", help="admin account email")
 
+    prune_parser = subparsers.add_parser(
+        "prune-unused-accounts",
+        help="list the accounts that were made and never used",
+    )
+    prune_parser.add_argument(
+        "--older-than-days",
+        type=int,
+        default=30,
+        help="how old an account has to be to count as unused (default 30)",
+    )
+    prune_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="deactivate the accounts instead of only listing them",
+    )
+
+    account_parser = subparsers.add_parser(
+        "deactivate-account", help="close a customer account, keeping its address"
+    )
+    account_parser.add_argument("email", help="customer account email")
+
+    reactivate_parser = subparsers.add_parser(
+        "activate-account", help="give a customer account back"
+    )
+    reactivate_parser.add_argument("email", help="customer account email")
+
+    verify_email_parser = subparsers.add_parser(
+        "verify-email", help="mark an email address as proved, without sending anything"
+    )
+    verify_email_parser.add_argument("email", help="account email")
+
     args = parser.parse_args(argv)
 
     setup_logging()
@@ -492,6 +623,16 @@ def main(
             return set_admin_active(session, str(args.email), active=True)
         if args.command == "delete-admin":
             return delete_admin(session, str(args.email))
+        if args.command == "prune-unused-accounts":
+            return prune_unused_accounts(
+                session, older_than_days=int(args.older_than_days), apply=bool(args.apply)
+            )
+        if args.command == "deactivate-account":
+            return set_account_active(session, str(args.email), active=False)
+        if args.command == "activate-account":
+            return set_account_active(session, str(args.email), active=True)
+        if args.command == "verify-email":
+            return verify_email(session, str(args.email))
     return 2
 
 

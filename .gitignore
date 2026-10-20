@@ -40,6 +40,10 @@ backups/
 openapi.json
 .schemathesis/
 
+# The generated knowledge graph of the repository. It is a map, not a source
+# of truth, and it is rebuilt with `make graph`.
+graphify-out/
+
 # Docs
 # The planning documents stay on this machine. The architecture decision
 # records and the decisions page are published, because "explainable" is

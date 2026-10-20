@@ -14,7 +14,6 @@ import threading
 import uuid
 
 import pytest
-from app.config import get_settings
 from app.gateways.payments import FakeGateway
 from app.models import (
     Order,
@@ -42,8 +41,8 @@ PRICE = PAGES * COPIES * BASE_PAISE
 
 
 @pytest.fixture
-def race_engine():
-    url = make_url(get_settings().database_url).set(database="spn_test")
+def race_engine(test_database: str):
+    url = make_url(test_database)
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
     engine.dispose()

@@ -12,11 +12,14 @@ import {
 } from "../../components/ui";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { registerRequest } from "./api";
+import { GoogleButton } from "./google-button";
 import { AuthLayout } from "./auth-layout";
 import { registerSchema, type RegisterValues } from "./schemas";
+import { useOAuthProviders } from "./use-oauth-providers";
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const providers = useOAuthProviders();
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -31,8 +34,14 @@ export function RegisterPage() {
     setPending(true);
     setServerError(null);
     try {
-      await registerRequest(values);
-      void navigate("/login", { replace: true, state: { registered: true } });
+      const user = await registerRequest(values);
+      // The account exists, and a link has been sent to the address.
+      // The next screen says where it went, so that a customer who
+      // mistyped it sees the mistake.
+      void navigate("/check-your-email", {
+        replace: true,
+        state: { email: user.email },
+      });
     } catch (error) {
       const fields = fieldErrorsFor(error);
       const names = Object.keys(fields) as Array<keyof RegisterValues>;
@@ -88,6 +97,15 @@ export function RegisterPage() {
           Create an account
         </Button>
       </form>
+      {providers.includes("google") && (
+        <div className="flex flex-col gap-2">
+          <GoogleButton label="Sign up with Google" />
+          <p className="text-xs text-steel">
+            Google tells us your email address is proved, so you can order a
+            print straight away.
+          </p>
+        </div>
+      )}
     </AuthLayout>
   );
 }

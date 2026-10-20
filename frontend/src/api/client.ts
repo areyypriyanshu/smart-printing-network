@@ -19,6 +19,14 @@ export type VendorShopUpdate = components["schemas"]["VendorShopUpdate"];
 export type UploadResponse = components["schemas"]["UploadResponse"];
 export type QuoteRequest = components["schemas"]["QuoteRequest"];
 export type QuoteResponse = components["schemas"]["QuoteResponse"];
+export type VerifyEmailRequest = components["schemas"]["VerifyEmailRequest"];
+export type ChangeEmailRequest = components["schemas"]["ChangeEmailRequest"];
+export type VerificationSentResponse =
+  components["schemas"]["VerificationSentResponse"];
+export type OAuthProvidersResponse = {
+  providers: string[];
+};
+export type OAuthStartResponse = { url: string };
 
 export type ApiErrorBody = {
   error?: {

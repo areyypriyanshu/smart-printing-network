@@ -7,6 +7,7 @@ export const customerUser: User = {
   email: "customer@example.com",
   full_name: "Customer One",
   role: "customer",
+  email_verified: true,
   created_at: "2026-01-01T00:00:00Z",
 };
 
@@ -15,6 +16,7 @@ export const vendorUser: User = {
   email: "vendor@example.com",
   full_name: "Vendor One",
   role: "vendor",
+  email_verified: true,
   created_at: "2026-01-01T00:00:00Z",
 };
 
@@ -23,6 +25,7 @@ export const adminUser: User = {
   email: "admin@example.com",
   full_name: "Owner",
   role: "admin",
+  email_verified: true,
   created_at: "2026-01-01T00:00:00Z",
 };
 
