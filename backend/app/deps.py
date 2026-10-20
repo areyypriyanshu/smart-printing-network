@@ -62,6 +62,30 @@ def get_email_sender(request: Request) -> EmailSender:
     return sender
 
 
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    session: Session = Depends(get_db),
+) -> User | None:
+    """The caller, if there is one.
+
+    Some routes are for everybody and behave differently for a signed in
+    caller. Starting a sign in with a provider is one: the address it
+    sends the browser to is the same either way, and the only thing
+    that changes is whether the account it comes back to is connected to
+    the one the caller is already signed in to.
+    """
+    if credentials is None:
+        return None
+    try:
+        user_id, _role = security.decode_access_token(credentials.credentials)
+    except Unauthenticated:
+        return None
+    user = session.get(User, user_id)
+    if user is None or not user.is_active:
+        return None
+    return user
+
+
 def require_verified_email(user: User = Depends(get_customer)) -> User:
     """A customer whose address has been proved.
 

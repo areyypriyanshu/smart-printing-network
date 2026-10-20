@@ -23,6 +23,10 @@ export type VerifyEmailRequest = components["schemas"]["VerifyEmailRequest"];
 export type ChangeEmailRequest = components["schemas"]["ChangeEmailRequest"];
 export type VerificationSentResponse =
   components["schemas"]["VerificationSentResponse"];
+export type OAuthProvidersResponse = {
+  providers: string[];
+};
+export type OAuthStartResponse = { url: string };
 
 export type ApiErrorBody = {
   error?: {

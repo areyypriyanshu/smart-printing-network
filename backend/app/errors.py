@@ -93,6 +93,54 @@ class PasswordMismatch(AppError):
     status_code = 422
 
 
+class OAuthProviderUnavailable(AppError):
+    """There is no provider with that name, or it is not configured.
+
+    A deployment that has not set the client id and the client secret
+    simply does not offer the provider. The front end hides the button,
+    and this is the answer for anybody who asks anyway.
+    """
+
+    code = "OAUTH_PROVIDER_UNAVAILABLE"
+    status_code = 400
+
+
+class OAuthStateInvalid(AppError):
+    """The sign in did not start where it says it did.
+
+    Either the state does not match the one that was sent, or the
+    cookie that carried it is missing or was not written by this
+    server. The answer says the same thing for all three, so that a
+    sign in cannot be probed to find out which part was wrong.
+    """
+
+    code = "OAUTH_STATE_INVALID"
+    status_code = 400
+
+
+class OAuthAccountExists(AppError):
+    """The address the provider gave is already an account here.
+
+    The provider says somebody owns that address over there. It says
+    nothing about who owns it here, and linking the two without asking
+    is how accounts are taken over.
+    """
+
+    code = "OAUTH_ACCOUNT_EXISTS"
+    status_code = 409
+
+
+class OAuthProviderError(AppError):
+    """The provider could not be reached, or would not say who it is.
+
+    It is a 502 because nothing about it is the caller's fault, and
+    the caller is told to try again.
+    """
+
+    code = "OAUTH_PROVIDER_ERROR"
+    status_code = 502
+
+
 class RateLimited(AppError):
     code = "RATE_LIMITED"
     status_code = 429

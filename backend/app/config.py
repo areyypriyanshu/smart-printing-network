@@ -100,6 +100,15 @@ class Settings(BaseSettings):
     # How long a verification link is good for.
     email_verification_ttl_minutes: int = 1440
 
+    # Sign in with Google. The button is only offered when these are
+    # set, and the client secret never leaves the server.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # Where the provider sends the browser back to. It is the API and
+    # not the front end, because the server is the one that exchanges
+    # the code for a token.
+    api_base_url: str = "http://localhost:8000"
+
     @model_validator(mode="after")
     def _validate_environment(self) -> Self:
         if self.env not in {"local", "test", "production"}:

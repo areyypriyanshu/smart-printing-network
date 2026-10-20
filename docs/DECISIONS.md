@@ -192,6 +192,14 @@ wrong can put the right one there, which is the only way out of a
 mistyped address.
 [ADR 026](adr/026-the-email-address-has-to-be-proved.md)
 
+**A provider never takes over an account here.** Signing in with
+Google is the authorization code flow with PKCE, the state lives in a
+signed cookie and nowhere else, and the tokens of the provider are used
+once and thrown away. An address the provider says is proved is not a
+claim on an account that somebody else claimed here: the customer signs
+in with their password and connects the provider themselves.
+[ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md)
+
 [ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
 conversion, including the alternatives that were rejected and why.
 

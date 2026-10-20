@@ -119,9 +119,20 @@ def login(session: Session, *, email: str, password: str) -> tuple[User, TokenBu
         raise Unauthenticated("Invalid email or password")
     if not user.is_active:
         raise Unauthenticated("Account is disabled")
+    return user, sign_in(session, user)
+
+
+def sign_in(session: Session, user: User) -> TokenBundle:
+    """The tokens for an account that has just been proved.
+
+    The login uses it, and so does a sign in with a provider: in both
+    cases the account is known and the work of checking it is already
+    done. The family is new every time, so a token that was stolen
+    cannot be used beside the one the owner has.
+    """
     bundle = _issue_tokens(session, user, family_id=uuid.uuid4())
     session.commit()
-    return user, bundle
+    return bundle
 
 
 def refresh(session: Session, refresh_token: str) -> tuple[User, TokenBundle]:

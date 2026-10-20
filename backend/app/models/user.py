@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
     text,
@@ -61,6 +62,30 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(CHAR(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OAuthIdentity(Base):
+    """An account at a provider, connected to an account here.
+
+    The provider and the identifier it gave are what the identity is.
+    The email address is not part of it, because the address at a
+    provider can change and the account cannot, and because the address
+    is the thing two platforms argue about.
+    """
+
+    __tablename__ = "oauth_identities"
+    __table_args__ = (
+        Index("oauth_identities_user_idx", "user_id"),
+        UniqueConstraint("provider", "provider_subject"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    provider: Mapped[str] = mapped_column(Text)
+    provider_subject: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

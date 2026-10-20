@@ -11,6 +11,7 @@ from app.errors import NotFound, Unauthenticated
 from app.gateways.email import EmailSender
 from app.models import User
 from app.rate_limit import account_rate_limit, registration_limit, user_rate_limit
+from app.routers.cookies import clear_refresh_cookie, set_refresh_cookie
 from app.schemas.auth import (
     AccessTokenResponse,
     ChangeEmailRequest,
@@ -210,7 +211,7 @@ def login(
     session: Session = Depends(get_db),
 ) -> AccessTokenResponse:
     _user, tokens = auth_service.login(session, email=str(body.email), password=body.password)
-    _set_refresh_cookie(response, tokens.refresh_token, request)
+    set_refresh_cookie(response, tokens.refresh_token, request)
     return AccessTokenResponse(access_token=tokens.access_token, expires_in=tokens.expires_in)
 
 
@@ -224,7 +225,7 @@ def refresh(
     if refresh_token is None:
         raise Unauthenticated("No refresh token")
     _user, tokens = auth_service.refresh(session, refresh_token)
-    _set_refresh_cookie(response, tokens.refresh_token, request)
+    set_refresh_cookie(response, tokens.refresh_token, request)
     return AccessTokenResponse(access_token=tokens.access_token, expires_in=tokens.expires_in)
 
 
@@ -237,44 +238,9 @@ def logout(
 ) -> None:
     if refresh_token is not None:
         auth_service.logout(session, refresh_token)
-    _clear_refresh_cookie(response, request)
+    clear_refresh_cookie(response, request)
 
 
 @router.get("/me", response_model=UserResponse)
 def me(user: User = Depends(get_current_user)) -> User:
     return user
-
-
-def _is_secure(request: Request) -> bool:
-    """Whether the request arrived over TLS.
-
-    The Secure attribute of the refresh cookie is a statement about the
-    transport the cookie travels over, so it is decided by the transport and
-    not by a configuration string. A configuration string can be mis-set;
-    the scheme cannot. The origin sets the forwarded scheme itself, so a
-    client cannot talk the cookie into being sent in the clear.
-    """
-    return request.url.scheme == "https"
-
-
-def _set_refresh_cookie(response: Response, token: str, request: Request) -> None:
-    settings = get_settings()
-    response.set_cookie(
-        auth_service.REFRESH_COOKIE,
-        token,
-        max_age=settings.refresh_token_days * 86400,
-        httponly=True,
-        samesite="lax",
-        secure=_is_secure(request),
-        path="/api/v1/auth",
-    )
-
-
-def _clear_refresh_cookie(response: Response, request: Request) -> None:
-    response.delete_cookie(
-        auth_service.REFRESH_COOKIE,
-        path="/api/v1/auth",
-        httponly=True,
-        samesite="lax",
-        secure=_is_secure(request),
-    )
