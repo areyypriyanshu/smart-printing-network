@@ -23,6 +23,8 @@ permissions:
 env:
   IMAGE: ghcr.io/${{ github.repository }}/api
   TAG: ${{ github.sha }}
+  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
+  WEB_TAG: ${{ github.sha }}
 
 jobs:
   build:
@@ -44,6 +46,20 @@ jobs:
             ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The frontend is built from the same commit as the API, and it is
+      # published under the same immutable name. Without this the origin
+      # would run a mutable tag that no workflow builds, so the release
+      # that was reviewed would not be the release the browser gets.
+      - uses: docker/build-push-action@v6.18.0
+        with:
+          context: frontend
+          file: frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ env.WEB_TAG }}
+            ${{ env.WEB_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     needs: build
@@ -61,6 +77,20 @@ jobs:
       SPN_DOMAIN: ${{ vars.SPN_DOMAIN }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          # The deployed code is the reviewed code. A dispatch may choose
+          # any ref, so the ref is checked here rather than left to the
+          # branch protection of main, and the deployment runs the same
+          # commit the images were built from.
+          ref: ${{ github.sha }}
+
+      - name: Refuse to deploy anything but the reviewed branch
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "the deployment runs the reviewed code on main, not ${{ github.ref }}" >&2
+            exit 1
+          fi
 
       - name: Configure SSH
         run: |
@@ -82,11 +112,13 @@ jobs:
       - name: Deploy, smoke check, roll back on failure
         env:
           IMAGE_TAG: ${{ env.IMAGE }}:${{ env.TAG }}
+          WEB_IMAGE_TAG: ${{ env.WEB_IMAGE }}:${{ env.WEB_TAG }}
         run: |
           set -euo pipefail
           ssh "$DEPLOY_HOST" env \
             DEPLOY_PATH="$DEPLOY_PATH" \
             IMAGE_TAG="$IMAGE_TAG" \
+            WEB_IMAGE_TAG="$WEB_IMAGE_TAG" \
             SPN_DOMAIN="$SPN_DOMAIN" \
             bash -s <<'REMOTE'
           set -euo pipefail
@@ -100,7 +132,13 @@ jobs:
           fi
           echo "deploying ${IMAGE_TAG}, previous was ${PREVIOUS_TAG:-none}"
 
+          # Both images are named by the commit they were built from, so
+          # the release that was reviewed is the release that runs. A
+          # mutable tag is re-resolved by name on every deploy, which is
+          # how a release ends up being something other than what was
+          # tested.
           export SPN_API_IMAGE="$IMAGE_TAG"
+          export SPN_WEB_IMAGE="$WEB_IMAGE_TAG"
           export SPN_DOMAIN="$SPN_DOMAIN"
 
           # Migrations first, as a one-off container, so a schema change
@@ -116,6 +154,7 @@ jobs:
             if curl -fsS "https://${SPN_DOMAIN}/readyz" > /dev/null 2>&1; then
               echo "smoke check passed"
               echo "${IMAGE_TAG}" > .current-tag
+              echo "${WEB_IMAGE_TAG}" > .current-web-tag
               exit 0
             fi
             sleep 2
@@ -127,6 +166,9 @@ jobs:
             exit 1
           fi
           export SPN_API_IMAGE="$PREVIOUS_TAG"
+          if [ -f .current-web-tag ]; then
+            export SPN_WEB_IMAGE="$(cat .current-web-tag)"
+          fi
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
           exit 1

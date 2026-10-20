@@ -13,9 +13,6 @@
 	# value even when it is never used, because the local run issues its
 	# own certificate and does not talk to ACME at all.
 	email {$ACME_EMAIL:admin@localhost}
-	servers {
-		trusted_proxies static private_ranges
-	}
 }
 
 {$SPN_DOMAIN} {
@@ -41,6 +38,13 @@
 	# The API answers under /api. The webhook has to be reachable from the
 	# public internet, so it is not behind an extra path check here.
 	handle /api/* {
+		# The API's own limit is MAX_UPLOAD_MB, and the edge must not
+		# forward a body the application would refuse anyway. Caddy reads
+		# MB as a megabyte of a million bytes, so 54MB is above both the
+		# application's 51 MiB cap and the 50 MB file limit it enforces.
+		request_body {
+			max_size 54MB
+		}
 		reverse_proxy api:8000
 	}
 

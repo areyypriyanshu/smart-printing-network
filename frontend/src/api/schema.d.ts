@@ -362,7 +362,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Simulate Payment */
+        /**
+         * Simulate Payment
+         * @description Mark an order paid, for local development.
+         *
+         *     The route is off unless a deployment turns it on, and it is bound to the
+         *     caller and to the order that caller owns. It is the only route that can
+         *     mark an order paid without a provider, so it must not be reachable by
+         *     an anonymous caller or by one customer on another's order.
+         */
         post: operations["simulate_payment_api_v1_testing_simulate_payment_post"];
         delete?: never;
         options?: never;

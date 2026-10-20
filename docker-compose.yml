@@ -6,10 +6,10 @@ services:
     platform: linux/amd64
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-spn}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-spn}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,11 +24,11 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-spn}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-spn-local-secret}
-      MC_HOST_local: http://${S3_ACCESS_KEY:-spn}:${S3_SECRET_KEY:-spn-local-secret}@localhost:9000
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      MC_HOST_local: http://${S3_ACCESS_KEY:-spn}:${S3_SECRET_KEY}@localhost:9000
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -50,16 +50,16 @@ services:
       # The pgAdmin login. Both are local development defaults; set
       # PGADMIN_EMAIL and PGADMIN_PASSWORD in .env to change them.
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-spn}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in .env}
       # The database password is read from the environment when the
       # connection is made, so it is never typed into the UI and never
       # written to a file in the repository.
       PGADMIN_CONFIG_ENABLE_SERVER_PASS_EXEC_CMD: "True"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
       PGADMIN_DISABLE_POSTFIX: "1"
-      SPN_DB_PASSWORD: ${POSTGRES_PASSWORD:-spn}
+      SPN_DB_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
@@ -79,7 +79,7 @@ services:
     env_file: .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
     healthcheck:
@@ -120,7 +120,7 @@ services:
       VITE_PROXY_TARGET: http://api:8000
     command: npm run dev -- --host 0.0.0.0
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules

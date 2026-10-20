@@ -82,16 +82,26 @@ For the fast, native checks (`make check`, `make test-fe`) you also need
 ```bash
 git clone https://github.com/areyypriyanshu/smart-printing-network.git
 cd smart-printing-network
-cp .env.example .env      # local defaults, PAYMENT_PROVIDER=fake
-make up                   # builds and starts api, worker, db, minio, frontend
+make up                   # copies .env.example, generates the secrets, starts everything
 make migrate              # applies database migrations
 make seed                 # three verified shops, one customer
 ```
 
 The PostGIS image is published for amd64 only, so `docker-compose.yml`
 pins the `db` service to `linux/amd64`; on Apple Silicon Docker Desktop
-runs it through Rosetta emulation automatically. `make up` copies
-`.env.example` to `.env` if missing.
+runs it through Rosetta emulation automatically.
+
+`make up` copies `.env.example` to `.env` if it is missing, and then
+replaces the placeholders in it with generated secrets: the JWT secret,
+the fake gateway's webhook key, the database password, the object store
+password and the pgAdmin password. The values that ship in
+`.env.example` are public, because the template is in the repository, so
+a fresh checkout does not run on them. A value you have already changed
+is left alone.
+
+Every port the local stack publishes is bound to `127.0.0.1`, so the
+database, the object store, the API and pgAdmin are not reachable from
+the network your laptop is on.
 
 | What | URL |
 |---|---|
@@ -133,8 +143,15 @@ which shops are allowed to take orders, so the account is created by
 somebody who already holds the server.
 
 ```bash
-docker compose run --rm api python -m app.cli create-admin you@example.com <password>
+docker compose run --rm api python -m app.cli create-admin you@example.com
 ```
+
+The password is asked for at the prompt, or read from standard input with
+`--password-stdin`. It is deliberately not an argument: an argument ends
+up in the shell history, in the process list and in the container
+metadata, where anybody with access to the host can read it. The password
+has to be at least eight characters, the same rule the sign-up form
+holds.
 
 Then sign in at `/admin/shops`. The panel approves and suspends shops, and
 keeps a log of every decision. It cannot read a customer's order or move
