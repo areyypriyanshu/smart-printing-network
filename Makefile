@@ -1,4 +1,4 @@
-.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down db-shell db-ui
+.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down db-shell db-ui graph graph-check graph-query
 
 up:
 	@test -f .env || cp .env.example .env
@@ -95,3 +95,22 @@ db-shell:
 # `make up`; this target is for starting it on its own.
 db-ui:
 	docker compose --profile tools up -d pgadmin
+
+# The knowledge graph of the repository: a node for every module, function,
+# class, ADR and concept, and the edges between them. It is a map of the
+# project, not a source of truth, and the session-start section of AGENTS.md
+# explains how to use it. `make graph` re-extracts the code with the AST
+# parser only, so it costs no tokens and is safe to run at the start of a
+# session.
+graph:
+	graphify update . --force
+	python3 infra/scripts/graphify-relabel.py
+
+# Says whether the code has moved on since the graph was built.
+graph-check:
+	python3 infra/scripts/graphify-check.py
+
+# Ask the graph a question:
+#   make graph-query Q="how does an order become paid"
+graph-query:
+	graphify query "$(Q)" --budget 1500
