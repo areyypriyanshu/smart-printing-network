@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
+    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
     create_paid_order,
     create_reserved_order,
@@ -478,7 +479,7 @@ def test_a_cash_order_is_never_marked_paid_by_a_webhook(
     ).encode()
     from app.gateways.payments import FakeGateway
 
-    signature = FakeGateway().sign(payload)
+    signature = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET).sign(payload)
 
     response = client.post(
         "/api/v1/webhooks/razorpay",
@@ -505,7 +506,11 @@ def test_the_simulated_payment_endpoint_does_not_pay_a_cash_order(
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
 
-    response = client.post("/api/v1/testing/simulate-payment", json={"order_id": str(order.id)})
+    response = client.post(
+        "/api/v1/testing/simulate-payment",
+        json={"order_id": str(order.id)},
+        headers=login_headers(client, CUSTOMER_EMAIL),
+    )
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "already_paid"

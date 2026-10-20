@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
+    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
     create_shop,
     create_upload_row,
@@ -22,7 +23,7 @@ BASE_PAISE = 200
 PAGES = 5
 COPIES = 2
 PRICE = PAGES * COPIES * BASE_PAISE
-GATEWAY = FakeGateway()
+GATEWAY = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET)
 
 
 def _seed(session: Session) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
@@ -277,7 +278,9 @@ def test_simulate_payment_endpoint_marks_the_order_paid(
     created = _create_order(client, db_session)
     order_id = created["order"]["id"]
 
-    response = client.post(SIMULATE, json={"order_id": order_id})
+    response = client.post(
+        SIMULATE, json={"order_id": order_id}, headers=login_headers(client, "customer@example.com")
+    )
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "paid"
@@ -287,16 +290,85 @@ def test_simulate_payment_endpoint_marks_the_order_paid(
     assert order.pickup_code is not None
 
 
+def test_simulate_payment_needs_a_token(client: TestClient, db_session: Session) -> None:
+    """The testing route marks an order paid, so it is not anonymous."""
+    created = _create_order(client, db_session)
+
+    response = client.post(SIMULATE, json={"order_id": created["order"]["id"]})
+
+    assert response.status_code == 401
+    order = db_session.get(Order, uuid.UUID(created["order"]["id"]))
+    assert order is not None
+    assert order.status == "PENDING_PAYMENT"
+
+
+def test_simulate_payment_does_not_pay_another_customers_order(
+    client: TestClient, db_session: Session
+) -> None:
+    """The route is bound to the caller, so it cannot reach another's order."""
+    created = _create_order(client, db_session)
+    create_user(db_session, email="other@example.com")
+
+    response = client.post(
+        SIMULATE,
+        json={"order_id": created["order"]["id"]},
+        headers=login_headers(client, "other@example.com"),
+    )
+
+    assert response.status_code == 404
+    order = db_session.get(Order, uuid.UUID(created["order"]["id"]))
+    assert order is not None
+    assert order.status == "PENDING_PAYMENT"
+
+
+def test_simulate_payment_is_disabled_when_the_testing_surface_is_off(
+    client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = _create_order(client, db_session)
+    monkeypatch.setattr(
+        "app.routers.webhooks.get_settings",
+        lambda: type(
+            "Settings",
+            (),
+            {
+                "env": "local",
+                "payment_provider": "fake",
+                "testing_endpoints_enabled": False,
+            },
+        )(),
+    )
+
+    response = client.post(
+        SIMULATE,
+        json={"order_id": created["order"]["id"]},
+        headers=login_headers(client, "customer@example.com"),
+    )
+
+    assert response.status_code == 404
+
+
 def test_simulate_payment_is_disabled_in_production(
     client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     created = _create_order(client, db_session)
     monkeypatch.setattr(
         "app.routers.webhooks.get_settings",
-        lambda: type("Settings", (), {"env": "production", "payment_provider": "fake"})(),
+        lambda: type(
+            "Settings",
+            (),
+            {
+                "env": "production",
+                "payment_provider": "fake",
+                "testing_endpoints_enabled": True,
+            },
+        )(),
     )
 
-    response = client.post(SIMULATE, json={"order_id": created["order"]["id"]})
+    response = client.post(
+        SIMULATE,
+        json={"order_id": created["order"]["id"]},
+        headers=login_headers(client, "customer@example.com"),
+    )
 
     assert response.status_code == 404
 

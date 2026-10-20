@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_payment_gateway
+from app.deps import get_current_user, get_payment_gateway
 from app.errors import Conflict, NotFound, ValidationError
 from app.gateways.payments import PaymentGateway, PaymentGatewayRouter
-from app.models import Order, Payment
+from app.models import Order, Payment, User
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.payment import SimulatePaymentRequest
 from app.services import payment_service
@@ -46,13 +46,24 @@ def simulate_payment(
     body: SimulatePaymentRequest,
     session: Session = Depends(get_db),
     gateway: PaymentGatewayRouter = Depends(get_payment_gateway),
+    user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    if get_settings().env == "production":
+    """Mark an order paid, for local development.
+
+    The route is off unless a deployment turns it on, and it is bound to the
+    caller and to the order that caller owns. It is the only route that can
+    mark an order paid without a provider, so it must not be reachable by
+    an anonymous caller or by one customer on another's order.
+    """
+    settings = get_settings()
+    if not settings.testing_endpoints_enabled or settings.env == "production":
         raise NotFound("Not found")
     if gateway.provider != "fake":
         raise Conflict("The configured payment provider is not the fake gateway")
 
-    order = session.get(Order, body.order_id)
+    order = session.scalar(
+        select(Order).where(Order.id == body.order_id, Order.customer_id == user.id)
+    )
     if order is None:
         raise NotFound("Order not found")
     payment = session.scalar(select(Payment).where(Payment.order_id == order.id))
