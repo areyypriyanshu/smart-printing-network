@@ -610,7 +610,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Razorpay Webhook */
+        /**
+         * Razorpay Webhook
+         * @description Take a delivery from the payment provider.
+         *
+         *     The event id is required and it cannot be empty, and the contract
+         *     says so: a delivery without one cannot be deduplicated, and the
+         *     provider always sends one. The signature is not required in the
+         *     contract, because a delivery without one is refused with a signature
+         *     error, which is a better answer than a validation error.
+         */
         post: operations["razorpay_webhook_api_v1_webhooks_razorpay_post"];
         delete?: never;
         options?: never;
@@ -4426,9 +4435,9 @@ export interface operations {
     razorpay_webhook_api_v1_webhooks_razorpay_post: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 "X-Razorpay-Signature"?: string;
-                "X-Razorpay-Event-Id"?: string;
+                "X-Razorpay-Event-Id": string;
             };
             path?: never;
             cookie?: never;

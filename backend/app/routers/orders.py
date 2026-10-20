@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_customer, get_payment_gateway, get_storage, require_verified_email
+from app.deps import get_customer, get_payment_gateway, get_storage
 from app.gateways.payments import PaymentGateway
 from app.gateways.storage import Storage
 from app.models import User
@@ -40,7 +40,7 @@ MAX_CURSOR = 2**63 - 1
 def create_order(
     body: OrderCreateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200),
-    user: User = Depends(require_verified_email),
+    user: User = Depends(get_customer),
     session: Session = Depends(get_db),
     gateway: PaymentGateway = Depends(get_payment_gateway),
 ) -> OrderCreateResponse:
