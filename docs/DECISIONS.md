@@ -169,6 +169,14 @@ minute for a whole address locks out a college, because a campus shares
 one address. The end-to-end suite found this by tripping it.
 [ADR 019](adr/019-rate-limiting-a-login-per-account.md)
 
+**A value the database cannot hold is refused at the door.** A NUL byte
+in an email, a name or a file name used to reach the insert and be
+refused by PostgreSQL, which the person typing saw as a 500. Every
+string written to the database is checked at the boundary, a value the
+database still refuses is a 422 rather than a 500, and a 500 carries the
+request id so it can be found in the logs.
+[ADR 024](adr/024-the-boundary-refuses-a-value-the-database-cannot-hold.md)
+
 [ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
 conversion, including the alternatives that were rejected and why.
 

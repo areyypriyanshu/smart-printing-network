@@ -56,7 +56,7 @@ def handle_webhook(
                     event_id=event_id,
                     provider=gateway.provider,
                     event_type=event_type,
-                    payload=payload,
+                    payload=_storable_payload(payload),
                 )
             )
             # Flushed, not committed: the inbox row becomes durable together
@@ -80,6 +80,25 @@ def handle_webhook(
         event.processed_at = datetime.now(UTC)
         session.commit()
     return outcome
+
+
+def _storable_payload(payload: Any) -> Any:
+    """The payload as the database is able to keep it.
+
+    A JSON document can carry a NUL byte inside a string, and
+    PostgreSQL's jsonb cannot hold one. The inbox row is written before
+    the payment is applied, so a payload that cannot be stored would
+    stop the payment from being applied at all. The byte carries no
+    meaning, so it is taken out of the copy that is kept. The decision
+    is still made from the payload as it arrived.
+    """
+    if isinstance(payload, dict):
+        return {key: _storable_payload(value) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [_storable_payload(value) for value in payload]
+    if isinstance(payload, str):
+        return payload.replace("\x00", "")
+    return payload
 
 
 def _handle_order_paid(session: Session, *, payload: dict[str, Any]) -> str:

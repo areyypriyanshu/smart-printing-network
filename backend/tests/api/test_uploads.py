@@ -249,3 +249,38 @@ def test_a_converted_document_is_downloaded_as_a_pdf(
     assert response.status_code == 201, response.text
     upload = db_session.query(Upload).one()
     assert printable_filename(upload) == "report.pdf"
+
+
+def test_upload_rejects_a_file_name_with_a_control_character(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    """The name is written to the database and put into a header.
+
+    A browser, and httpx with it, percent encodes a control character in
+    a file name, so this request is written by hand. A client that does
+    not follow that rule could otherwise put a NUL byte into the name,
+    which the database cannot store and the customer would see as a 500.
+    The file is not even read now: the name is checked first.
+    """
+    create_user(db_session, email="customer@example.com")
+    headers = login_headers(client, "customer@example.com")
+    pdf_path = make_pdf(tmp_path / "valid.pdf")
+    body = (
+        b"--SPNBOUNDARY\r\n"
+        b'Content-Disposition: form-data; name="file"; filename="report\x00.pdf"\r\n'
+        b"Content-Type: application/pdf\r\n\r\n"
+        + pdf_path.read_bytes()
+        + b"\r\n--SPNBOUNDARY--\r\n"
+    )
+
+    response = client.post(
+        UPLOADS,
+        headers={**headers, "Content-Type": "multipart/form-data; boundary=SPNBOUNDARY"},
+        content=body,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert db_session.query(Upload).count() == 0
+    storage: MemoryStorage = client.app.state.storage
+    assert storage.objects == {}

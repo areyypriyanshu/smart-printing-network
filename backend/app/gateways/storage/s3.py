@@ -1,9 +1,15 @@
+import re
 from pathlib import Path
 from typing import Any
 
 import boto3
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
+
+#: The characters that cannot be in a header value, and the quote that
+#: would end the file name early. The name comes from the customer, so
+#: it is cleaned before it is put into the header.
+_UNSAFE_IN_HEADER = re.compile(r"[\x00-\x1f\x7f\"]")
 
 
 class S3Storage:
@@ -47,7 +53,7 @@ class S3Storage:
     ) -> str:
         params: dict[str, Any] = {"Bucket": self._bucket, "Key": key}
         if download_filename is not None:
-            safe_name = download_filename.replace('"', "").replace("\r", "").replace("\n", "")
+            safe_name = _UNSAFE_IN_HEADER.sub("", download_filename)
             params["ResponseContentDisposition"] = f'attachment; filename="{safe_name}"'
         url: str = self.client.generate_presigned_url(
             "get_object", Params=params, ExpiresIn=expires_seconds

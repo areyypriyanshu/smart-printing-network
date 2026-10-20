@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.schemas.order import OrderEventResponse
+from app.schemas.text import MultiLine
 
 MAX_REASON_LENGTH = 500
 
@@ -59,7 +60,7 @@ class VendorOrderDetailResponse(BaseModel):
 class ReasonRequest(BaseModel):
     """A rejection or cancellation reason. Required by the PRD."""
 
-    reason: str = Field(min_length=1, max_length=MAX_REASON_LENGTH)
+    reason: MultiLine = Field(min_length=1, max_length=MAX_REASON_LENGTH)
 
 
 class CollectRequest(BaseModel):

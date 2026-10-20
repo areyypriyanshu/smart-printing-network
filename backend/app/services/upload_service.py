@@ -18,10 +18,12 @@ from app.errors import (
     PdfCorrupt,
     PdfEncrypted,
     PdfTooManyPages,
+    ValidationError,
 )
 from app.gateways.storage import Storage
 from app.models import Upload
 from app.schemas.order import FileUrlResponse
+from app.schemas.text import single_line
 from app.services.document_service import ConversionError, convert_to_pdf
 
 CHUNK_SIZE = 1024 * 1024
@@ -42,6 +44,7 @@ def create_upload(
     source: IO[bytes],
 ) -> Upload:
     max_bytes = settings.max_upload_mb * 1024 * 1024
+    _check_filename(original_filename)
     digest = hashlib.sha256()
     size = 0
     with tempfile.NamedTemporaryFile(suffix=".bin") as temp_file:
@@ -106,6 +109,21 @@ def create_upload(
     session.commit()
     session.refresh(upload)
     return upload
+
+
+def _check_filename(filename: str) -> None:
+    """The name the customer gave the file has to be one we can store.
+
+    The name is written to the database, and it is put into the header
+    that names the download. A name carrying a control character is
+    refused before the file is read, so the request is answered in
+    milliseconds. The object itself is stored under a random key, so the
+    name never becomes a path.
+    """
+    try:
+        single_line(filename)
+    except ValueError as exc:
+        raise ValidationError("The file name contains a character that is not allowed") from exc
 
 
 def _convert(source_path: str, kind: str) -> tuple[int, Path]:

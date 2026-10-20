@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.text import MultiLine
+
 MAX_REASON_LENGTH = 500
 
 
@@ -54,4 +56,4 @@ class AdminActionListResponse(BaseModel):
 class SuspendShopRequest(BaseModel):
     """Why a shop was taken offline. Required, so the log is useful later."""
 
-    reason: str = Field(min_length=1, max_length=MAX_REASON_LENGTH)
+    reason: MultiLine = Field(min_length=1, max_length=MAX_REASON_LENGTH)

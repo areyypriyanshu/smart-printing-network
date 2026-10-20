@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.auth import UserResponse
 from app.schemas.phone import Phone
+from app.schemas.text import MultiLine, SingleLine
 
 
 class RateItem(BaseModel):
@@ -75,8 +76,8 @@ class VendorRegistrationResponse(BaseModel):
 
 
 class VendorShopUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    address: str | None = Field(default=None, min_length=1, max_length=300)
+    name: SingleLine | None = Field(default=None, min_length=1, max_length=200)
+    address: MultiLine | None = Field(default=None, min_length=1, max_length=300)
     phone: Phone | None = None
     min_order_paise: int | None = Field(default=None, ge=0)
     accepting_orders: bool | None = None

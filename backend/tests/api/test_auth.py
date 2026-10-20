@@ -51,6 +51,52 @@ def test_register_rejects_invalid_email(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_register_rejects_a_nul_byte_in_the_email(client: TestClient) -> None:
+    """The database cannot store a NUL byte, so it is refused at the door.
+
+    It used to be accepted by the shape of the address and then refused
+    by the insert, which the client saw as a 500.
+    """
+    payload = register_payload("bad\x00@example.com")
+
+    response = client.post(REGISTER, json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_register_rejects_a_nul_byte_in_the_name(client: TestClient) -> None:
+    payload = register_payload()
+    payload["full_name"] = "New\x00User"
+
+    response = client.post(REGISTER, json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_register_rejects_a_character_that_reverses_the_text(client: TestClient) -> None:
+    """A name that reads backwards says something other than what it says."""
+    payload = register_payload()
+    payload["full_name"] = "New‮User"
+
+    response = client.post(REGISTER, json=payload)
+
+    assert response.status_code == 422
+
+
+def test_login_with_a_nul_byte_in_the_email_is_a_validation_error(
+    client: TestClient,
+) -> None:
+    """The address was used in a lookup, so it used to be a 500 as well."""
+    response = client.post(
+        LOGIN, json={"email": "bad\x00@example.com", "password": DEFAULT_PASSWORD}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
 def test_login_returns_token_and_sets_httponly_refresh_cookie(
     client: TestClient, db_session: Session
 ) -> None:
