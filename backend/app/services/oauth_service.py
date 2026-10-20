@@ -150,6 +150,7 @@ def callback(
         full_name=profile.name or profile.email.split("@")[0],
     )
     user.email_verified = profile.email_verified
+    user.has_password = False
     session.add(
         OAuthIdentity(
             user_id=user.id,

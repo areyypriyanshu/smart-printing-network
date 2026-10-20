@@ -33,6 +33,9 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(CITEXT, unique=True)
     password_hash: Mapped[str] = mapped_column(Text)
+    # Google-only accounts have a random unusable hash and can add a
+    # password deliberately from their authenticated account.
+    has_password: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     full_name: Mapped[str] = mapped_column(Text)
     role: Mapped[str] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))

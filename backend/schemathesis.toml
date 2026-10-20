@@ -55,3 +55,27 @@ checks.positive_data_acceptance.expected-statuses = [
   "429",
   "5xx",
 ]
+
+# These endpoints have deliberately meaningful refusal paths that the
+# schema cannot express: an unverified account, a token that was not sent,
+# and an OAuth provider that is not configured or a request without the
+# signed state cookie. They are still fuzzed; the expected status list
+# documents that the refusal is correct rather than a server failure.
+[[operations]]
+include-path = [
+  "/api/v1/auth/change-email",
+  "/api/v1/auth/verify-email",
+  "/api/v1/auth/oauth/{provider}/start",
+]
+checks.positive_data_acceptance.expected-statuses = [
+  "2xx",
+  "3xx",
+  "400",
+  "401",
+  "403",
+  "404",
+  "409",
+  "422",
+  "429",
+  "5xx",
+]

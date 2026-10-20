@@ -193,3 +193,37 @@ def test_a_signed_in_customer_connects_the_provider_to_their_own_account(
     identity = db_session.scalar(select(OAuthIdentity))
     assert identity is not None
     assert identity.user_id == user.id
+
+
+def test_a_google_only_account_can_add_a_local_password(
+    client: TestClient, db_session: Session
+) -> None:
+    _use_provider(client)
+    _start(client)
+    state = _state_from(client)
+    response = client.get(
+        CALLBACK, params={"code": "the-code", "state": state}, follow_redirects=False
+    )
+    assert response.status_code == 302
+    user = db_session.scalar(select(User).where(User.email == "person@example.com"))
+    assert user is not None
+    token = client.post(
+        "/api/v1/auth/login",
+        json={"email": "person@example.com", "password": "anything"},
+    )
+    assert token.status_code == 401
+    # The callback sets the refresh cookie. The browser uses it to get
+    # the short-lived bearer token before calling the account endpoint.
+    refresh = client.post("/api/v1/auth/refresh")
+    assert refresh.status_code == 200
+    set_password = client.post(
+        "/api/v1/auth/set-password",
+        headers={"Authorization": f"Bearer {refresh.json()['access_token']}"},
+        json={"password": "new-local-password"},
+    )
+    assert set_password.status_code == 200, set_password.text
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "person@example.com", "password": "new-local-password"},
+    )
+    assert login.status_code == 200, login.text

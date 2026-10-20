@@ -9,7 +9,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.config import get_settings
 from app.gateways.payments import CashGateway
 from app.jobs import expire_no_shows
 from app.models import (
@@ -216,8 +215,8 @@ def test_two_workers_running_at_the_same_time_expire_it_once(
 
 
 @pytest.fixture
-def race_engine():
-    url = make_url(get_settings().database_url).set(database="spn_test")
+def race_engine(test_database: str):
+    url = make_url(test_database)
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
     engine.dispose()

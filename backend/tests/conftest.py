@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Iterator
 
 import pytest
@@ -14,7 +15,7 @@ from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 from tests.factories import FAKE_WEBHOOK_SECRET
 
-TEST_DATABASE = "spn_test"
+TEST_DATABASE = f"spn_test_{uuid.uuid4().hex[:12]}"
 
 
 @pytest.fixture(autouse=True, scope="session")

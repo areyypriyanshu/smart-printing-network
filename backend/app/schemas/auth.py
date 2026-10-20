@@ -48,6 +48,12 @@ class ChangeEmailRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class SetPasswordRequest(BaseModel):
+    """A password for an account that currently has none."""
+
+    password: Password = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+
+
 class TestingVerifyEmailRequest(BaseModel):
     """The address of the account to mark as proved, for the test surface."""
 
