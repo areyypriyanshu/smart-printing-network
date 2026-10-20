@@ -7,7 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.errors import Conflict, InvalidTransition, ValidationError, WebhookSignatureInvalid
+from app.errors import (
+    Conflict,
+    InvalidTransition,
+    PaymentNotApplied,
+    ValidationError,
+    WebhookSignatureInvalid,
+)
 from app.gateways.payments import PaymentGateway
 from app.models import Order, Payment, WebhookEvent
 from app.services import order_service
@@ -30,7 +36,11 @@ def handle_webhook(
     if not gateway.verify_webhook_signature(raw_body=raw_body, signature=signature):
         raise WebhookSignatureInvalid("Webhook signature does not match")
 
-    if session.get(WebhookEvent, event_id) is not None:
+    # "Duplicate" means "already applied", not "already recorded". A delivery
+    # that failed after the inbox row was written must stay reprocessable, so
+    # the provider's retry can still apply it.
+    event = session.get(WebhookEvent, event_id)
+    if event is not None and event.processed_at is not None:
         return "duplicate"
 
     try:
@@ -39,19 +49,24 @@ def handle_webhook(
         raise ValidationError("Webhook body is not valid JSON") from exc
 
     event_type = str(payload.get("event", ""))
-    try:
-        session.add(
-            WebhookEvent(
-                event_id=event_id,
-                provider=gateway.provider,
-                event_type=event_type,
-                payload=payload,
+    if event is None:
+        try:
+            session.add(
+                WebhookEvent(
+                    event_id=event_id,
+                    provider=gateway.provider,
+                    event_type=event_type,
+                    payload=payload,
+                )
             )
-        )
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        return "duplicate"
+            # Flushed, not committed: the inbox row becomes durable together
+            # with the effect, so a failure before the effect rolls the event
+            # id back instead of spending it, and the provider's retry can
+            # still apply it.
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            return "duplicate"
 
     if event_type == ORDER_PAID:
         outcome = _handle_order_paid(session, payload=payload)
@@ -112,27 +127,64 @@ def _handle_order_paid(session: Session, *, payload: dict[str, Any]) -> str:
         payment.provider_payment_id = provider_payment_id
 
     if order.status == "PENDING_PAYMENT":
+        # The capture and the state change are one operation: let the
+        # transition's own commit write both, so a failed transition cannot
+        # leave a captured payment behind.
         payment.status = "CAPTURED"
-        session.commit()
         try:
             order_service.transition(
                 session, order_id=order.id, to_status="PAID", actor_type="webhook"
             )
-        except (InvalidTransition, Conflict):
+        except (InvalidTransition, Conflict) as failure:
+            session.rollback()
+            refreshed = session.get(Order, order.id)
+            status = refreshed.status if refreshed is not None else "unknown"
+            if status in LATE_PAYMENT_STATUSES:
+                # The order went terminal while the payment was landing. The
+                # money was taken at the provider, so it has to go back. The
+                # refund job selects on refund_next_attempt_at, so the
+                # schedule is set here as well.
+                late = session.get(Payment, payment.id)
+                if late is None:
+                    return "unknown_order"
+                if provider_payment_id:
+                    late.provider_payment_id = provider_payment_id
+                late.status = "REFUND_PENDING"
+                late.refund_next_attempt_at = datetime.now(UTC)
+                session.commit()
+                logger.error(
+                    "webhook_late_payment_refund_queued",
+                    extra={"order_id": str(order.id), "status": status},
+                )
+                return "refund_pending"
             # The provider can deliver two different events for the same
             # payment at the same moment. The first one moved the order to
-            # PAID, so this one has nothing left to do. The money is
-            # captured either way, and the order is paid, which is exactly
-            # what the two deliveries together mean.
-            logger.info(
-                "webhook_order_paid_already_applied",
-                extra={"order_id": str(order.id), "status": order.status},
+            # PAID, so this one has nothing left to do. The money is captured
+            # either way, and the order is paid, which is exactly what the two
+            # deliveries together mean.
+            if status == "PAID":
+                logger.info(
+                    "webhook_order_paid_already_applied",
+                    extra={"order_id": str(order.id), "status": status},
+                )
+                return "already_paid"
+            # The order is still waiting for its payment, so the capture
+            # was not applied. The delivery is answered with a status that
+            # says "try again", and the event is not recorded as applied,
+            # so the provider's retry can still apply it.
+            logger.error(
+                "webhook_order_paid_not_applied",
+                extra={"order_id": str(order.id), "status": status},
             )
-            return "already_paid"
+            raise PaymentNotApplied("The payment could not be applied to the order") from failure
         return "paid"
 
     if order.status in LATE_PAYMENT_STATUSES:
         payment.status = "REFUND_PENDING"
+        # The refund job only picks up a row that has a due time, so the
+        # schedule has to be set here as well, or the money the provider
+        # captured is never sent back.
+        payment.refund_next_attempt_at = datetime.now(UTC)
         session.commit()
         logger.error(
             "webhook_late_payment_refund_queued",

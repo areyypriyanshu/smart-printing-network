@@ -9,7 +9,7 @@ payment id, so a retry can never move the money twice.
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.refunds import refund_backoff_seconds
@@ -33,8 +33,14 @@ def run(session: Session, *, now: datetime, gateway: PaymentGateway) -> int:
             select(Payment.id)
             .where(
                 Payment.status == "REFUND_PENDING",
-                Payment.refund_next_attempt_at.is_not(None),
-                Payment.refund_next_attempt_at <= now,
+                # A row that is REFUND_PENDING is a refund that is owed. The
+                # next-attempt time is the schedule, not the permission: a
+                # writer that forgot to set it must not leave the money in
+                # the platform's pocket for ever.
+                or_(
+                    Payment.refund_next_attempt_at.is_(None),
+                    Payment.refund_next_attempt_at <= now,
+                ),
             )
             .order_by(Payment.refund_next_attempt_at.asc())
             .limit(BATCH_SIZE)

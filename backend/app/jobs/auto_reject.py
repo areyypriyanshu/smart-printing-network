@@ -14,7 +14,7 @@ because a reserved order is not one of the states that can be refunded.
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -41,9 +41,14 @@ def run(session: Session, *, now: datetime) -> int:
             select(Order.id)
             .where(
                 Order.status.in_(("PAID", "RESERVED")),
-                Order.reserved_at < cutoff,
+                # `reserved_at` is the queue timestamp, but an order paid by
+                # the previous application version, during a deployment, has
+                # no value there. Falling back to `paid_at` reproduces the
+                # behaviour of the previous version for exactly those rows,
+                # so a stranded order is still rejected and refunded.
+                func.coalesce(Order.reserved_at, Order.paid_at) < cutoff,
             )
-            .order_by(Order.reserved_at.asc())
+            .order_by(func.coalesce(Order.reserved_at, Order.paid_at).asc())
             .limit(BATCH_SIZE)
             .with_for_update(skip_locked=True)
         )

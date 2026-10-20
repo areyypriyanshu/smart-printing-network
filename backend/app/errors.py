@@ -112,6 +112,18 @@ class InvalidTransition(AppError):
     status_code = 409
 
 
+class PaymentNotApplied(AppError):
+    """The payment could not be applied to the order.
+
+    The provider retries a delivery it was told failed, so this is
+    answered with a status that says "try again". The event is not
+    recorded as applied, so the retry can still apply it.
+    """
+
+    code = "PAYMENT_NOT_APPLIED"
+    status_code = 503
+
+
 class ShopAlreadyVerified(AppError):
     """The shop is already approved, so there is nothing to approve."""
 
@@ -180,6 +192,7 @@ HTTP_STATUS_CODES: dict[int, str] = {
     403: "FORBIDDEN",
     404: "NOT_FOUND",
     405: "METHOD_NOT_ALLOWED",
+    413: "FILE_TOO_LARGE",
     429: "RATE_LIMITED",
 }
 
