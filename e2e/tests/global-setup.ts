@@ -25,4 +25,19 @@ export default async function globalSetup(): Promise<void> {
       `the test customer could not be created: ${response.status} ${await response.text()}`,
     );
   }
+
+  // A customer cannot order a print until its address is proved, and
+  // this suite has no mail box to read the link out of. The testing
+  // surface marks the address as proved. It is off unless a deployment
+  // turns it on, and it is never on in production.
+  const verified = await fetch(`${baseUrl}/api/v1/testing/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: CUSTOMER_EMAIL }),
+  });
+  if (!verified.ok) {
+    throw new Error(
+      `the test customer could not be verified: ${verified.status} ${await verified.text()}`,
+    );
+  }
 }

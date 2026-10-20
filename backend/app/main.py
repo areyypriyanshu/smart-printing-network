@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import get_settings
 from app.errors import AppError, exception_handler, http_exception_handler
+from app.gateways.email import build_email_sender
 from app.gateways.payments import build_payment_gateway
 from app.gateways.storage import S3Storage
 from app.logging import RequestIdMiddleware, setup_logging
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Smart Printing Network API", version="0.1.0")
     app.state.rate_limiter = RateLimiter()
     app.state.payment_gateway = build_payment_gateway(settings)
+    app.state.email_sender = build_email_sender(settings)
     app.state.storage = S3Storage(
         endpoint_url=settings.s3_endpoint_url or None,
         bucket=settings.s3_bucket,

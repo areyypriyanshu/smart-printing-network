@@ -2,6 +2,11 @@ import { ApiError } from "../api/client";
 
 const MESSAGES: Record<string, string> = {
   EMAIL_TAKEN: "An account with this email already exists.",
+  EMAIL_NOT_VERIFIED:
+    "Confirm your email address first. We sent you a link when you signed up.",
+  INVALID_VERIFICATION_TOKEN:
+    "This link is not valid any more. Ask for a new one and try again.",
+  PASSWORD_MISMATCH: "That password is not right.",
   UNAUTHENTICATED: "Invalid email or password.",
   FORBIDDEN: "You do not have access to this page.",
   NOT_FOUND: "We could not find what you asked for.",

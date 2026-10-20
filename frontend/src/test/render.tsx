@@ -26,12 +26,26 @@ export function TestProviders({ children }: { children: ReactNode }) {
 
 export function renderWithProviders(
   ui: ReactElement,
-  { route = "/" }: { route?: string } = {},
+  { route = "/", state }: { route?: string; state?: unknown } = {},
 ) {
+  // The route is split into its path and its query, because a location
+  // given as an object keeps the query in the search and not in the
+  // path, and a screen that reads a query parameter needs it there.
+  const [pathname, search] = route.split("?");
   return render(
     <QueryClientProvider client={createTestQueryClient()}>
       <SessionProvider>
-        <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        <MemoryRouter
+          initialEntries={[
+            {
+              pathname,
+              search: search === undefined ? "" : `?${search}`,
+              state,
+            },
+          ]}
+        >
+          {ui}
+        </MemoryRouter>
       </SessionProvider>
     </QueryClientProvider>,
   );

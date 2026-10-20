@@ -35,6 +35,25 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class VerifyEmailRequest(BaseModel):
+    """The token from the link that was sent to the address."""
+
+    token: str = Field(min_length=1, max_length=200)
+
+
+class ChangeEmailRequest(BaseModel):
+    """A different address for the account, and the password that proves it is ours."""
+
+    email: Email
+    password: str = Field(min_length=1, max_length=128)
+
+
+class TestingVerifyEmailRequest(BaseModel):
+    """The address of the account to mark as proved, for the test surface."""
+
+    email: Email
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -42,7 +61,23 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: Literal["customer", "vendor", "admin"]
+    # Whether the address has been proved. A customer whose address is
+    # not proved can sign in and look around, but cannot order a
+    # print.
+    email_verified: bool = False
     created_at: datetime
+
+
+class VerificationSentResponse(BaseModel):
+    """That a message was asked for.
+
+    It says nothing about whether the message arrived, because the
+    server cannot know that. It says the address the message went to,
+    so the customer can see that it is the address they meant.
+    """
+
+    email: str
+    expires_at: datetime
 
 
 class AccessTokenResponse(BaseModel):

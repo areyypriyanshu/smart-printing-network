@@ -184,6 +184,14 @@ on registration, and the last one is per deployment rather than per
 caller: sixty accounts a minute, however many machines are asking.
 [ADR 025](adr/025-the-limits-on-creating-an-account.md)
 
+**An email address is a claim until it is proved.** A link is sent to
+the address, and opening it proves it. The account works while it is
+unproved, but it cannot order a print, because the printout and the
+pickup code are tied to the address. A customer who typed the address
+wrong can put the right one there, which is the only way out of a
+mistyped address.
+[ADR 026](adr/026-the-email-address-has-to-be-proved.md)
+
 [ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
 conversion, including the alternatives that were rejected and why.
 

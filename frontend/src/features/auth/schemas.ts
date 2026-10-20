@@ -18,6 +18,20 @@ export const registerSchema = z.object({
 
 export type RegisterValues = z.infer<typeof registerSchema>;
 
+/**
+ * Changing the address of an account.
+ *
+ * The password is asked for, because changing the address is how an
+ * account is taken over, and a session that was stolen is not the
+ * password.
+ */
+export const changeEmailSchema = z.object({
+  email: z.email("Enter a valid email address"),
+  password: z.string().min(1, "Enter your password"),
+});
+
+export type ChangeEmailValues = z.infer<typeof changeEmailSchema>;
+
 const coordinate = (min: number, max: number, label: string) =>
   z
     .string()

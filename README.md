@@ -39,7 +39,7 @@ orders from a counter screen.
 - No delivery, no delivery tracking, no route optimisation (OR-Tools). Pickup only.
 - No CNN or deep learning. Blur and resolution checks use classical image analysis because it is enough and it is explainable.
 - No "AI price prediction". Price is arithmetic: `pages x copies x shop rate`, with a minimum order amount.
-- No vendor payouts or settlements, no GST invoicing, no email or SMS notifications, no admin UI.
+- No vendor payouts or settlements, no GST invoicing, no email or SMS notifications, no admin UI. The one message the platform sends is the link that proves an email address, which is part of the account rather than a notification.
 
 ## Architecture at a glance
 
@@ -211,6 +211,38 @@ Two guards stop the obvious accidents. The last active admin cannot be
 deactivated or deleted, because that would leave nobody who can undo it
 from the panel; create another one first. And an account that has
 recorded a decision cannot be deleted at all.
+
+### Confirming an email address
+
+An account has to prove its email address before it can order a print. A
+link is sent to the address, and opening it proves the address. The
+account works while it is unproved, but it cannot upload a file or order
+a print, because the printout and the pickup code are tied to the
+address.
+
+On a local machine there is no mail server, so the message is written to
+the log of the API container. The link is in it:
+
+```bash
+docker compose logs api | grep verify-email
+```
+
+A deployment sends the message over SMTP. Set `EMAIL_PROVIDER=smtp` and
+the `SMTP_*` values in `.env`; the console sender is refused when
+`ENV=production`, because the link in a message is a secret and the log
+is where secrets go to leak.
+
+The operator can confirm an address without sending anything, which is
+what the demo accounts and a customer who cannot receive mail need:
+
+```bash
+docker compose run --rm api python -m app.cli verify-email <email>
+```
+
+A customer who typed their address wrong can put the right one there
+themselves, from **/account/email** in the app. It asks for the
+password, because changing the address is how an account is taken over.
+See [ADR 026](docs/adr/026-the-email-address-has-to-be-proved.md).
 
 ### Looking at the data
 
@@ -399,7 +431,10 @@ committed. The decisions are.
   See [ADR 013](docs/adr/013-cash-on-collection.md).
 - One shop per vendor account, one order per upload, whole-document printing only (no page ranges, no binding options).
 - A converted Word, Excel or PowerPoint file keeps the text, the headings, the pictures and the table contents. It does not keep the fonts, the exact table widths, the headers, the footers or the columns. A student who needs the exact layout uploads a PDF. See [ADR 016](docs/adr/016-office-file-upload.md).
-- No email verification or password reset.
+- No password reset. An email address is proved by a link before the
+  account can order a print, and a customer who forgot their password
+  has no way back in. See
+  [ADR 026](docs/adr/026-the-email-address-has-to-be-proved.md).
 - Single-instance deployment. The rate limiter lives in the process, so a
   second API instance would need Redis. A login is limited per account
   and per address, so a campus behind one address is not locked out.

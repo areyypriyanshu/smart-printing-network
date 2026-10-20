@@ -108,13 +108,18 @@ def seed(session: Session) -> None:
 
     customer = session.scalar(select(User).where(User.email == SEED_CUSTOMER["email"]))
     if customer is None:
-        auth_service.register_customer(
+        customer = auth_service.register_customer(
             session,
             email=SEED_CUSTOMER["email"],
             password=SEED_PASSWORD,
             full_name=SEED_CUSTOMER["full_name"],
         )
         logger.info("seed: created customer %s", SEED_CUSTOMER["email"])
+    # The demo accounts are proved, because a demo that cannot order a
+    # print because of a mail box nobody has is not a demo.
+    if not customer.email_verified:
+        customer.email_verified = True
+        session.commit()
 
     print("Seed complete. Local credentials (password for all):", SEED_PASSWORD)
     for spec in SEED_SHOPS:
@@ -450,6 +455,27 @@ def set_account_active(session: Session, email: str, active: bool) -> int:
     return 0
 
 
+def verify_email(session: Session, email: str) -> int:
+    """Mark an address as proved, without sending anything.
+
+    The operator does this for the demo accounts and for a customer who
+    cannot receive mail at the address they gave. It is the same
+    decision the shop verification makes: the person who holds the
+    server decides.
+    """
+    user = session.scalar(select(User).where(User.email == email))
+    if user is None:
+        print(f"No account with email {email}", file=sys.stderr)
+        return 1
+    if user.email_verified:
+        print(f"{email} is already verified.")
+        return 0
+    user.email_verified = True
+    session.commit()
+    print(f"Verified {email}")
+    return 0
+
+
 def _read_admin_password(password_stdin: bool) -> str:
     """Read the admin password without putting it in the shell history.
 
@@ -565,6 +591,11 @@ def main(
     )
     reactivate_parser.add_argument("email", help="customer account email")
 
+    verify_email_parser = subparsers.add_parser(
+        "verify-email", help="mark an email address as proved, without sending anything"
+    )
+    verify_email_parser.add_argument("email", help="account email")
+
     args = parser.parse_args(argv)
 
     setup_logging()
@@ -600,6 +631,8 @@ def main(
             return set_account_active(session, str(args.email), active=False)
         if args.command == "activate-account":
             return set_account_active(session, str(args.email), active=True)
+        if args.command == "verify-email":
+            return verify_email(session, str(args.email))
     return 2
 
 

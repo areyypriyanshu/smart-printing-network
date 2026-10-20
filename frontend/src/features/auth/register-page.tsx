@@ -31,8 +31,14 @@ export function RegisterPage() {
     setPending(true);
     setServerError(null);
     try {
-      await registerRequest(values);
-      void navigate("/login", { replace: true, state: { registered: true } });
+      const user = await registerRequest(values);
+      // The account exists, and a link has been sent to the address.
+      // The next screen says where it went, so that a customer who
+      // mistyped it sees the mistake.
+      void navigate("/check-your-email", {
+        replace: true,
+        state: { email: user.email },
+      });
     } catch (error) {
       const fields = fieldErrorsFor(error);
       const names = Object.keys(fields) as Array<keyof RegisterValues>;

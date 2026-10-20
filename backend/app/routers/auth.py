@@ -6,20 +6,25 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import SessionLocal, get_db
-from app.deps import get_current_user
-from app.errors import Unauthenticated
+from app.deps import get_current_user, get_email_sender
+from app.errors import NotFound, Unauthenticated
+from app.gateways.email import EmailSender
 from app.models import User
-from app.rate_limit import account_rate_limit, registration_limit
+from app.rate_limit import account_rate_limit, registration_limit, user_rate_limit
 from app.schemas.auth import (
     AccessTokenResponse,
+    ChangeEmailRequest,
     LoginRequest,
     RegisterRequest,
     RegisterVendorRequest,
+    TestingVerifyEmailRequest,
     UserResponse,
+    VerificationSentResponse,
+    VerifyEmailRequest,
 )
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.shop import VendorRegistrationResponse
-from app.services import auth_service, shop_service
+from app.services import auth_service, shop_service, verification_service
 
 router = APIRouter(tags=["auth"], responses=ERROR_RESPONSES)
 
@@ -81,10 +86,19 @@ def _account_from_request(request: Request) -> str:
     response_model=UserResponse,
     dependencies=[Depends(registration_limit(_account_from_request))],
 )
-def register(body: RegisterRequest, session: Session = Depends(get_db)) -> User:
-    return auth_service.register_customer(
+def register(
+    body: RegisterRequest,
+    session: Session = Depends(get_db),
+    sender: EmailSender = Depends(get_email_sender),
+) -> User:
+    user = auth_service.register_customer(
         session, email=str(body.email), password=body.password, full_name=body.full_name
     )
+    # The account exists whether or not the message about it can be
+    # sent, so the message is sent after the account is made and its
+    # failure does not undo the account.
+    verification_service.send_verification(session, sender, get_settings(), user=user)
+    return user
 
 
 @router.post(
@@ -94,7 +108,9 @@ def register(body: RegisterRequest, session: Session = Depends(get_db)) -> User:
     dependencies=[Depends(registration_limit(_account_from_request))],
 )
 def register_vendor(
-    body: RegisterVendorRequest, session: Session = Depends(get_db)
+    body: RegisterVendorRequest,
+    session: Session = Depends(get_db),
+    sender: EmailSender = Depends(get_email_sender),
 ) -> VendorRegistrationResponse:
     user, shop = auth_service.register_vendor(
         session,
@@ -107,10 +123,77 @@ def register_vendor(
         latitude=body.latitude,
         longitude=body.longitude,
     )
+    verification_service.send_verification(session, sender, get_settings(), user=user)
     return VendorRegistrationResponse(
         user=UserResponse.model_validate(user),
         shop=shop_service.vendor_shop_response(session, shop),
     )
+
+
+@router.post("/testing/verify-email")
+def testing_verify_email(
+    body: TestingVerifyEmailRequest,
+    session: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Mark an address as proved, for a test that cannot read a mail box.
+
+    The route is off unless a deployment turns it on, and it is bound to
+    an address rather than to a token, because the whole point is that
+    the test has no mail box to read the token out of.
+    """
+    settings = get_settings()
+    if not settings.testing_endpoints_enabled or settings.env == "production":
+        raise NotFound("Not found")
+    user = session.scalar(select(User).where(User.email == str(body.email)))
+    if user is None:
+        raise NotFound("Account not found")
+    user.email_verified = True
+    session.commit()
+    return {"status": "verified", "email": user.email}
+
+
+@router.post("/auth/verify-email", response_model=UserResponse)
+def verify_email(
+    body: VerifyEmailRequest,
+    session: Session = Depends(get_db),
+) -> User:
+    """Prove the address from the link that was sent to it."""
+    user = verification_service.verify(session, token=body.token)
+    return user
+
+
+@router.post(
+    "/auth/resend-verification",
+    response_model=VerificationSentResponse,
+    dependencies=[Depends(user_rate_limit(3, 3600, "resend-verification"))],
+)
+def resend_verification(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_db),
+    sender: EmailSender = Depends(get_email_sender),
+) -> VerificationSentResponse:
+    """Send the link again, to the address the account holds."""
+    issued = verification_service.send_verification(session, sender, get_settings(), user=user)
+    return VerificationSentResponse(email=user.email, expires_at=issued.expires_at)
+
+
+@router.post("/auth/change-email", response_model=UserResponse)
+def change_email(
+    body: ChangeEmailRequest,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_db),
+    sender: EmailSender = Depends(get_email_sender),
+) -> User:
+    """Put a different address on the account and start proving it.
+
+    This is the way out of a mistyped address. The new address has to
+    be proved as well, because the old one was never proved.
+    """
+    verification_service.change_email(
+        session, user=user, email=str(body.email), password=body.password
+    )
+    verification_service.send_verification(session, sender, get_settings(), user=user)
+    return user
 
 
 @router.post(

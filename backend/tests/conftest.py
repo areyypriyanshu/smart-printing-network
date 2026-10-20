@@ -5,6 +5,7 @@ from alembic import command
 from alembic.config import Config
 from app.config import get_settings
 from app.db import get_db
+from app.gateways.email import MemoryEmailSender
 from app.gateways.storage import MemoryStorage
 from app.main import create_app
 from fastapi.testclient import TestClient
@@ -117,6 +118,7 @@ def db_session(engine: Engine) -> Iterator[Session]:
 def client(db_session: Session) -> Iterator[TestClient]:
     app = create_app()
     app.state.storage = MemoryStorage()
+    app.state.email_sender = MemoryEmailSender()
     app.dependency_overrides[get_db] = lambda: db_session
     with TestClient(app) as test_client:
         yield test_client
@@ -135,6 +137,7 @@ def client_that_reports_failures(db_session: Session) -> Iterator[TestClient]:
     """
     app = create_app()
     app.state.storage = MemoryStorage()
+    app.state.email_sender = MemoryEmailSender()
     app.dependency_overrides[get_db] = lambda: db_session
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
@@ -151,6 +154,7 @@ def https_client(db_session: Session) -> Iterator[TestClient]:
     """
     app = create_app()
     app.state.storage = MemoryStorage()
+    app.state.email_sender = MemoryEmailSender()
     app.dependency_overrides[get_db] = lambda: db_session
     with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client

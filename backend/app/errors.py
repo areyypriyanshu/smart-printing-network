@@ -58,6 +58,41 @@ class EmailTaken(AppError):
     status_code = 409
 
 
+class EmailNotVerified(AppError):
+    """The address has not been proved yet.
+
+    The customer is signed in and the account works. This one thing
+    needs the address to be real, because the address is what the
+    printout and the pickup code are tied to.
+    """
+
+    code = "EMAIL_NOT_VERIFIED"
+    status_code = 403
+
+
+class InvalidVerificationToken(AppError):
+    """The link is not one this server sent, or it is too old to use.
+
+    The answer does not say which of the three it was, so that a link
+    cannot be probed to find out whether it was ever valid.
+    """
+
+    code = "INVALID_VERIFICATION_TOKEN"
+    status_code = 400
+
+
+class PasswordMismatch(AppError):
+    """The password that was given is not the one on the account.
+
+    It is a 422 and not a 401 on purpose. The session is perfectly
+    good; it is one field of the request that is wrong, and a 401
+    would log the customer out for it.
+    """
+
+    code = "PASSWORD_MISMATCH"
+    status_code = 422
+
+
 class RateLimited(AppError):
     code = "RATE_LIMITED"
     status_code = 429

@@ -2,10 +2,11 @@ from app.models.admin import AdminAction
 from app.models.order import Order, OrderEvent, Payment, WebhookEvent
 from app.models.shop import Shop, ShopRate
 from app.models.upload import Upload
-from app.models.user import RefreshToken, User
+from app.models.user import EmailVerificationToken, RefreshToken, User
 
 __all__ = [
     "AdminAction",
+    "EmailVerificationToken",
     "Order",
     "OrderEvent",
     "Payment",

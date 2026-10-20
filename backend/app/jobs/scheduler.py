@@ -30,6 +30,7 @@ from app.jobs import (
     expire_no_shows,
     expire_orders,
     process_refunds,
+    purge_expired_verifications,
     purge_files,
 )
 from app.logging import setup_logging
@@ -82,6 +83,10 @@ def run_once(
         (
             "purge_files",
             lambda session: purge_files.run(session, storage=storage, now=current),
+        ),
+        (
+            "purge_expired_verifications",
+            lambda session: purge_expired_verifications.run(session, now=current),
         ),
     ]
 

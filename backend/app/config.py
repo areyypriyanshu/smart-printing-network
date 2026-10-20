@@ -78,6 +78,28 @@ class Settings(BaseSettings):
 
     google_maps_api_key: str = ""
 
+    # Email. The console sender writes the message to the log, which is
+    # what a local development machine uses and what a deployment must
+    # not use: a verification message carries a link that proves an
+    # address, and that link is a secret.
+    email_provider: str = "console"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@spn.local"
+    # Whether the SMTP connection is encrypted from the first byte, which
+    # is the usual arrangement on port 465. The usual arrangement on port
+    # 587 is to start in the clear and upgrade with STARTTLS, and that
+    # is what happens when this is off.
+    smtp_use_tls: bool = False
+    # Where the link in a verification message points. It is the address
+    # a person opens in a browser, so it is the front end and not the
+    # API.
+    app_base_url: str = "http://localhost:5173"
+    # How long a verification link is good for.
+    email_verification_ttl_minutes: int = 1440
+
     @model_validator(mode="after")
     def _validate_environment(self) -> Self:
         if self.env not in {"local", "test", "production"}:
@@ -103,6 +125,14 @@ class Settings(BaseSettings):
                 "The webhook route is public, so the key that signs its "
                 "deliveries has to be one the operator chose. Set it in .env, "
                 "or run `make up`, which generates one."
+            )
+        if self.email_provider == "smtp" and not self.smtp_host:
+            raise ValueError("SMTP_HOST is required when EMAIL_PROVIDER=smtp")
+        if self.env == "production" and self.email_provider == "console":
+            raise ValueError(
+                "EMAIL_PROVIDER=console is not allowed when ENV=production. "
+                "It writes the verification link to the log, and that link is "
+                "a secret. Use SMTP."
             )
         return self
 
