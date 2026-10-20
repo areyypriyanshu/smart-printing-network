@@ -69,12 +69,28 @@ def create_upload(
 
         if info.converted:
             page_count, printable = _convert(temp_file.name, kind)
+            if page_count > settings.max_pages:
+                # The page limit is the platform's limit on what will be
+                # printed. A converted document is printed as a PDF, so the
+                # same limit applies to it as to a PDF that was uploaded
+                # directly.
+                Path(printable).unlink(missing_ok=True)
+                raise PdfTooManyPages(
+                    f"The converted document has more than {settings.max_pages} pages"
+                )
         else:
             page_count = _inspect_pdf(temp_file.name, settings.max_pages)
             printable = Path(temp_file.name)
 
         file_key = f"uploads/{uuid.uuid4().hex}.pdf"
-        storage.put_file(file_key, printable)
+        try:
+            storage.put_file(file_key, printable)
+        finally:
+            if info.converted:
+                # The converted PDF is scratch space, not the stored object.
+                # It is removed as soon as the object has been written, so a
+                # conversion never leaves a file behind on the container.
+                Path(printable).unlink(missing_ok=True)
 
     upload = Upload(
         customer_id=customer_id,
@@ -104,6 +120,10 @@ def _convert(source_path: str, kind: str) -> tuple[int, Path]:
             f"We could not read that {kind.upper()} file. Open it in Word, "
             "Excel or Google Docs and download it as a PDF, then upload that."
         ) from exc
+    except BaseException:
+        # An unexpected failure must not leave the scratch file behind either.
+        target_path.unlink(missing_ok=True)
+        raise
     return page_count, target_path
 
 

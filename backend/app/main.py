@@ -1,9 +1,12 @@
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import get_settings
 from app.errors import AppError, exception_handler, http_exception_handler
@@ -24,6 +27,54 @@ from app.routers import (
 )
 
 API_PREFIX = "/api/v1"
+#: How much room the multipart envelope gets on top of the file itself.
+ENVELOPE_BYTES = 1024 * 1024
+
+
+class BodyLimitMiddleware:
+    """Cap the request body before the multipart parser can spool it to disk.
+
+    FastAPI parses a form body before it runs the route's dependencies, so an
+    unauthenticated caller can put an unbounded body on the container's
+    filesystem. The limit has to be applied to the stream, not to the parsed
+    form.
+    """
+
+    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = Headers(scope=scope)
+        declared = headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > self.max_bytes:
+            response = JSONResponse(
+                status_code=413,
+                content={
+                    "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "The file is larger than the limit",
+                        "details": {},
+                    }
+                },
+            )
+            await response(scope, receive, send)
+            return
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    raise HTTPException(status_code=413, detail="The file is larger than the limit")
+            return message
+
+        await self.app(scope, limited_receive, send)
 
 
 def create_app() -> FastAPI:
@@ -38,6 +89,10 @@ def create_app() -> FastAPI:
         bucket=settings.s3_bucket,
         access_key=settings.s3_access_key,
         secret_key=settings.s3_secret_key,
+    )
+    app.add_middleware(
+        BodyLimitMiddleware,
+        max_bytes=settings.max_upload_mb * 1024 * 1024 + ENVELOPE_BYTES,
     )
     app.add_middleware(RequestIdMiddleware)
     app.add_exception_handler(AppError, exception_handler)

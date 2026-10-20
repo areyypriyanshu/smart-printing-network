@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.pricing import quote_paise
-from app.errors import NotFound, RateNotSet, ShopUnavailable
+from app.errors import FileUnavailable, NotFound, RateNotSet, ShopUnavailable
 from app.models import Shop, ShopRate
 from app.schemas.quote import QuoteRequest, QuoteResponse
 from app.services.upload_service import get_upload
@@ -17,6 +17,14 @@ def quote(
     request: QuoteRequest,
 ) -> QuoteResponse:
     upload = get_upload(session, upload_id=request.upload_id, customer_id=customer_id)
+    if upload.file_deleted_at is not None:
+        # The object is gone from storage, so there is nothing to print.
+        # Refuse here, before a price is shown, rather than after the
+        # customer has committed money to a job that cannot be done.
+        raise FileUnavailable(
+            "This file is no longer stored, so it cannot be printed. "
+            "Upload it once more and we will print it again."
+        )
     shop = session.get(Shop, request.shop_id)
     if shop is None:
         raise NotFound("Shop not found")

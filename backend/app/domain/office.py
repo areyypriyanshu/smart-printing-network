@@ -30,6 +30,10 @@ PRESENTATION_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 #: How much a single archive may expand to. A small upload can be a zip
 #: bomb, and printing one would fill the disk.
 MAX_EXPANDED_BYTES = 200 * 1024 * 1024
+#: How much one archive member may expand to. A member is bounded on its own
+#: as well as by the document budget, so one picture cannot take the whole
+#: allowance.
+MAX_MEMBER_BYTES = 32 * 1024 * 1024
 #: How many pictures one document may hold.
 MAX_IMAGES = 200
 #: How many rows one sheet may hold.
@@ -38,6 +42,31 @@ MAX_ROWS = 2000
 MAX_COLUMNS = 60
 #: How many characters one cell may hold.
 MAX_CELL_LENGTH = 500
+
+
+class _Budget:
+    """What one document may still expand to.
+
+    The limit is a property of the document, not of the member: a document
+    made of many small members can expand just as far as one made of a
+    single large member, so the bytes are counted across the whole read.
+    """
+
+    def __init__(self, total: int = MAX_EXPANDED_BYTES) -> None:
+        self.remaining = total
+        self.images_left = MAX_IMAGES
+
+    def take(self, size: int) -> None:
+        """Charge the budget, and refuse the document when it is spent."""
+        self.remaining -= size
+        if self.remaining < 0:
+            raise OfficeReadError("The archive is too large once expanded")
+
+    def take_image(self) -> None:
+        """Charge one picture, and refuse the document when there are too many."""
+        self.images_left -= 1
+        if self.images_left < 0:
+            raise OfficeReadError("The document has too many pictures")
 
 
 class OfficeReadError(ValueError):
@@ -78,13 +107,14 @@ Block = TextBlock | ImageBlock | TableBlock | PageBreak
 
 def extract_docx(data: bytes) -> list[Block]:
     """Read a Word document: its paragraphs, its headings and its pictures."""
+    budget = _Budget()
     with _open(data) as archive:
-        document = _read_xml(archive, "word/document.xml")
-        relations = _read_relations(archive, "word/_rels/document.xml.rels", "word/")
+        document = _read_xml(archive, "word/document.xml", budget)
+        relations = _read_relations(archive, "word/_rels/document.xml.rels", "word/", budget)
 
         blocks: list[Block] = []
         for paragraph in document.iter(f"{{{WORD_NS}}}p"):
-            blocks.extend(_docx_paragraph(paragraph, relations, archive))
+            blocks.extend(_docx_paragraph(paragraph, relations, archive, budget))
     return blocks
 
 
@@ -92,6 +122,7 @@ def _docx_paragraph(
     paragraph: ElementTree.Element,
     relations: dict[str, str],
     archive: zipfile.ZipFile,
+    budget: _Budget,
 ) -> list[Block]:
     style = paragraph.find(f"{{{WORD_NS}}}pPr/{{{WORD_NS}}}pStyle")
     heading = 0
@@ -113,7 +144,7 @@ def _docx_paragraph(
     if text:
         blocks.append(TextBlock(text=text, heading=heading, bold=bold))
     for blip in paragraph.iter(f"{{{DRAWING_NS}}}blip"):
-        image = _image_for(blip, relations, archive)
+        image = _image_for(blip, relations, archive, budget)
         if image is not None:
             blocks.append(image)
     return blocks
@@ -121,10 +152,11 @@ def _docx_paragraph(
 
 def extract_xlsx(data: bytes) -> list[Block]:
     """Read a spreadsheet: one table per sheet, in the order of the tabs."""
+    budget = _Budget()
     with _open(data) as archive:
-        workbook = _read_xml(archive, "xl/workbook.xml")
-        relations = _read_relations(archive, "xl/_rels/workbook.xml.rels", "xl/")
-        shared = _shared_strings(archive)
+        workbook = _read_xml(archive, "xl/workbook.xml", budget)
+        relations = _read_relations(archive, "xl/_rels/workbook.xml.rels", "xl/", budget)
+        shared = _shared_strings(archive, budget)
 
     blocks: list[Block] = []
     sheets = workbook.find(f"{{{SHEET_NS}}}sheets")
@@ -136,7 +168,7 @@ def extract_xlsx(data: bytes) -> list[Block]:
             continue
         name = sheet.get("name") or "Sheet"
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            sheet_xml = _read_xml(archive, target)
+            sheet_xml = _read_xml(archive, target, budget)
         rows = _sheet_rows(sheet_xml, shared)
         if not rows:
             continue
@@ -147,9 +179,10 @@ def extract_xlsx(data: bytes) -> list[Block]:
 
 def extract_pptx(data: bytes) -> list[Block]:
     """Read a presentation: one page per slide."""
+    budget = _Budget()
     with _open(data) as archive:
-        presentation = _read_xml(archive, "ppt/presentation.xml")
-        relations = _read_relations(archive, "ppt/_rels/presentation.xml.rels", "ppt/")
+        presentation = _read_xml(archive, "ppt/presentation.xml", budget)
+        relations = _read_relations(archive, "ppt/_rels/presentation.xml.rels", "ppt/", budget)
         slide_ids = [
             node.get(f"{{{REL_NS}}}id") or ""
             for node in presentation.iter(f"{{{PRESENTATION_NS}}}sldId")
@@ -159,11 +192,11 @@ def extract_pptx(data: bytes) -> list[Block]:
     blocks: list[Block] = []
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         for index, slide in enumerate(slides):
-            slide_xml = _read_xml(archive, slide)
-            slide_relations = _read_relations(archive, _rels_path(slide), _folder(slide))
+            slide_xml = _read_xml(archive, slide, budget)
+            slide_relations = _read_relations(archive, _rels_path(slide), _folder(slide), budget)
             if index > 0:
                 blocks.append(PageBreak())
-            blocks.extend(_pptx_slide(slide_xml, slide_relations, archive))
+            blocks.extend(_pptx_slide(slide_xml, slide_relations, archive, budget))
     return blocks
 
 
@@ -171,6 +204,7 @@ def _pptx_slide(
     slide: ElementTree.Element,
     relations: dict[str, str],
     archive: zipfile.ZipFile,
+    budget: _Budget,
 ) -> list[Block]:
     blocks: list[Block] = []
     for shape in slide.iter(f"{{{PRESENTATION_NS}}}sp"):
@@ -181,20 +215,24 @@ def _pptx_slide(
         if text:
             blocks.append(TextBlock(text=text))
     for blip in slide.iter(f"{{{DRAWING_NS}}}blip"):
-        image = _image_for(blip, relations, archive)
+        image = _image_for(blip, relations, archive, budget)
         if image is not None:
             blocks.append(image)
     return blocks
 
 
-def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
+def _shared_strings(archive: zipfile.ZipFile, budget: _Budget) -> list[str]:
     if "xl/sharedStrings.xml" not in archive.namelist():
         return []
-    root = _read_xml(archive, "xl/sharedStrings.xml")
+    root = _read_xml(archive, "xl/sharedStrings.xml", budget)
     strings: list[str] = []
     for item in root.findall(f"{{{SHEET_NS}}}si"):
         parts = [node.text or "" for node in item.iter(f"{{{SHEET_NS}}}t")]
-        strings.append("".join(parts))
+        text = "".join(parts)
+        # The shared string table is held in memory all at once, so it is
+        # charged against the document budget like any other expansion.
+        budget.take(len(text.encode("utf-8")))
+        strings.append(text)
     return strings
 
 
@@ -238,6 +276,7 @@ def _image_for(
     blip: ElementTree.Element,
     relations: dict[str, str],
     archive: zipfile.ZipFile,
+    budget: _Budget,
 ) -> ImageBlock | None:
     relation_id = blip.get(f"{{{REL_NS}}}embed")
     if relation_id is None:
@@ -245,11 +284,18 @@ def _image_for(
     target = relations.get(relation_id)
     if target is None or target not in archive.namelist():
         return None
+    # Every picture that is read is a copy that is held in memory, so every
+    # one of them is counted and charged, whether or not the same member has
+    # been read before.
+    budget.take_image()
     try:
         with archive.open(target) as handle:
-            data = handle.read(MAX_EXPANDED_BYTES)
+            data = handle.read(min(MAX_MEMBER_BYTES, max(budget.remaining, 0)) + 1)
     except (KeyError, RuntimeError, zipfile.BadZipFile):
         return None
+    if len(data) > MAX_MEMBER_BYTES:
+        raise OfficeReadError("The archive is too large once expanded")
+    budget.take(len(data))
     return ImageBlock(data=data, name=target.rpartition("/")[2])
 
 
@@ -261,7 +307,7 @@ def _open(data: bytes) -> zipfile.ZipFile:
         raise OfficeReadError("The archive could not be opened") from exc
 
 
-def _read_xml(archive: zipfile.ZipFile, name: str) -> ElementTree.Element:
+def _read_xml(archive: zipfile.ZipFile, name: str, budget: _Budget) -> ElementTree.Element:
     try:
         with archive.open(name) as handle:
             data = handle.read(MAX_EXPANDED_BYTES + 1)
@@ -271,18 +317,21 @@ def _read_xml(archive: zipfile.ZipFile, name: str) -> ElementTree.Element:
         raise OfficeReadError("The archive could not be opened") from exc
     if len(data) > MAX_EXPANDED_BYTES:
         raise OfficeReadError("The archive is too large once expanded")
+    budget.take(len(data))
     try:
         return ElementTree.fromstring(data)
     except ElementTree.ParseError as exc:
         raise OfficeReadError("The document could not be read") from exc
 
 
-def _read_relations(archive: zipfile.ZipFile, path: str, folder: str) -> dict[str, str]:
+def _read_relations(
+    archive: zipfile.ZipFile, path: str, folder: str, budget: _Budget
+) -> dict[str, str]:
     """Map a relationship id to the name of the file it points at."""
     if path not in archive.namelist():
         return {}
     try:
-        root = _read_xml(archive, path)
+        root = _read_xml(archive, path, budget)
     except OfficeReadError:
         # A file with no relationships has nothing in it, which is not an
         # error: the document simply has no pictures.

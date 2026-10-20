@@ -76,6 +76,13 @@ def create_order(
         raise CashPaymentDisabled("Paying at the shop is not available right now")
 
     upload = get_upload(session, upload_id=request.upload_id, customer_id=customer_id)
+    if upload.file_deleted_at is not None:
+        # The file is gone from storage, so there is nothing to print and
+        # nothing to take money for.
+        raise FileUnavailable(
+            "This file is no longer stored, so it cannot be printed. "
+            "Upload it once more and we will print it again."
+        )
     already_used = session.scalar(select(Order.id).where(Order.upload_id == upload.id))
     if already_used is not None:
         raise UploadAlreadyUsed("This file is already attached to an order")
