@@ -3,3 +3,8 @@ dist
 coverage
 .env
 .env.*
+
+# macOS artefacts. The AppleDouble files are binary, and they are never
+# wanted in an image.
+.DS_Store
+._*

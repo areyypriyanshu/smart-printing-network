@@ -15,3 +15,10 @@ htmlcov/
 
 # Test and tooling artefacts
 openapi.json
+
+# macOS artefacts. The AppleDouble files are binary and end in .py
+# often enough that a tool will try to read one, which fails with a
+# null byte error that looks nothing like the cause.
+.DS_Store
+._*
+.hypothesis/

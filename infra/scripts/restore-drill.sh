@@ -23,8 +23,19 @@ POSTGRES_DB="${POSTGRES_DB:-spn}"
 
 cd "${REPO_ROOT}"
 
+# The compose files, in the order docker compose reads them. One file is
+# the normal case. A deployment that uses an override file, which the
+# home server does, passes both, separated by a colon, which is the
+# separator docker compose itself uses for COMPOSE_FILE.
+compose_files=()
+_file_list=()
+IFS=':' read -ra _file_list <<< "${COMPOSE_FILE}"
+for _file in "${_file_list[@]}"; do
+	compose_files+=(-f "${REPO_ROOT}/${_file}")
+done
+
 db() {
-	docker compose -f "${REPO_ROOT}/${COMPOSE_FILE}" exec -T db "$@"
+	docker compose "${compose_files[@]}" exec -T db "$@"
 }
 
 # The drill drops the database it restores into, so it must never be able

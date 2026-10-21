@@ -41,6 +41,10 @@ jobs:
         with:
           context: backend
           push: true
+          # Both processors are published, because the free Oracle shape
+          # (VM.Standard.A1.Flex) has an ARM processor and cannot pull an
+          # amd64 only image.
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.IMAGE }}:${{ env.TAG }}
             ${{ env.IMAGE }}:latest
@@ -55,6 +59,7 @@ jobs:
           context: frontend
           file: frontend/Dockerfile.prod
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.WEB_IMAGE }}:${{ env.WEB_TAG }}
             ${{ env.WEB_IMAGE }}:latest
@@ -143,6 +148,16 @@ jobs:
 
           # Migrations first, as a one-off container, so a schema change
           # never happens while the old API is still serving.
+          #
+          # The database is started first, on purpose. "docker compose
+          # run" creates the services it depends on without the network
+          # alias that carries the service name, so a database created
+          # that way is not reachable as "db" and the API cannot find
+          # it. On a first deployment, where the database does not exist
+          # yet, that breaks the deploy. Starting the database the
+          # ordinary way gives it the alias, and it is a no-op on every
+          # deploy after that.
+          docker compose -f docker-compose.prod.yml up -d db
           docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
 
           docker compose -f docker-compose.prod.yml pull

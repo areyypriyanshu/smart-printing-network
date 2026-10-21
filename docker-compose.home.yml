@@ -1,0 +1,154 @@
+# Override for the home server.
+#
+# docker-compose.prod.yml describes a VPS: 12 GB of RAM, a public IPv4
+# address, a spinning-free disk and ports 80 and 443 free for Caddy. This
+# box is 4 GB of RAM on a 1 TB spinning disk, behind a home router with no
+# public address, with a CasaOS panel already holding port 80.
+#
+# This file is the difference between the two, and it is an override so
+# that docker-compose.prod.yml stays the one description of what the
+# services are. Always use both:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.home.yml ...
+#
+# What it changes:
+#
+#   1. Caddy is published on the loopback instead of on the public
+#      interface, on ports 8443 and 8444 instead of 80 and 443, because
+#      CasaOS owns port 80 on this host and two of its apps own 8080 and
+#      8081. Nothing is reachable from the internet directly; the
+#      Cloudflare Tunnel publishes the site.
+#   2. Every service has a memory cap. With 4 GB and CasaOS on the same
+#      box, one runaway container must not be able to starve the others
+#      and get the database killed by the OOM killer.
+#   3. PostgreSQL is tuned for a spinning disk and a small machine:
+#      shared_buffers is 128 MB, random_page_cost is 4.0 because the disk
+#      seeks, and max_connections is 40 because every connection costs
+#      memory here.
+#   4. A Cloudflare Tunnel is added, so the site is public without a
+#      public IP address and without touching the router.
+
+name: ${SPN_COMPOSE_PROJECT:-spn-home}
+
+# The network is pinned so that SPN_TRUSTED_PROXIES is a fixed value
+# rather than whatever Docker hands out on the day. It sits inside
+# 172.16.0.0/12, which is the range the API already trusts for the
+# forwarded headers it gets from Caddy.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.240.0/24
+
+services:
+  caddy:
+    # The loopback only. The tunnel reaches Caddy over the Docker
+    # network by its service name, so nothing needs the host's public
+    # interface, and a machine on the LAN cannot forge the header the
+    # tunnel sets. To reach the origin directly, forward the port over
+    # SSH instead of opening it:
+    #   ssh -L 8443:127.0.0.1:8443 ray@192.168.0.146
+    mem_limit: 128m
+    mem_reservation: 48m
+    cpus: 0.50
+
+  api:
+    # One worker, not four. Each uvicorn worker is a separate process
+    # with its own copy of the application, and on a two core box that
+    # is the difference between answering a request and swapping.
+    environment:
+      WEB_CONCURRENCY: "1"
+      # The production topology pins the application's mode, and the
+      # home stack is that topology. It runs in demo mode until the
+      # operator has Razorpay and SMTP credentials, because production
+      # mode refuses to start without them and a site that does not
+      # start is not a deployment.
+      #
+      # The default is production, so a .env that forgets to choose
+      # gets the stricter mode. Set SPN_HOME_ENV=local in .env, with
+      # PAYMENT_PROVIDER=fake and EMAIL_PROVIDER=console, for the demo
+      # deployment, and switch it to production when the real keys are
+      # in place.
+      ENV: ${SPN_HOME_ENV:-production}
+      # The testing surface, which lets a customer mark their own order
+      # as paid. It is off by default here for the same reason it is off
+      # in the production topology: it is the only route that can mark
+      # an order paid without a provider, and it must not be reachable
+      # by an anonymous caller.
+      #
+      # In demo mode it is safe, because the payment provider is the
+      # fake one and there is no money involved: the route is bound to
+      # the order the caller owns, and the application refuses it
+      # outright when ENV=production. It is what the end to end smoke
+      # test uses to walk the payment step.
+      TESTING_ENDPOINTS_ENABLED: ${SPN_HOME_TESTING_ENDPOINTS:-false}
+    mem_limit: 640m
+    mem_reservation: 256m
+    cpus: 1.00
+
+  worker:
+    environment:
+      ENV: ${SPN_HOME_ENV:-production}
+    mem_limit: 448m
+    mem_reservation: 192m
+    cpus: 0.75
+
+  db:
+    # The database is the one service that cannot be restarted without
+    # losing something, so it gets the largest cap and the smallest
+    # settings that still work.
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c effective_cache_size=768MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=40
+      -c random_page_cost=4.0
+      -c effective_io_concurrency=2
+      -c wal_compression=on
+      -c checkpoint_completion_target=0.9
+      -c log_min_duration_statement=1000
+      -c timezone=UTC
+    mem_limit: 1024m
+    mem_reservation: 384m
+    cpus: 1.00
+
+  minio:
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: 0.50
+
+  tunnel:
+    # The way out to the internet. The tunnel makes an outbound
+    # connection to Cloudflare, so the router needs no port forwarding
+    # and the house needs no public address.
+    #
+    # This is a QUICK tunnel: it needs no domain, no DNS record and no
+    # account, and Cloudflare gives it a hostname at random. That
+    # hostname changes every time the tunnel starts, so the
+    # application has to be told the new one: infra/home/spn-url.sh
+    # does that, and the .env holds the result.
+    #
+    # Nothing of a named tunnel is mounted here, on purpose.
+    # cloudflared looks in its configuration directory for a tunnel
+    # credentials file, and if it finds one it runs THAT tunnel
+    # instead of a quick one, and the hostname it prints is not the
+    # hostname the edge routes. A deployment with its own domain uses
+    # docker-compose.home-tunnel.yml, which mounts the configuration.
+    #
+    # The tunnel reaches Caddy over the Docker network as
+    # https://caddy:443. Caddy issues that certificate from its own
+    # authority (SPN_TLS=internal), so the tunnel is told not to verify
+    # it, and to use SPN_DOMAIN as the server name and the Host header:
+    # Caddy serves the site under that name only, so a handshake for
+    # "caddy" would match no site at all.
+    image: cloudflare/cloudflared:2026.10.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url https://caddy:443 --no-tls-verify --origin-server-name ${SPN_DOMAIN} --http-host-header ${SPN_DOMAIN}
+    depends_on:
+      caddy:
+        condition: service_started
+    mem_limit: 192m
+    mem_reservation: 64m
+    cpus: 0.50

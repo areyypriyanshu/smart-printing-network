@@ -10,8 +10,10 @@
 # browser will warn once until that root certificate is trusted:
 #   docker compose -f docker-compose.prod.yml exec caddy wget -qO- http://localhost:2019/pki/ca/cert.crt
 #
-# For a real deployment set SPN_DOMAIN to the domain and leave SPN_TLS
-# empty so Caddy uses ACME.
+# For a real deployment set SPN_DOMAIN to the domain and SPN_TLS to the
+# ACME account address, which is what ACME_EMAIL is, so Caddy uses ACME.
+# SPN_TLS cannot be empty: the Caddyfile turns it into a "tls" directive,
+# and "tls" with no argument is a Caddyfile parse error.
 
 name: ${SPN_COMPOSE_PROJECT:-spn-prod}
 
@@ -23,11 +25,22 @@ services:
     image: ${SPN_WEB_IMAGE:-ghcr.io/areyypriyanshu/smart-printing-network/web:latest}
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      # The host ports are configurable because this stack is not always
+      # deployed on a VPS with a public address. A deployment behind a
+      # tunnel binds them to the loopback and the tunnel forwards to
+      # them, and a host that already has something on port 80 needs a
+      # different pair. The defaults are the public ones.
+      - "${SPN_HTTP_PORT:-80}:80"
+      - "${SPN_HTTPS_PORT:-443}:443"
     environment:
       SPN_DOMAIN: ${SPN_DOMAIN:-localhost}
       SPN_TLS: ${SPN_TLS:-internal}
+      # The networks whose forwarded headers Caddy believes. Empty on a
+      # VPS, where the browser is the only client. A deployment behind a
+      # tunnel sets it to the tunnel's network, or the API would see the
+      # tunnel's address for every request and the rate limiter would
+      # count every visitor as one client.
+      SPN_TRUSTED_PROXIES: ${SPN_TRUSTED_PROXIES:-}
       # Caddy needs a value for the ACME account address even when it never
       # talks to ACME, which is the case for a local run.
       ACME_EMAIL: ${ACME_EMAIL:-admin@localhost}
@@ -104,8 +117,14 @@ services:
         condition: service_healthy
 
   db:
-    image: postgis/postgis:16-3.6
-    platform: linux/amd64
+    # The image and the platform come from the environment, because the
+    # official PostGIS image is published for amd64 only and the free
+    # Oracle shape (VM.Standard.A1.Flex) has an ARM processor. A
+    # deployment on ARM sets SPN_DB_IMAGE to a multi-arch PostGIS image
+    # and SPN_DB_PLATFORM to linux/arm64. The default is unchanged, so
+    # every other deployment keeps the image it had.
+    image: ${SPN_DB_IMAGE:-postgis/postgis:16-3.6}
+    platform: ${SPN_DB_PLATFORM:-linux/amd64}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-spn}
@@ -120,8 +139,11 @@ services:
       retries: 10
       start_period: 10s
 
-  # Local object storage. In production set S3_ENDPOINT_URL to empty in
-  # .env and point S3_BUCKET at a real private S3 bucket instead.
+  # Local object storage. A deployment that keeps this MinIO leaves
+  # S3_ENDPOINT_URL at http://minio:9000 in .env. A deployment that uses
+  # a real private S3 bucket sets S3_ENDPOINT_URL to that bucket's
+  # endpoint. It must not be empty: boto3 rejects an empty endpoint and
+  # the application then refuses to start.
   minio:
     image: coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
     restart: unless-stopped

@@ -1,4 +1,4 @@
-.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down db-shell db-ui graph graph-check graph-query
+.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query
 
 up:
 	@test -f .env || cp .env.example .env
@@ -63,12 +63,43 @@ smoke:
 # The production stack, which also runs locally. Caddy issues a
 # certificate from its own local authority, so the browser warns once
 # until that certificate is trusted.
+#
+# The migration runs before the new API starts, so a schema change
+# never happens while the old API is still serving. That is the order
+# the runbook and the deploy workflow both use.
+#
+# The database is started first, on purpose. "docker compose run" starts
+# the services it depends on, and it creates them without the network
+# alias that carries the service name, so a database created that way
+# is not reachable as "db" and the API cannot find it. Starting the
+# database the ordinary way gives it that alias, and the migration
+# then finds the database that is already running.
 prod-up:
-	docker compose -f docker-compose.prod.yml up -d --build
+	docker compose -f docker-compose.prod.yml up -d db
 	docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+	docker compose -f docker-compose.prod.yml up -d --build
 
 prod-down:
 	docker compose -f docker-compose.prod.yml down
+
+# The production stack on the home server: the same services, with the
+# override that fits 4 GB of RAM, a spinning disk and a tunnel instead
+# of a public address. The tunnel is a quick one, so it needs no domain
+# and its address changes every time it starts. See docs/DEPLOY_HOME.md.
+prod-home-up:
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml up -d db
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml run --rm api alembic upgrade head
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml up -d --build
+
+# The same stack with a named tunnel, for a deployment that has a domain
+# of its own. The address is then fixed and never changes.
+prod-home-named-up:
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml -f docker-compose.home-tunnel.yml up -d db
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml -f docker-compose.home-tunnel.yml run --rm api alembic upgrade head
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml -f docker-compose.home-tunnel.yml up -d --build
+
+prod-home-down:
+	docker compose -f docker-compose.prod.yml -f docker-compose.home.yml down
 
 check: lint typecheck arch test-unit test-fe
 

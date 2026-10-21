@@ -5,14 +5,36 @@
 # and renews the certificate on its own.
 #
 # SPN_DOMAIN  the domain to serve. Use localhost for a local run.
-# SPN_TLS     leave empty for ACME (a real domain), set to "internal" for
-#             a local run, where Caddy issues from its own authority.
+# SPN_TLS     "internal" for a local run, where Caddy issues from its own
+#             authority. For a real certificate this is the ACME account
+#             address, which is what ACME_EMAIL is. It cannot be left
+#             empty: "tls" with no argument is a Caddyfile parse error.
+# SPN_TRUSTED_PROXIES  the networks whose forwarded headers are believed.
+#             Empty on a VPS, where the browser is the only client. A
+#             deployment behind a tunnel sets it to the tunnel's network.
 
 {
 	# The address Caddy registers the ACME account with. It has to have a
 	# value even when it is never used, because the local run issues its
 	# own certificate and does not talk to ACME at all.
 	email {$ACME_EMAIL:admin@localhost}
+
+	# The proxies whose forwarded headers are believed, and the headers
+	# the real client address is read from.
+	#
+	# On a VPS the browser is the only thing that connects, so the
+	# address that opened the connection is the address to believe, and
+	# this list is empty. Behind a tunnel the thing that connects is
+	# the tunnel, and the real address arrives in a header the tunnel
+	# sets, so the tunnel's network goes here.
+	#
+	# This matters because the API's rate limiter keys on the client
+	# address. Without it, every visitor through a tunnel would count as
+	# one client, and one busy visitor could lock everyone else out.
+	servers {
+		trusted_proxies static {$SPN_TRUSTED_PROXIES:}
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
 {$SPN_DOMAIN} {

@@ -24,6 +24,21 @@ RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 POSTGRES_USER="${POSTGRES_USER:-spn}"
 POSTGRES_DB="${POSTGRES_DB:-spn}"
 
+# The compose files, in the order docker compose reads them. One file is
+# the normal case. A deployment that uses an override file, which the
+# home server does, passes both, separated by a colon, which is the
+# separator docker compose itself uses for COMPOSE_FILE.
+compose() {
+	local args=()
+	local file
+	local list=()
+	IFS=':' read -ra list <<< "${COMPOSE_FILE}"
+	for file in "${list[@]}"; do
+		args+=(-f "${REPO_ROOT}/${file}")
+	done
+	docker compose "${args[@]}" "$@"
+}
+
 mkdir -p "${BACKUP_DIR}"
 chmod 700 "${BACKUP_DIR}"
 
@@ -31,7 +46,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DEST="${BACKUP_DIR}/spn-${STAMP}.dump"
 
 echo "backup: dumping ${POSTGRES_DB} to ${DEST}"
-docker compose -f "${REPO_ROOT}/${COMPOSE_FILE}" exec -T db \
+compose exec -T db \
 	pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" --format=custom > "${DEST}"
 chmod 600 "${DEST}"
 

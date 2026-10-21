@@ -1,0 +1,37 @@
+# Override for a deployment with its own domain.
+#
+# The home stack runs a QUICK tunnel, which needs no domain and no DNS
+# record, and gives a hostname at random. This file is the other half:
+# it turns the tunnel into a NAMED one, which has a fixed hostname in a
+# domain that is in the Cloudflare account, and it never changes.
+#
+# Use it with both other files:
+#
+#   docker compose -f docker-compose.prod.yml \
+#                  -f docker-compose.home.yml \
+#                  -f docker-compose.home-tunnel.yml up -d
+#
+# Before the first run, the tunnel and its configuration have to exist:
+#
+#   cloudflared tunnel create spn-home
+#   cloudflared tunnel route dns <tunnel-id> print.yourdomain.com
+#   infra/home/make-tunnel-config.sh <tunnel-id> print.yourdomain.com
+#
+# The last one writes .tunnel/config.yml and .tunnel/creds/, which this
+# file mounts into the container. The credentials are in a subdirectory
+# on purpose: cloudflared looks for a credentials file directly in its
+# configuration directory, and one there would make it run the named
+# tunnel even when a quick one was asked for.
+
+name: ${SPN_COMPOSE_PROJECT:-spn-home}
+
+services:
+  tunnel:
+    # The image runs as nobody by default, and the credentials file is
+    # readable only by the account that created it. Running the
+    # container as the same user that owns the file solves that without
+    # making the file readable by the world.
+    user: "${SPN_TUNNEL_UID:-1000}:${SPN_TUNNEL_GID:-1000}"
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./.tunnel:/etc/cloudflared:ro

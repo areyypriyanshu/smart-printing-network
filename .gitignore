@@ -2,6 +2,10 @@
 .env
 .env.*
 !.env.example
+# The production template is a deployment artefact, not a secret: it holds
+# placeholders only, and an operator cannot fill in a file they cannot
+# see.
+!.env.prod.example
 
 # Python
 __pycache__/
@@ -31,10 +35,29 @@ playwright-report/
 .idea/
 .vscode/
 
+# AppleDouble files. macOS writes a companion file for anything that
+# carries an extended attribute, and a tar created on a Mac carries one
+# for every file in the archive. They are binary, they end in .py often
+# enough for a tool to try to read them, and they are never wanted.
+._*
+
 # Local data
 pgdata/
 miniodata/
 backups/
+
+# Deployment secrets and machine-specific credentials. Keep the
+# instance environment, tunnel credentials, account certificates and
+# local bot credentials out of Git even if they are created below a
+# subdirectory.
+.tunnel/
+**/credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*.token
+telegram-chat-id
 
 # Generated artefacts
 openapi.json

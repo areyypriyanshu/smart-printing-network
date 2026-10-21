@@ -68,16 +68,66 @@ def test_the_production_stack_needs_a_real_jwt_secret() -> None:
     assert "PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?" in compose
 
 
-def test_the_edge_does_not_trust_the_forwarded_address() -> None:
+def test_the_edge_does_not_trust_the_forwarded_address_by_default() -> None:
     """Caddy sets the forwarded scheme and address itself.
 
-    A global "trusted_proxies" list that includes the private ranges
-    would let a client on the instance's own network choose the address
-    the application sees.
+    A wildcard, or a blanket trust of the private ranges, would let a
+    client on the instance's own network choose the address the
+    application sees, and that is a way around the rate limiter rather
+    than a nuisance.
+
+    A deployment behind a tunnel has to trust exactly one network, the
+    tunnel's. Without that, every visitor through the tunnel would look
+    like one client, and one busy visitor could lock everyone else out.
+    So the list is empty by default and the operator sets it, and it is
+    read from the environment instead of being written into the file:
+    a file that could name a range is a file that could name the wrong
+    range.
     """
     caddyfile = _read("infra/Caddyfile")
+    compose = _read("docker-compose.prod.yml")
 
-    assert "trusted_proxies" not in caddyfile
+    # There is one list, and it reads the environment. The default
+    # inside the braces is empty, which is the default of a VPS where
+    # the browser is the only client.
+    trusted = re.findall(r"trusted_proxies\s+(\S.*)$", caddyfile, re.MULTILINE)
+    assert trusted == ["static {$SPN_TRUSTED_PROXIES:}"], trusted
+
+    # The private ranges are never trusted as a whole.
+    for private in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"):
+        assert private not in caddyfile
+
+    # And the compose file passes an empty list through when the
+    # operator has not chosen one.
+    assert "SPN_TRUSTED_PROXIES: ${SPN_TRUSTED_PROXIES:-}" in compose
+
+
+def test_the_home_stack_trusts_one_network_and_not_the_lan() -> None:
+    """The tunnel's network is trusted, and the LAN is not.
+
+    The home server is on a home network with no address forwarding, so
+    the only way in is the tunnel. The edge is published on the
+    loopback, so a machine on the LAN cannot connect to it and cannot
+    put a forged forwarding header in front of it, and the one network
+    that is trusted is the tunnel's, which is a single /24.
+    """
+    compose = _read("docker-compose.prod.yml")
+    override = _read("docker-compose.home.yml")
+
+    # The host ports come from the environment, so a deployment can
+    # publish the edge somewhere other than the public ones.
+    assert '"${SPN_HTTP_PORT:-80}:80"' in compose
+    assert '"${SPN_HTTPS_PORT:-443}:443"' in compose
+
+    # The one trusted network is a single /24 on the Docker network,
+    # and not the private ranges as a whole.
+    subnets = re.findall(r"subnet:\s*(\S+)", override)
+    assert subnets == ["172.28.240.0/24"], subnets
+
+    # The example leaves the trusted list empty, which is the safe
+    # answer for a deployment that has not thought about it.
+    example = _read(".env.prod.example")
+    assert re.search(r"^SPN_TRUSTED_PROXIES=\s*$", example, re.MULTILINE)
 
 
 def test_the_edge_caps_the_body_it_forwards() -> None:
