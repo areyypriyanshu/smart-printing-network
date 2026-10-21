@@ -5,11 +5,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-import {
-  API_URL,
-  signIn as signInHelper,
-  signInAsCustomer,
-} from "./helpers";
+import { API_URL, signIn as signInHelper, signInAsCustomer } from "./helpers";
 
 // A student uploads the file they actually have.
 //
@@ -36,11 +32,22 @@ async function printedFileLink(
     data: { email: VENDOR_EMAIL },
   });
   const token = (await login.json()).access_token as string;
-  const link = await request.get(
-    `${API_URL}/api/v1/vendor/orders/${orderId}/file`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  return (await link.json()).url as string;
+
+  // The file the shop opens is a PDF, and it is a PDF only after the
+  // worker has converted the document. The worker runs every thirty
+  // seconds, so the link is asked for until it is there rather than
+  // once and hoped for. The route is rate limited, so the attempts are
+  // spaced out and few.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const link = await request.get(
+      `${API_URL}/api/v1/vendor/orders/${orderId}/file`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const body = (await link.json()) as { url?: string };
+    if (typeof body.url === "string") return body.url;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  throw new Error("the printed file never became available to the shop");
 }
 
 test("a Word document is printed like any other file", async ({

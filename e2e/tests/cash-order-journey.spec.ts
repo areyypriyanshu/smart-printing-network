@@ -1,9 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  signIn as signInHelper,
-  signInAsCustomer,
-} from "./helpers";
+import { signIn as signInHelper, signInAsCustomer } from "./helpers";
 
 // The same product, paid in cash.
 //

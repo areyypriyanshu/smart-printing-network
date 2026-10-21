@@ -37,5 +37,7 @@ test("a shop owner has a shop waiting for the team to look at it", async ({
   await expect(page).not.toHaveURL(/\/login$/);
 
   await page.goto("/vendor");
-  await expect(page.getByRole("heading", { name: /queue|orders/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /queue|orders/i }),
+  ).toBeVisible();
 });
