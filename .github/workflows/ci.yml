@@ -232,6 +232,7 @@ jobs:
           #
           # The cursors are the same kind of problem and are handled in
           # schemathesis.toml, one operation at a time.
+          set -o pipefail
           uv run schemathesis --config-file schemathesis.toml run \
             http://127.0.0.1:8000/openapi.json \
             --phases examples,fuzzing \
@@ -239,7 +240,22 @@ jobs:
             --workers 4 \
             --rate-limit 40/m \
             --exclude-path "/api/v1/uploads" \
-            --header "Authorization: Bearer $(cat token.txt)"
+            --header "Authorization: Bearer $(cat token.txt)" 2>&1 | tee fuzz.log
+
+      # The fuzzer's own report is long, and the part that matters is
+      # at the end of it. The lines below are turned into annotations,
+      # so the failure is readable from the pull request without asking
+      # for the whole log.
+      - name: Say what the fuzzer found
+        if: failure()
+        working-directory: backend
+        run: |
+          {
+            echo "::group::the fuzzer's report"
+            tail -n 60 fuzz.log || true
+            echo "::endgroup::"
+            echo "::error title=The fuzzer found something::$(grep -E 'Falsifying example|Error:|assert|Status' fuzz.log | head -n 20 | tr '\n' ' ')"
+          }
 
   e2e:
     # Runs the Playwright journeys and the accessibility checks against the
