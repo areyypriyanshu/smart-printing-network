@@ -11,6 +11,14 @@ BASE: dict[str, object] = {
     "payment_provider": "fake",
     "fake_webhook_secret": "a-key-the-operator-chose",
     "testing_endpoints_enabled": False,
+    # The identity provider. These are here so that a deployment with
+    # Clerk configured cannot change what these tests mean: the values
+    # below win over the environment, and a test that asserts a default
+    # reads the default off the class rather than off the environment.
+    "clerk_enabled": False,
+    "clerk_fapi_url": "",
+    "clerk_allowed_origins": "",
+    "spn_dev_auth": False,
 }
 
 
@@ -115,12 +123,18 @@ def test_clerk_is_off_until_it_is_switched_on() -> None:
     and the switch defaults to off so that a deployment which was never
     configured cannot end up talking to an identity provider it did not
     choose.
-    """
-    settings = _settings()
 
-    assert settings.clerk_enabled is False
-    assert settings.clerk_fapi_url == ""
-    assert settings.clerk_allowed_origins == ""
+    The defaults are read off the class and not off a built Settings,
+    because a built Settings has the environment in it, and a
+    deployment with Clerk configured would otherwise change what this
+    test means.
+    """
+    defaults = Settings.model_fields
+
+    assert defaults["clerk_enabled"].default is False
+    assert defaults["clerk_fapi_url"].default == ""
+    assert defaults["clerk_allowed_origins"].default == ""
+    assert defaults["spn_dev_auth"].default is False
 
 
 def test_clerk_needs_an_instance_when_it_is_switched_on() -> None:
