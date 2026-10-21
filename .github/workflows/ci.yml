@@ -252,9 +252,10 @@ jobs:
         run: |
           {
             echo "::group::the fuzzer's report"
-            tail -n 60 fuzz.log || true
+            tail -n 80 fuzz.log || true
             echo "::endgroup::"
-            echo "::error title=The fuzzer found something::$(grep -E 'Falsifying example|Error:|assert|Status' fuzz.log | head -n 20 | tr '\n' ' ')"
+            echo "::error title=The fuzzer's report::$(tail -n 40 fuzz.log | tr '\n' ' ' | cut -c1-1500)"
+            echo "::error title=the fuzzer's exit::the run ended with $(tail -n 3 fuzz.log | tr '\n' ' ')"
           }
 
   e2e:
