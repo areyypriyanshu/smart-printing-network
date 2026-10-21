@@ -157,6 +157,64 @@ migration the email gateway is waiting for the notification backlog
 rather than doing anything. It is not deleted, because it is the seam
 the backlog will need.
 
+### The address is proved by the provider, and the application stops asking
+
+The provider's instance asks for an address to be proved before it lets
+anybody sign in, so a session that exists means the address behind it
+was proved. The application used to keep its own answer to that
+question, in a column, and refuse the upload while it was false, and
+put a banner at the top of every page for a customer whose answer was
+not yet true.
+
+All of that is gone, and the reason is worth writing down: a copy of
+an answer that another server owns can only ever disagree with the
+truth, and it disagrees in the way that costs a customer. A customer
+told to confirm an address they had already confirmed is a customer
+who gives up, and the local copy was false in exactly that case for
+as long as the provider's message was in flight.
+
+So the rule is now: **the provider proves the address, and the
+application does not keep a copy of the answer.** The upload gate and
+the banner are gone with it, and the upload is refused for the
+reasons that are still this application's business: the file, the
+price, the state of the order.
+
+The address itself is still on the account, because the order is tied
+to it and a human has to read it. It is read from the provider's own
+API when the account is made, and not from the browser.
+
+### The one question, and the one place the role is decided
+
+A person who signs in has proved who they are and has not yet said
+what they are here for. Those are two different states, and the
+application has four rather than three: loading, signed out, signed
+in without an account, and signed in with one.
+
+The account is made in exactly one place, the onboarding, where the
+person says whether they are here to print something or to run a shop.
+The role is read from the database and never from the token, because a
+token is something the caller presents and a role is a thing the
+application decides. The role is chosen once and never changes, which
+is the rule that was already in place.
+
+The onboarding reads the address and the name from the provider rather
+than from the body, because the provider proved them and the browser
+did not. The body carries the intent and nothing else.
+
+### The provider's API is behind a bot protection
+
+Clerk's backend API refuses a request with no user agent of its own,
+and the one the Python standard library sends by default is refused.
+The request names the application instead. It is a small thing, and it
+cost an afternoon to find, and it would cost anyone else who reads one
+of the provider's answers the same afternoon.
+
+The provider's public keys are published at a fixed address and its
+script is loaded from its own host, so the content security policy has
+to allow that host. It is read from the environment rather than
+written into the policy, because a policy that allows the wrong host
+is a policy that does not mean anything.
+
 ### The free tier, and what it costs
 
 The facts below were checked against Clerk's own documentation and
@@ -255,10 +313,21 @@ webhook keeps in step.
    identity table and the OAuth gateway have already gone: they were
    removed with [ADR 027](027-sign-in-with-google-without-a-new-dependency.md),
    because Clerk's own social connections replace them.
-- The `JWT_SECRET` setting stays until the local access token machinery
-   is removed. It used to sign the OAuth state cookie as well, and that
-   reason no longer applies, but the access token is still signed with
-   it.
+- **The `JWT_SECRET` setting is gone, and the local access token
+  machinery with it.** The setting is not kept for the sake of a
+  rollback, because a rollback to the previous image is a redeploy and
+  the previous image brings its own settings with it. The password
+  column stays, nullable, and is dropped in the contraction, because
+  the deployment runs the migrations before the new image starts and a
+  migration that removed a column the previous image still reads would
+  break that rollback.
+- **The local way in is a route, not a flag in the product.** The end
+  to end suite has to run offline and the same way every time, so it
+  signs in through a route that mints a session without the provider,
+  through the same interface the real verifier is read through. The
+  setting that turns it on is refused in production, and the
+  application refuses to start without the provider's settings, so a
+  deployment cannot run with the front door open.
 - The authorization matrix, the ownership filters, the 404 on cross
    tenant access, the money rules and the file privacy rules are
    untouched. The tests for them are the tests for this change.
@@ -289,6 +358,43 @@ webhook keeps in step.
   minimum of 15 characters, and a check against a list of breached
   passwords at sign-in, which is a call to a third party and a
   network dependency the test suite has to know about.
+
+## The smoke test, walked by hand on 2026-10-21
+
+The test suite never reaches the provider, so the cutover was proved
+against the real one by hand, in a browser, on the development
+instance.
+
+What was walked, and what was seen:
+
+1. The landing page loads.
+2. The sign in page shows the provider's own card, with the Google
+   connection offered, and the "Secured by Clerk" branding that the
+   free tier costs.
+3. The address, then the password, then the code. The code is asked for
+   because the provider does not know that device, and `424242` proves
+   an address whose name ends in `+clerk_test`.
+4. The application calls `GET /me` and is answered `403` with
+   `ACCOUNT_NOT_PROVISIONED`, which is the state between signing in and
+   choosing.
+5. The onboarding page asks the one question, and answering it creates
+   the account: `spn-check+clerk_test@example.com`, role `customer`,
+   the provider's identifier `user_3L0f8DSMjlcFb2PGS4Jhc1taqYQ`, and
+   the name the provider holds.
+6. The application then answers `/me` with `200`, and the header shows
+   the address and a sign out.
+
+Two things were found by walking it that no test would have found.
+
+The provider's API refuses a request with no user agent of its own,
+and the one the standard library sends by default is refused. The
+request names the application now.
+
+The application decided that a person was signed out before the
+provider had finished loading, because "not signed in" and "not looked
+yet" are two different answers and the application believed the first
+one too early. A person who had just signed in was sent back to the
+sign in page. The session now waits for the provider.
 
 ## Revisit if
 

@@ -223,9 +223,12 @@ pickup code are tied to the address. A customer who typed the address
 wrong can put the right one there, which is the only way out of a
 mistyped address. The claim is still a claim and the rule is still the
 rule; after the migration Clerk sends the link and proves the address,
-and this application keeps a copy of the answer and still refuses the
-upload.
-[ADR 026](adr/026-the-email-address-has-to-be-proved.md)
+and **this application keeps no copy of the answer and asks nothing**.
+The provider does not let anybody sign in until the address is proved,
+so a copy here could only ever disagree with the truth, and it
+disagreed in the way that costs a customer.
+[ADR 026](adr/026-the-email-address-has-to-be-proved.md),
+[ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
 
 **A provider never takes over an account here.** The rule outlived the
 hand written OAuth client that first carried it, and it outlives that
