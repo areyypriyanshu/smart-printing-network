@@ -49,7 +49,10 @@ export function OnboardingPage() {
           ? {
               shop_name: values.shop_name,
               shop_address: values.shop_address,
-              phone: values.phone === undefined || values.phone === "" ? null : values.phone,
+              phone:
+                values.phone === undefined || values.phone === ""
+                  ? null
+                  : values.phone,
               latitude: Number(values.latitude),
               longitude: Number(values.longitude),
             }
@@ -67,11 +70,12 @@ export function OnboardingPage() {
       title="What are you here for?"
       subtitle="This decides what the account can do, and it does not change later."
     >
-      <form className="flex flex-col gap-5" onSubmit={(event) => void onSubmit(event)}>
+      <form
+        className="flex flex-col gap-5"
+        onSubmit={(event) => void onSubmit(event)}
+      >
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm font-medium text-ink">
-            I am here to
-          </legend>
+          <legend className="text-sm font-medium text-ink">I am here to</legend>
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="radio"

@@ -44,7 +44,10 @@ export function DevSignInForm() {
   });
 
   return (
-    <form className="flex flex-col gap-4" onSubmit={(event) => void onSubmit(event)}>
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => void onSubmit(event)}
+    >
       <TextField
         label="Email"
         type="email"

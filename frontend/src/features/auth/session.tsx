@@ -8,7 +8,12 @@ import {
   type ReactNode,
 } from "react";
 
-import { ApiError, apiRequest, setTokenSource, type User } from "../../api/client";
+import {
+  ApiError,
+  apiRequest,
+  setTokenSource,
+  type User,
+} from "../../api/client";
 
 /**
  * What the application knows about the person using it.

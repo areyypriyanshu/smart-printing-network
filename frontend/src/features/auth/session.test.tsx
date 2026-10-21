@@ -39,7 +39,9 @@ describe("the session", () => {
 
     renderWithProviders(<Probe />);
 
-    expect(await screen.findByText("status: authenticated")).toBeInTheDocument();
+    expect(
+      await screen.findByText("status: authenticated"),
+    ).toBeInTheDocument();
     expect(screen.getByText("email: customer@example.com")).toBeInTheDocument();
   });
 
@@ -56,7 +58,9 @@ describe("the session", () => {
 
     renderWithProviders(<Probe />);
 
-    expect(await screen.findByText("status: needs-onboarding")).toBeInTheDocument();
+    expect(
+      await screen.findByText("status: needs-onboarding"),
+    ).toBeInTheDocument();
   });
 
   it("is anonymous when the token is refused", async () => {

@@ -23,8 +23,13 @@
         padding: 2rem 1rem 4rem;
         background: var(--page);
         color: var(--ink);
-        font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-          Roboto, sans-serif;
+        font:
+          16px/1.55 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
       }
       main {
         max-width: 46rem;
@@ -173,8 +178,8 @@
 
         <h2 style="margin-top: 1.5rem">Session token</h2>
         <p class="hint">
-          This is the token the application will receive. It lives about
-          sixty seconds.
+          This is the token the application will receive. It lives about sixty
+          seconds.
         </p>
         <pre id="token">…</pre>
         <p>
@@ -183,7 +188,8 @@
         </p>
 
         <h2 style="margin-top: 1.5rem">Check it</h2>
-        <pre id="check-command">cd backend
+        <pre id="check-command">
+cd backend
 set -a &amp;&amp; . ../.env &amp;&amp; set +a
 uv run python scripts/check_clerk.py --token "$CLERK_TOKEN"</pre>
       </div>
@@ -193,24 +199,24 @@ uv run python scripts/check_clerk.py --token "$CLERK_TOKEN"</pre>
       // The publishable key is the Frontend API URL in base64, with a "$"
       // delimiter on the end. The delimiter is not part of the host, and
       // leaving it in makes the host unresolvable.
-      const PUBLISHABLE_KEY = "%VITE_CLERK_PUBLISHABLE_KEY%"
+      const PUBLISHABLE_KEY = "%VITE_CLERK_PUBLISHABLE_KEY%";
 
       function frontendApiUrl(publishableKey) {
-        const raw = publishableKey.replace(/^pk_(test|live)_/, "")
-        const base64 = raw.replace(/-/g, "+").replace(/_/g, "/")
-        const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4)
-        const decoded = atob(padded).replace(/\$$/, "")
-        return "https://" + decoded
+        const raw = publishableKey.replace(/^pk_(test|live)_/, "");
+        const base64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+        const decoded = atob(padded).replace(/\$$/, "");
+        return "https://" + decoded;
       }
 
       function setUp() {
         if (!PUBLISHABLE_KEY || PUBLISHABLE_KEY.startsWith("%")) {
           document.getElementById("loading").textContent =
-            "No publishable key. Set VITE_CLERK_PUBLISHABLE_KEY in the root .env and restart the front end."
-          return null
+            "No publishable key. Set VITE_CLERK_PUBLISHABLE_KEY in the root .env and restart the front end.";
+          return null;
         }
 
-        const fapi = frontendApiUrl(PUBLISHABLE_KEY)
+        const fapi = frontendApiUrl(PUBLISHABLE_KEY);
 
         // The scripts are loaded by hand rather than written into the
         // markup, because their addresses come from the publishable key.
@@ -218,20 +224,19 @@ uv run python scripts/check_clerk.py --token "$CLERK_TOKEN"</pre>
         // order is awaited rather than assumed.
         function loadScript(src, dataset) {
           return new Promise((resolve, reject) => {
-            const script = document.createElement("script")
-            script.crossOrigin = "anonymous"
-            script.type = "text/javascript"
-            script.src = src
+            const script = document.createElement("script");
+            script.crossOrigin = "anonymous";
+            script.type = "text/javascript";
+            script.src = src;
             if (dataset) {
               for (const [name, value] of Object.entries(dataset)) {
-                script.dataset[name] = value
+                script.dataset[name] = value;
               }
             }
-            script.onload = resolve
-            script.onerror = () =>
-              reject(new Error("could not load " + src))
-            document.head.appendChild(script)
-          })
+            script.onload = resolve;
+            script.onerror = () => reject(new Error("could not load " + src));
+            document.head.appendChild(script);
+          });
         }
 
         return loadScript(fapi + "/npm/@clerk/ui@1/dist/ui.browser.js")
@@ -240,82 +245,83 @@ uv run python scripts/check_clerk.py --token "$CLERK_TOKEN"</pre>
               clerkPublishableKey: PUBLISHABLE_KEY,
             }),
           )
-          .then(() => Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } }))
+          .then(() =>
+            Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } }),
+          );
       }
 
       function showSignedIn() {
-        document.getElementById("loading-card").hidden = true
-        document.getElementById("signed-in-card").hidden = false
-        document.getElementById("user-id").textContent = Clerk.user?.id ?? "—"
+        document.getElementById("loading-card").hidden = true;
+        document.getElementById("signed-in-card").hidden = false;
+        document.getElementById("user-id").textContent = Clerk.user?.id ?? "—";
         document.getElementById("session-id").textContent =
-          Clerk.session?.id ?? "—"
-        document.getElementById("origin").textContent = window.location.origin
-        document.getElementById("issuer").textContent = frontendApiUrl(
-          PUBLISHABLE_KEY,
-        )
-        void refreshToken()
+          Clerk.session?.id ?? "—";
+        document.getElementById("origin").textContent = window.location.origin;
+        document.getElementById("issuer").textContent =
+          frontendApiUrl(PUBLISHABLE_KEY);
+        void refreshToken();
       }
 
       function showSignedOut() {
-        document.getElementById("loading-card").hidden = true
-        document.getElementById("signed-out-card").hidden = false
+        document.getElementById("loading-card").hidden = true;
+        document.getElementById("signed-out-card").hidden = false;
         Clerk.mountSignIn(document.getElementById("sign-in"), {
           // Without this, a successful sign in sends the browser to the
           // instance's home page, which is the origin root, and the
           // token this page exists to show never gets shown.
           fallbackRedirectUrl:
             window.location.origin + window.location.pathname,
-        })
+        });
       }
 
       async function refreshToken() {
-        const token = await Clerk.session.getToken()
-        document.getElementById("token").textContent = token ?? "—"
+        const token = await Clerk.session.getToken();
+        document.getElementById("token").textContent = token ?? "—";
         document.getElementById("check-command").textContent =
           "cd backend\n" +
           "set -a && . ../.env && set +a\n" +
           'uv run python scripts/check_clerk.py --token "' +
           (token ?? "PASTE THE TOKEN HERE") +
-          '"'
+          '"';
       }
 
       async function start() {
         try {
-          const loaded = setUp()
-          if (loaded === null) return
-          await loaded
+          const loaded = setUp();
+          if (loaded === null) return;
+          await loaded;
         } catch (error) {
           document.getElementById("loading").textContent =
-            "The identity provider could not be loaded: " + error.message
-          return
+            "The identity provider could not be loaded: " + error.message;
+          return;
         }
 
         if (Clerk.isSignedIn) {
-          showSignedIn()
+          showSignedIn();
         } else {
-          showSignedOut()
+          showSignedOut();
         }
       }
 
       if (document.readyState === "complete") {
-        void start()
+        void start();
       } else {
-        window.addEventListener("load", () => void start())
+        window.addEventListener("load", () => void start());
       }
 
       document.addEventListener("click", function (event) {
         if (event.target.id === "copy-token") {
-          const token = document.getElementById("token").textContent
-          void navigator.clipboard.writeText(token)
-          event.target.textContent = "Copied"
+          const token = document.getElementById("token").textContent;
+          void navigator.clipboard.writeText(token);
+          event.target.textContent = "Copied";
           setTimeout(() => {
-            event.target.textContent = "Copy the token"
-          }, 1500)
+            event.target.textContent = "Copy the token";
+          }, 1500);
         }
         if (event.target.id === "new-token") {
-          void refreshToken()
+          void refreshToken();
         }
-      })
+      });
     </script>
   </body>
 </html>

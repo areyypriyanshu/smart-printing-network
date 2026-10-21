@@ -6,7 +6,4 @@ export { DevSession, useDevAuth } from "./dev-session";
 export { SignInPage } from "./sign-in-page";
 export { SignUpPage } from "./sign-up-page";
 export { OnboardingPage } from "./onboarding-page";
-export {
-  onboardingSchema,
-  type OnboardingValues,
-} from "./onboarding-schemas";
+export { onboardingSchema, type OnboardingValues } from "./onboarding-schemas";

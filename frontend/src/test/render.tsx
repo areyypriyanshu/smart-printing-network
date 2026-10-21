@@ -1,6 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
-import { useCallback, useState, type ReactElement, type ReactNode } from "react";
+import {
+  useCallback,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { MemoryRouter } from "react-router";
 
 import { SessionProvider } from "../features/auth";
@@ -29,7 +34,10 @@ export function TestSession({
   children: ReactNode;
   signedIn?: boolean;
 }) {
-  const getToken = useCallback(async () => (signedIn ? "test-token" : null), [signedIn]);
+  const getToken = useCallback(
+    async () => (signedIn ? "test-token" : null),
+    [signedIn],
+  );
   const signOut = useCallback(async () => {}, []);
   return (
     <SessionProvider
