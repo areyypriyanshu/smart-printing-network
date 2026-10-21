@@ -592,10 +592,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Quality */
+        /**
+         * Get Quality
+         * @description The quality report for one of the customer's own files.
+         *
+         *     Another customer's file is not found, rather than refused, so the
+         *     answer does not tell a stranger that it exists.
+         */
         get: operations["get_quality_api_v1_uploads__upload_id__quality_get"];
         put?: never;
-        /** Trigger Quality */
+        /**
+         * Trigger Quality
+         * @description Ask for the file to be checked.
+         *
+         *     The check itself happens in the worker, so this answers at once. The
+         *     report is one per file, so asking twice does not start a second
+         *     analysis.
+         */
         post: operations["trigger_quality_api_v1_uploads__upload_id__quality_post"];
         delete?: never;
         options?: never;
@@ -612,7 +625,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Acknowledge Quality */
+        /**
+         * Acknowledge Quality
+         * @description Record that the customer has seen the warnings.
+         *
+         *     The acknowledgement is a fact about the customer. It is not a
+         *     permission, and the order can be placed without it.
+         */
         post: operations["acknowledge_quality_api_v1_uploads__upload_id__quality_acknowledge_post"];
         delete?: never;
         options?: never;
