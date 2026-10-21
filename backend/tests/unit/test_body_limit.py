@@ -42,6 +42,22 @@ def test_a_body_over_the_limit_is_refused() -> None:
     assert response.json()["error"]["code"] == "FILE_TOO_LARGE"
 
 
+def test_a_body_over_the_limit_is_refused_in_the_usual_shape() -> None:
+    """The refusal is a failure like every other failure.
+
+    A caller reads a failure the same way whichever limit refused it,
+    so the body has the same fields the other failures have, including
+    the request id.
+    """
+    client = _client(1024)
+
+    response = client.post("/", content=b"x" * 2048)
+
+    body = response.json()["error"]
+    assert set(body) == {"code", "message", "details", "request_id"}
+    assert body["message"]
+
+
 def test_a_body_that_says_it_is_over_the_limit_is_refused() -> None:
     """A declared length is refused before the body is read.
 

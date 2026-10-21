@@ -39,6 +39,7 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     403: _response("This account may not do that."),
     404: _response("Not found, or not yours. The two are deliberately the same."),
     409: _response("The state moved on, for example the price changed."),
+    413: _response("The request body is larger than the limit."),
     422: _response("The request body did not validate."),
     429: _response("Too many requests. The response carries a Retry-After header."),
 }

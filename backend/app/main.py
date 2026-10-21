@@ -9,7 +9,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import get_settings
-from app.errors import AppError, exception_handler, http_exception_handler
+from app.errors import AppError, error_body, exception_handler, http_exception_handler
 from app.gateways.email import build_email_sender
 from app.gateways.identity import (
     ClerkAdminClient,
@@ -60,15 +60,15 @@ class BodyLimitMiddleware:
         headers = Headers(scope=scope)
         declared = headers.get("content-length")
         if declared is not None and declared.isdigit() and int(declared) > self.max_bytes:
+            # The same body every other failure has, with the request
+            # id in it, so a caller that reads a failure the way it
+            # reads every other failure is not surprised by this one.
             response = JSONResponse(
                 status_code=413,
-                content={
-                    "error": {
-                        "code": "FILE_TOO_LARGE",
-                        "message": "The file is larger than the limit",
-                        "details": {},
-                    }
-                },
+                content=error_body(
+                    "FILE_TOO_LARGE",
+                    "The file is larger than the limit",
+                ),
             )
             await response(scope, receive, send)
             return
