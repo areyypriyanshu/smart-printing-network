@@ -1,12 +1,29 @@
-from app.routers import auth, health, orders, quotes, shops, uploads, vendor, webhooks
+from app.routers import (
+    admin,
+    dev_auth,
+    health,
+    identity,
+    orders,
+    quality,
+    quotes,
+    shops,
+    uploads,
+    vendor,
+    webhooks,
+    webhooks_clerk,
+)
 
 __all__ = [
-    "auth",
+    "admin",
+    "dev_auth",
     "health",
+    "identity",
     "orders",
+    "quality",
     "quotes",
     "shops",
     "uploads",
     "vendor",
     "webhooks",
+    "webhooks_clerk",
 ]

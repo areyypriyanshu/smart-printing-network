@@ -4,8 +4,6 @@ from typing import Self
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PLACEHOLDER_JWT_SECRET = "local-dev-placeholder-change-me-0123456789abcdef"
-
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -19,12 +17,13 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://spn:spn@localhost:5432/spn"
 
-    jwt_secret: str = ""
-    access_token_minutes: int = 15
-    refresh_token_days: int = 7
-
     # Clerk, the identity provider. It proves who someone is; this
     # application decides what they may do. See ADR 029.
+    #
+    # There is one path. The provider signs every session token, the
+    # application checks the signature, and there is no second way in,
+    # so a deployment that has not been configured for the provider
+    # cannot start rather than running with the front door open.
     #
     # The Frontend API URL is the instance's own host, and it is two
     # things: it is the issuer the token claims, and the key set is
@@ -38,13 +37,17 @@ class Settings(BaseSettings):
     # Comma separated, because a deployment has more than one origin:
     # the local front end and the deployed one.
     clerk_allowed_origins: str = ""
-    # Whether the Clerk path is in use at all. Off by default, so a
-    # deployment that has not been configured cannot reach it, and so
-    # the migration is a configuration change rather than a code change.
-    clerk_enabled: bool = False
-    # A local bypass that mints a token without Clerk, for the end to
-    # end suite. It is refused in production, and it is never a way to
-    # skip a check: the role still comes from the database.
+    # The provider's own secret key. It is used to read one person from
+    # the provider when a local account is created, and it never reaches
+    # the browser.
+    clerk_secret_key: str = ""
+    # The key the provider signs its webhooks with. The webhook route is
+    # public, so a key that is written in the repository is a key that
+    # anybody who has read the repository can use.
+    clerk_webhook_signing_secret: str = ""
+    # A local bypass that mints a token without the provider, for the
+    # end to end suite. It is refused in production, and it is never a
+    # way to skip a check: the role still comes from the database.
     spn_dev_auth: bool = False
 
     s3_endpoint_url: str = "http://localhost:9000"
@@ -88,17 +91,13 @@ class Settings(BaseSettings):
     # every student behind one address, so a limit that rations signups
     # would lock out the people it is meant to serve. They are here to
     # stop a machine, not to ration people.
-    register_address_per_minute: int = 5
-    register_address_per_day: int = 100
     # The limit on one email address. This is what stops many machines
     # claiming the same address, which is how somebody else's address
     # gets taken.
-    register_account_per_hour: int = 5
     # The total the whole deployment will create in a minute. This is
     # the limit that bounds the work rather than the attacker, and it is
     # the reason a botnet cannot spend the server's CPU on password
     # hashes.
-    register_global_per_minute: int = 60
 
     google_maps_api_key: str = ""
 
@@ -136,10 +135,6 @@ class Settings(BaseSettings):
                 "a session without the identity provider, so a deployment that "
                 "has it on would accept a session that was never proved."
             )
-        if self.env == "production" and (
-            not self.jwt_secret or self.jwt_secret == PLACEHOLDER_JWT_SECRET
-        ):
-            raise ValueError("JWT_SECRET must be set to a real secret in production")
         if self.payment_provider == "razorpay" and not (
             self.razorpay_key_id and self.razorpay_key_secret and self.razorpay_webhook_secret
         ):
@@ -164,20 +159,31 @@ class Settings(BaseSettings):
                 "It writes the verification link to the log, and that link is "
                 "a secret. Use SMTP."
             )
-        if self.clerk_enabled:
-            if not self.clerk_fapi_url:
-                raise ValueError(
-                    "CLERK_FAPI_URL is required when CLERK_ENABLED=true. It is "
-                    "the instance's own host, and the key set is published "
-                    "there."
-                )
-            if not self.clerk_allowed_origins:
-                raise ValueError(
-                    "CLERK_ALLOWED_ORIGINS is required when CLERK_ENABLED=true. "
-                    "A token carries the origin that asked for it, and a token "
-                    "minted for another application on the same instance is not "
-                    "a token for this one."
-                )
+        if not self.clerk_fapi_url:
+            raise ValueError(
+                "CLERK_FAPI_URL is required. It is the instance's own host, "
+                "and the key set is published there. There is one way to "
+                "sign in, so a deployment that has not been configured for "
+                "it cannot start."
+            )
+        if not self.clerk_allowed_origins:
+            raise ValueError(
+                "CLERK_ALLOWED_ORIGINS is required. A token carries the "
+                "origin that asked for it, and a token minted for another "
+                "application on the same instance is not a token for this "
+                "one."
+            )
+        if not self.clerk_secret_key:
+            raise ValueError(
+                "CLERK_SECRET_KEY is required. It is used to read one person "
+                "from the identity provider when a local account is created."
+            )
+        if not self.clerk_webhook_signing_secret:
+            raise ValueError(
+                "CLERK_WEBHOOK_SIGNING_SECRET is required. The webhook route "
+                "is public, so the key that signs its deliveries has to be "
+                "one the operator chose."
+            )
         return self
 
     @property

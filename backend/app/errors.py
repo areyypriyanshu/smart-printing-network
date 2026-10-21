@@ -93,6 +93,16 @@ class PasswordMismatch(AppError):
     status_code = 422
 
 
+class ProviderUnavailable(AppError):
+    """The identity provider could not be read.
+
+    It is a fault in a dependency rather than anything the caller did,
+    so it is a gateway error and not a 404. The caller can try again.
+    """
+
+    status_code = 502
+
+
 class RateLimited(AppError):
     code = "RATE_LIMITED"
     status_code = 429

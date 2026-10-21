@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_customer, get_storage, require_verified_email
+from app.deps import get_customer, get_storage
 from app.gateways.storage import Storage
 from app.models import Upload, User
 from app.rate_limit import user_rate_limit
@@ -24,7 +24,7 @@ router = APIRouter(tags=["uploads"], responses=ERROR_RESPONSES)
 )
 def create_upload(
     file: UploadFile = File(...),
-    user: User = Depends(require_verified_email),
+    user: User = Depends(get_customer),
     session: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
 ) -> Upload:

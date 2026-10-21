@@ -46,7 +46,6 @@ def test_run_once_reports_every_job(db_session: Session) -> None:
         "expire_no_shows",
         "process_refunds",
         "purge_files",
-        "purge_expired_verifications",
     }
     assert all(count == 0 for count in results.values())
 

@@ -19,7 +19,6 @@ from app.models import (
     Order,
     OrderEvent,
     Payment,
-    RefreshToken,
     Shop,
     ShopRate,
     Upload,
@@ -119,7 +118,6 @@ def _cleanup(engine, customer_id: uuid.UUID, order_id: uuid.UUID, run_id: str) -
             )
         )
         session.execute(delete(Shop).where(Shop.name.like(f"Race Shop {run_id}%")))
-        session.execute(delete(RefreshToken).where(RefreshToken.user_id == customer_id))
         session.execute(delete(User).where(User.email.like(f"race-%{run_id}@example.com")))
         session.commit()
 

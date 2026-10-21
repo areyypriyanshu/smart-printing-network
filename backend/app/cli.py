@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import logging
 import sys
 import uuid
@@ -12,14 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import SessionLocal
+from app.gateways.identity.clerk_admin import ClerkAdminClient, ClerkAdminError
+from app.gateways.identity.fake import dev_subject_for
 from app.logging import setup_logging
-from app.models import AdminAction, Order, RefreshToken, Shop, ShopRate, Upload, User
-from app.security import validate_password_strength
-from app.services import admin_service, auth_service
+from app.models import AdminAction, Order, Shop, ShopRate, Upload, User
+from app.services import admin_service, identity_service
 
 logger = logging.getLogger(__name__)
-
-SEED_PASSWORD = "spn-demo-password"
 
 
 class SeedShopSpec(TypedDict):
@@ -75,8 +73,8 @@ def seed(session: Session) -> None:
     """Create the demo shops, rates and customer.
 
     The command is for local development only. It refuses to run against a
-    production configuration, because the accounts it creates have a
-    published password and the shops it creates are on the market.
+    production configuration, because the shops it creates are on the
+    market and the accounts it creates are local ones.
     """
     if get_settings().env == "production":
         raise SystemExit("the seed command is for local development only")
@@ -85,13 +83,14 @@ def seed(session: Session) -> None:
         if existing is not None:
             logger.info("seed: %s already exists, skipping", spec["email"])
             continue
-        user, shop = auth_service.register_vendor(
+        user, shop = identity_service.create_vendor_account(
             session,
+            subject=dev_subject_for(spec["email"]),
             email=spec["email"],
-            password=SEED_PASSWORD,
             full_name=spec["full_name"],
             shop_name=spec["shop_name"],
             shop_address=spec["shop_address"],
+            phone=None,
             latitude=spec["latitude"],
             longitude=spec["longitude"],
         )
@@ -108,20 +107,16 @@ def seed(session: Session) -> None:
 
     customer = session.scalar(select(User).where(User.email == SEED_CUSTOMER["email"]))
     if customer is None:
-        customer = auth_service.register_customer(
+        customer = identity_service.create_account(
             session,
+            subject=dev_subject_for(SEED_CUSTOMER["email"]),
             email=SEED_CUSTOMER["email"],
-            password=SEED_PASSWORD,
             full_name=SEED_CUSTOMER["full_name"],
+            role=identity_service.CUSTOMER,
         )
         logger.info("seed: created customer %s", SEED_CUSTOMER["email"])
-    # The demo accounts are proved, because a demo that cannot order a
-    # print because of a mail box nobody has is not a demo.
-    if not customer.email_verified:
-        customer.email_verified = True
-        session.commit()
 
-    print("Seed complete. Local credentials (password for all):", SEED_PASSWORD)
+    print("Seed complete. The local accounts are:", SEED_CUSTOMER["email"])
     for spec in SEED_SHOPS:
         print(f"  vendor: {spec['email']}")
     print("  customer:", SEED_CUSTOMER["email"])
@@ -344,10 +339,6 @@ def _admin_blockers(session: Session, admin_id: uuid.UUID) -> str:
             select(func.count()).select_from(AdminAction).where(AdminAction.admin_id == admin_id)
         )
         or 0,
-        "session": session.scalar(
-            select(func.count()).select_from(RefreshToken).where(RefreshToken.user_id == admin_id)
-        )
-        or 0,
         "order": session.scalar(
             select(func.count()).select_from(Order).where(Order.customer_id == admin_id)
         )
@@ -367,18 +358,37 @@ def _admin_blockers(session: Session, admin_id: uuid.UUID) -> str:
     return ", ".join(found)
 
 
-def create_admin(session: Session, email: str, password: str, full_name: str) -> int:
-    existing = session.scalar(select(User).where(User.email == email))
-    if existing is not None:
-        print(f"An account with email {email} already exists", file=sys.stderr)
-        return 1
+def create_admin(
+    session: Session,
+    subject: str,
+    reader: ClerkAdminClient,
+) -> int:
+    """Make somebody an administrator of this application.
+
+    The person has to have an account with the identity provider
+    already, because that is where the sign in and the address live.
+    The command takes the provider's identifier for them and reads the
+    rest from the provider, so the administrator is the person the
+    provider says they are and not the person the shell says they are.
+    """
     try:
-        validate_password_strength(password)
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        person = reader.get_user(subject)
+    except ClerkAdminError as exc:
+        print(f"The identity provider could not be read: {exc}", file=sys.stderr)
         return 1
-    auth_service.register_admin(session, email=email, password=password, full_name=full_name)
-    print(f"Created admin account {email}")
+    existing = session.scalar(select(User).where(User.email == person.email))
+    if existing is not None:
+        print(f"An account with email {person.email} already exists", file=sys.stderr)
+        return 1
+    user = User(
+        email=person.email,
+        clerk_user_id=subject,
+        full_name=person.full_name,
+        role="admin",
+    )
+    session.add(user)
+    session.commit()
+    print(f"Created admin account {person.email}")
     return 0
 
 
@@ -411,7 +421,6 @@ def prune_unused_accounts(session: Session, older_than_days: int, apply: bool) -
                 # joins happen to produce.
                 ~User.id.in_(select(Order.customer_id)),
                 ~User.id.in_(select(Upload.customer_id)),
-                ~User.id.in_(select(RefreshToken.user_id)),
             )
             .order_by(User.created_at.asc())
         ).all()
@@ -453,39 +462,6 @@ def set_account_active(session: Session, email: str, active: bool) -> int:
     else:
         print(f"Deactivated account {email}. The address is still taken.")
     return 0
-
-
-def verify_email(session: Session, email: str) -> int:
-    """Mark an address as proved, without sending anything.
-
-    The operator does this for the demo accounts and for a customer who
-    cannot receive mail at the address they gave. It is the same
-    decision the shop verification makes: the person who holds the
-    server decides.
-    """
-    user = session.scalar(select(User).where(User.email == email))
-    if user is None:
-        print(f"No account with email {email}", file=sys.stderr)
-        return 1
-    if user.email_verified:
-        print(f"{email} is already verified.")
-        return 0
-    user.email_verified = True
-    session.commit()
-    print(f"Verified {email}")
-    return 0
-
-
-def _read_admin_password(password_stdin: bool) -> str:
-    """Read the admin password without putting it in the shell history.
-
-    A password that is given as an argument ends up in the shell history, in
-    the process list and in the container metadata, where anybody with access
-    to the host can read it.
-    """
-    if password_stdin:
-        return sys.stdin.readline().rstrip("\n")
-    return getpass.getpass("Admin password: ")
 
 
 def _admin_id_for(session: Session, email: str | None) -> uuid.UUID | None:
@@ -538,14 +514,9 @@ def main(
     )
 
     admin_parser = subparsers.add_parser("create-admin", help="create an admin account")
-    admin_parser.add_argument("email", help="admin account email")
     admin_parser.add_argument(
-        "--password-stdin",
-        action="store_true",
-        help="read the admin password from standard input instead of a prompt",
-    )
-    admin_parser.add_argument(
-        "--name", default="Administrator", help="the name shown in the admin panel"
+        "subject",
+        help="the identity provider's identifier for the person, such as user_2abc",
     )
 
     subparsers.add_parser("list-admins", help="list the admin accounts")
@@ -591,11 +562,6 @@ def main(
     )
     reactivate_parser.add_argument("email", help="customer account email")
 
-    verify_email_parser = subparsers.add_parser(
-        "verify-email", help="mark an email address as proved, without sending anything"
-    )
-    verify_email_parser.add_argument("email", help="account email")
-
     args = parser.parse_args(argv)
 
     setup_logging()
@@ -613,8 +579,9 @@ def main(
         if args.command == "list-shops":
             return list_shops(session, pending_only=bool(args.pending))
         if args.command == "create-admin":
-            password = _read_admin_password(bool(args.password_stdin))
-            return create_admin(session, str(args.email), password, str(args.name))
+            settings = get_settings()
+            reader = ClerkAdminClient(secret_key=settings.clerk_secret_key)
+            return create_admin(session, str(args.subject), reader)
         if args.command == "list-admins":
             return list_admins(session)
         if args.command == "deactivate-admin":
@@ -631,8 +598,6 @@ def main(
             return set_account_active(session, str(args.email), active=False)
         if args.command == "activate-account":
             return set_account_active(session, str(args.email), active=True)
-        if args.command == "verify-email":
-            return verify_email(session, str(args.email))
     return 2
 
 

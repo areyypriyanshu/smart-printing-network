@@ -1,5 +1,5 @@
 import pytest
-from app.config import PLACEHOLDER_JWT_SECRET, Settings
+from app.config import Settings
 from pydantic import ValidationError
 
 #: The settings a test starts from. Every value is passed in, so the
@@ -11,13 +11,14 @@ BASE: dict[str, object] = {
     "payment_provider": "fake",
     "fake_webhook_secret": "a-key-the-operator-chose",
     "testing_endpoints_enabled": False,
-    # The identity provider. These are here so that a deployment with
-    # Clerk configured cannot change what these tests mean: the values
-    # below win over the environment, and a test that asserts a default
-    # reads the default off the class rather than off the environment.
-    "clerk_enabled": False,
-    "clerk_fapi_url": "",
-    "clerk_allowed_origins": "",
+    # The identity provider. There is one way to sign in, so these are
+    # always needed. They are here so that a deployment which has them
+    # configured cannot change what these tests mean: the values below
+    # win over the environment.
+    "clerk_fapi_url": "https://app.accounts.dev",
+    "clerk_allowed_origins": "http://localhost:5173",
+    "clerk_secret_key": "a-secret-the-operator-chose",
+    "clerk_webhook_signing_secret": "whsec_another-secret-the-operator-chose",
     "spn_dev_auth": False,
 }
 
@@ -43,18 +44,6 @@ def test_razorpay_provider_with_credentials_is_valid() -> None:
     assert settings.payment_provider == "razorpay"
 
 
-def test_production_rejects_placeholder_jwt_secret() -> None:
-    with pytest.raises(ValidationError, match="JWT_SECRET must be set to a real secret"):
-        _settings(
-            env="production",
-            jwt_secret=PLACEHOLDER_JWT_SECRET,
-            payment_provider="razorpay",
-            razorpay_key_id="rzp_test_placeholder",
-            razorpay_key_secret="placeholder",
-            razorpay_webhook_secret="placeholder",
-        )
-
-
 def test_production_rejects_the_fake_payment_provider() -> None:
     """The fake provider's webhook key is a key somebody could read.
 
@@ -63,7 +52,7 @@ def test_production_rejects_the_fake_payment_provider() -> None:
     with.
     """
     with pytest.raises(ValidationError, match="PAYMENT_PROVIDER must be razorpay"):
-        _settings(env="production", jwt_secret="a-real-secret-that-is-not-the-placeholder")
+        _settings(env="production")
 
 
 def test_the_fake_provider_needs_a_key_of_its_own() -> None:
@@ -99,7 +88,6 @@ def test_the_testing_surface_cannot_be_on_in_production() -> None:
     with pytest.raises(ValidationError, match="testing endpoints cannot be enabled"):
         _settings(
             env="production",
-            jwt_secret="a-real-secret-that-is-not-the-placeholder",
             payment_provider="razorpay",
             razorpay_key_id="rzp_test_placeholder",
             razorpay_key_secret="placeholder",
@@ -116,28 +104,22 @@ def test_local_defaults_are_valid_once_the_fake_key_is_set() -> None:
     assert settings.max_upload_mb == 50
 
 
-def test_clerk_is_off_until_it_is_switched_on() -> None:
-    """A deployment that has not heard of Clerk cannot reach it.
+def test_the_identity_provider_is_always_configured() -> None:
+    """There is one way to sign in, so a deployment cannot start without it.
 
-    The migration is a configuration change rather than a code change,
-    and the switch defaults to off so that a deployment which was never
-    configured cannot end up talking to an identity provider it did not
-    choose.
-
-    The defaults are read off the class and not off a built Settings,
-    because a built Settings has the environment in it, and a
-    deployment with Clerk configured would otherwise change what this
-    test means.
+    A deployment that has not been told about the identity provider
+    cannot sign anybody in, and a deployment that starts anyway is a
+    deployment with a front door and nothing behind it.
     """
     defaults = Settings.model_fields
 
-    assert defaults["clerk_enabled"].default is False
     assert defaults["clerk_fapi_url"].default == ""
     assert defaults["clerk_allowed_origins"].default == ""
-    assert defaults["spn_dev_auth"].default is False
+    assert defaults["clerk_secret_key"].default == ""
+    assert defaults["clerk_webhook_signing_secret"].default == ""
 
 
-def test_clerk_needs_an_instance_when_it_is_switched_on() -> None:
+def test_the_instance_is_required() -> None:
     """The instance's host is where the key set is published.
 
     Without it there is no key set to fetch and no issuer to check the
@@ -145,45 +127,44 @@ def test_clerk_needs_an_instance_when_it_is_switched_on() -> None:
     safe but is not a working deployment.
     """
     with pytest.raises(ValidationError, match="CLERK_FAPI_URL is required"):
-        _settings(
-            clerk_enabled=True, clerk_fapi_url="", clerk_allowed_origins="http://localhost:5173"
-        )
+        _settings(clerk_fapi_url="")
 
 
-def test_clerk_needs_the_origins_whose_tokens_are_accepted() -> None:
+def test_the_origins_whose_tokens_are_accepted_are_required() -> None:
     """A token carries the origin that asked for it.
 
-    An instance can hold more than one application, so a token minted
-    for a different one on the same instance is not a token for this
-    one. Without the list, every token would be accepted, which is the
-    thing the check exists to prevent.
+    A token minted for another application on the same instance is not
+    a token for this one, and the only way to tell them apart is the
+    origin.
     """
     with pytest.raises(ValidationError, match="CLERK_ALLOWED_ORIGINS is required"):
-        _settings(
-            clerk_enabled=True, clerk_fapi_url="https://app.accounts.dev", clerk_allowed_origins=""
-        )
+        _settings(clerk_allowed_origins="")
 
 
-def test_clerk_with_an_instance_and_the_origins_is_valid() -> None:
+def test_the_secret_key_is_required() -> None:
+    """It is used to read one person from the provider."""
+    with pytest.raises(ValidationError, match="CLERK_SECRET_KEY is required"):
+        _settings(clerk_secret_key="")
+
+
+def test_the_webhook_signing_secret_is_required() -> None:
+    """The webhook route is public, so the key that signs it is the only proof."""
+    with pytest.raises(ValidationError, match="CLERK_WEBHOOK_SIGNING_SECRET is required"):
+        _settings(clerk_webhook_signing_secret="")
+
+
+def test_a_configured_instance_is_valid() -> None:
     settings = _settings(
-        clerk_enabled=True,
         clerk_fapi_url="https://app.accounts.dev",
         clerk_allowed_origins="http://localhost:5173,https://spn.example.com",
     )
 
-    assert settings.clerk_enabled is True
+    assert settings.clerk_fapi_url == "https://app.accounts.dev"
+    assert settings.clerk_origin_list == ["http://localhost:5173", "https://spn.example.com"]
 
 
 def test_the_key_set_is_published_at_the_instance_host() -> None:
-    """The key set is public, so the backend needs no secret to verify.
-
-    Clerk serves the instance's public signing keys from the Frontend
-    API host with a fixed path appended. Reading it from the same
-    setting as the issuer means the two cannot disagree about which
-    instance they are talking about.
-    """
     settings = _settings(
-        clerk_enabled=True,
         clerk_fapi_url="https://app.accounts.dev",
         clerk_allowed_origins="http://localhost:5173",
     )
@@ -191,52 +172,10 @@ def test_the_key_set_is_published_at_the_instance_host() -> None:
     assert settings.clerk_jwks_url == "https://app.accounts.dev/.well-known/jwks.json"
 
 
-def test_a_trailing_slash_does_not_double_up_in_the_key_set_address() -> None:
+def test_the_key_set_host_does_not_carry_a_trailing_slash() -> None:
     settings = _settings(
-        clerk_enabled=True,
         clerk_fapi_url="https://app.accounts.dev/",
         clerk_allowed_origins="http://localhost:5173",
     )
 
     assert settings.clerk_jwks_url == "https://app.accounts.dev/.well-known/jwks.json"
-
-
-def test_the_origins_are_read_as_a_list() -> None:
-    """A deployment has more than one origin, and spaces are not origins."""
-    settings = _settings(
-        clerk_enabled=True,
-        clerk_fapi_url="https://app.accounts.dev",
-        clerk_allowed_origins="http://localhost:5173, https://spn.example.com ,",
-    )
-
-    assert settings.clerk_origin_list == ["http://localhost:5173", "https://spn.example.com"]
-
-
-def test_the_local_bypass_cannot_be_on_in_production() -> None:
-    """The local bypass mints a session nobody proved.
-
-    A deployment with it on would accept a session that was never
-    proved, which is the whole thing the identity provider is for. The
-    check is refused in production the way the testing surface is.
-    """
-    with pytest.raises(ValidationError, match="SPN_DEV_AUTH cannot be enabled"):
-        _settings(
-            env="production",
-            jwt_secret="a-real-secret-that-is-not-the-placeholder",
-            payment_provider="razorpay",
-            razorpay_key_id="rzp_test_placeholder",
-            razorpay_key_secret="placeholder",
-            razorpay_webhook_secret="placeholder",
-            spn_dev_auth=True,
-        )
-
-
-def test_the_local_bypass_is_allowed_outside_production() -> None:
-    """The end to end suite needs a session without a network.
-
-    It runs against the local stack, where the identity provider is not
-    reachable, so the bypass has to be usable outside production.
-    """
-    settings = _settings(spn_dev_auth=True)
-
-    assert settings.spn_dev_auth is True

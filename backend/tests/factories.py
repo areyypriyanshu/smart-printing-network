@@ -1,16 +1,15 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from app import security
+from app.gateways.identity.fake import dev_subject_for
 from app.gateways.payments import CashGateway, FakeGateway, GatewayOrder, GatewayRefund
 from app.models import Order, Shop, ShopRate, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
 from fastapi.testclient import TestClient
 from geoalchemy2.elements import WKTElement
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-DEFAULT_PASSWORD = "password-123"
 
 # The key the fake gateway signs its webhooks with in the test suite.
 # The fake gateway takes no default on purpose: a key that lives in the
@@ -70,29 +69,38 @@ def create_user(
     session: Session,
     *,
     email: str = "user@example.com",
-    password: str = DEFAULT_PASSWORD,
     role: str = "customer",
     full_name: str = "Test User",
     is_active: bool = True,
-    email_verified: bool = True,
 ) -> User:
     """An account to test with.
 
-    It is proved by default, because a test that is about something
-    else should not have to prove an address first. The tests that are
-    about the proof itself ask for an unproved one.
+    The account carries the identifier the identity provider would
+    give the person, so that the tests find it by the same route the
+    application does. The identifier is a local one, because the test
+    suite does not talk to a provider.
     """
     user = User(
         email=email,
-        password_hash=security.hash_password(password),
+        clerk_user_id=dev_subject_for(email),
         full_name=full_name,
         role=role,
         is_active=is_active,
-        email_verified=email_verified,
     )
     session.add(user)
     session.commit()
     return user
+
+
+def identity_headers(client: TestClient, subject: str) -> dict[str, str]:
+    """The headers for a caller who has signed in but has no account yet.
+
+    The identity provider knows the person, and the application has not
+    made an account for them, which is the state a person is in between
+    signing in and saying what they are here for.
+    """
+    verifier = client.app.state.token_verifier
+    return {"Authorization": f"Bearer {verifier.issue(subject)}"}
 
 
 def create_shop(
@@ -170,12 +178,21 @@ def create_upload_row(
     return upload
 
 
-def login_headers(
-    client: TestClient, email: str, password: str = DEFAULT_PASSWORD
-) -> dict[str, str]:
-    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
-    assert response.status_code == 200, response.text
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+def login_headers(client: TestClient, email: str, password: str | None = None) -> dict[str, str]:
+    """The headers that sign a caller in as the account with this address.
+
+    The password is accepted and ignored. There is no password any
+    more: the identity provider holds it, and the application never
+    sees it. The argument is still here because the callers have it,
+    and removing it would be a change to every test that signs in
+    rather than to the thing being tested.
+    """
+    session: Session = client.app.state.db_session
+    user = session.scalar(select(User).where(User.email == email))
+    assert user is not None, f"there is no account with the address {email}"
+    assert user.clerk_user_id is not None
+    verifier = client.app.state.token_verifier
+    return {"Authorization": f"Bearer {verifier.issue(user.clerk_user_id)}"}
 
 
 def create_unpaid_order(
