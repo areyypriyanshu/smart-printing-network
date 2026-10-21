@@ -118,6 +118,10 @@ services:
       context: ./frontend
     environment:
       VITE_PROXY_TARGET: http://api:8000
+      # The publishable key is public: it is in the front end bundle
+      # either way. It is named here rather than the whole .env, so the
+      # back end's secrets are not handed to the front end container.
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     command: npm run dev -- --host 0.0.0.0
     ports:
       - "127.0.0.1:5173:5173"
