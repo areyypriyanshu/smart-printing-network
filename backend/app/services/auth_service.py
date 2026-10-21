@@ -36,7 +36,6 @@ def register_customer(session: Session, *, email: str, password: str, full_name:
     user = User(
         email=email,
         password_hash=security.hash_password(password),
-        has_password=True,
         full_name=full_name,
         role="customer",
     )
@@ -60,7 +59,6 @@ def register_vendor(
     user = User(
         email=email,
         password_hash=security.hash_password(password),
-        has_password=True,
         full_name=full_name,
         role="vendor",
     )
@@ -100,7 +98,6 @@ def register_admin(session: Session, *, email: str, password: str, full_name: st
     user = User(
         email=email,
         password_hash=security.hash_password(password),
-        has_password=True,
         full_name=full_name,
         role="admin",
     )
@@ -136,22 +133,6 @@ def sign_in(session: Session, user: User) -> TokenBundle:
     bundle = _issue_tokens(session, user, family_id=uuid.uuid4())
     session.commit()
     return bundle
-
-
-def set_password(session: Session, *, user: User, password: str) -> User:
-    """Give a provider-only account a password while it is authenticated.
-
-    A Google-only account is not a dead end: it can add a local password
-    without changing its verified email or disconnecting the provider.
-    The account must not overwrite an existing password through this path;
-    changing one belongs to password reset, which remains out of scope.
-    """
-    if user.has_password:
-        raise Unauthenticated("This account already has a password")
-    user.password_hash = security.hash_password(password)
-    user.has_password = True
-    session.commit()
-    return user
 
 
 def refresh(session: Session, refresh_token: str) -> tuple[User, TokenBundle]:

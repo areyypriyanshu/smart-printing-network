@@ -13,10 +13,8 @@ import {
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { AuthLayout } from "./auth-layout";
 import { changeEmailRequest } from "./api";
-import { GoogleButton } from "./google-button";
 import { changeEmailSchema, type ChangeEmailValues } from "./schemas";
 import { useSession } from "./session";
-import { useOAuthProviders } from "./use-oauth-providers";
 
 /**
  * Putting a different address on the account.
@@ -28,7 +26,6 @@ import { useOAuthProviders } from "./use-oauth-providers";
 export function ChangeEmailPage() {
   const { user, refreshUser } = useSession();
   const navigate = useNavigate();
-  const providers = useOAuthProviders();
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -98,15 +95,6 @@ export function ChangeEmailPage() {
           Change the address
         </Button>
       </form>
-      {providers.includes("google") && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-steel">
-            You can also sign in with Google. Connecting it does not change your
-            password, and you can still use the password you have.
-          </p>
-          <GoogleButton label="Connect Google" />
-        </div>
-      )}
     </AuthLayout>
   );
 }

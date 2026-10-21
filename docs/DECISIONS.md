@@ -227,16 +227,12 @@ and this application keeps a copy of the answer and still refuses the
 upload.
 [ADR 026](adr/026-the-email-address-has-to-be-proved.md)
 
-**A provider never takes over an account here.** Signing in with
-Google is the authorization code flow with PKCE, the state lives in a
-signed cookie and nowhere else, and the tokens of the provider are used
-once and thrown away. An address the provider says is proved is not a
-claim on an account that somebody else claimed here: the customer signs
-in with their password and connects the provider themselves. The rule
-outlives the implementation. Clerk links accounts inside its own store
-by email, and the local account is still keyed on the Clerk subject and
-never on the address, so a provider cannot take over a local account
-here either.
+**A provider never takes over an account here.** The rule outlived the
+hand written OAuth client that first carried it, and it outlives that
+client's removal: the local account is keyed on the identity provider's
+subject and never on the email address. Clerk links accounts inside its
+own store by email, and that does not change the subject, so a provider
+cannot take over a local account here.
 [ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md),
 [ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
 

@@ -10,11 +10,16 @@ This project has its own authentication. Argon2id hashes, a signed
 JWT access token that lives in memory for fifteen minutes, a rotating
 opaque refresh token in an httpOnly cookie, a hashed refresh token in
 the database grouped into families so that the reuse of an old one
-revokes the whole login, a link sent to an address to prove it belongs
-to its owner, and a hand written OAuth client for signing in with
-Google. It works, it is tested, and it is about eleven hundred lines
-across the security module, the auth service, the verification service,
-the OAuth gateway and their tests.
+revokes the whole login, and a link sent to an address to prove it
+belongs to its owner. It works, it is tested, and it is about nine
+hundred lines across the security module, the auth service and the
+verification service and their tests.
+
+A hand written OAuth client for signing in with Google was part of
+that, and it was removed when this record was written, because Clerk's
+own social connections replace it and a provider cannot be left to rot
+beside the thing that replaces it. See
+[ADR 027](027-sign-in-with-google-without-a-new-dependency.md).
 
 Two things changed that make it worth asking whether to keep it.
 
@@ -244,12 +249,16 @@ webhook keeps in step.
    present today) and by one on the frontend (`@clerk/react`). The
    official Clerk SDK is not used, and neither is `httpx` at runtime.
 - This application stops issuing tokens, stops hashing passwords, and
-   stops sending verification emails. The refresh token table, the
-   email verification token table, the OAuth identity table and the
-   OAuth gateway all go, each in its own migration, in the contraction
-   phase, after the cutover has been verified.
-- The `JWT_SECRET` setting stays until the OAuth flow is retired,
-   because it also signs the OAuth state cookie.
+   stops sending verification emails. The refresh token table and the
+   email verification token table go, each in its own migration, in the
+   contraction phase, after the cutover has been verified. The OAuth
+   identity table and the OAuth gateway have already gone: they were
+   removed with [ADR 027](027-sign-in-with-google-without-a-new-dependency.md),
+   because Clerk's own social connections replace them.
+- The `JWT_SECRET` setting stays until the local access token machinery
+   is removed. It used to sign the OAuth state cookie as well, and that
+   reason no longer applies, but the access token is still signed with
+   it.
 - The authorization matrix, the ownership filters, the 404 on cross
    tenant access, the money rules and the file privacy rules are
    untouched. The tests for them are the tests for this change.

@@ -11,7 +11,6 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.config import get_settings
 from app.errors import AppError, exception_handler, http_exception_handler
 from app.gateways.email import build_email_sender
-from app.gateways.oauth import build_oauth_provider
 from app.gateways.payments import build_payment_gateway
 from app.gateways.storage import S3Storage
 from app.logging import RequestIdMiddleware, setup_logging
@@ -20,7 +19,6 @@ from app.routers import (
     admin,
     auth,
     health,
-    oauth,
     orders,
     quality,
     quotes,
@@ -89,13 +87,6 @@ def create_app() -> FastAPI:
     app.state.rate_limiter = RateLimiter()
     app.state.payment_gateway = build_payment_gateway(settings)
     app.state.email_sender = build_email_sender(settings)
-    # The providers that this deployment offers. A provider that is not
-    # configured is not there at all, and the front end hides the button.
-    app.state.oauth_providers = {
-        name: provider
-        for name in ("google",)
-        if (provider := build_oauth_provider(settings, name)) is not None
-    }
     app.state.storage = S3Storage(
         endpoint_url=settings.s3_endpoint_url or None,
         bucket=settings.s3_bucket,
@@ -113,7 +104,6 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, exception_handler)
     app.include_router(health.router)
     app.include_router(auth.router, prefix=API_PREFIX)
-    app.include_router(oauth.router, prefix=API_PREFIX)
     app.include_router(shops.router, prefix=API_PREFIX)
     app.include_router(vendor.router, prefix=API_PREFIX)
     app.include_router(uploads.router, prefix=API_PREFIX)

@@ -23,5 +23,3 @@ export { CheckEmailPage } from "./check-email-page";
 export { ChangeEmailPage } from "./change-email-page";
 export { VerifyEmailPage } from "./verify-email-page";
 export { UnverifiedBanner } from "./unverified-banner";
-export { GoogleButton } from "./google-button";
-export { useOAuthProviders } from "./use-oauth-providers";

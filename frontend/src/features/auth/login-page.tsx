@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 
 import {
   Alert,
@@ -13,14 +13,11 @@ import {
 import type { Role } from "../../api/client";
 import {
   fieldErrorsFor,
-  messageForCode,
   messageForError,
 } from "../../lib/errors";
 import { AuthLayout } from "./auth-layout";
-import { GoogleButton } from "./google-button";
 import { loginSchema, type LoginValues } from "./schemas";
 import { useSession } from "./session";
-import { useOAuthProviders } from "./use-oauth-providers";
 
 type LocationState = { registered?: boolean; from?: string } | null;
 
@@ -43,11 +40,6 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState;
-  const [searchParams] = useSearchParams();
-  const providers = useOAuthProviders();
-  // A sign in with a provider that did not work sends the browser back
-  // here with the reason in the address.
-  const oauthError = searchParams.get("oauth_error");
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -102,7 +94,6 @@ export function LoginPage() {
       {state?.registered === true && (
         <Alert variant="success">Account created. Sign in to continue.</Alert>
       )}
-      {oauthError !== null && <Alert>{messageForCode(oauthError)}</Alert>}
       {serverError !== null && <Alert>{serverError}</Alert>}
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <TextField
@@ -122,15 +113,6 @@ export function LoginPage() {
           Sign in
         </Button>
       </form>
-      {providers.includes("google") && (
-        <div className="flex flex-col gap-2">
-          <GoogleButton />
-          <p className="text-xs text-steel">
-            Google tells us your email address is proved, so you can order a
-            print straight away.
-          </p>
-        </div>
-      )}
     </AuthLayout>
   );
 }

@@ -3,8 +3,6 @@ import {
   type AccessTokenResponse,
   type ChangeEmailRequest,
   type LoginRequest,
-  type OAuthProvidersResponse,
-  type OAuthStartResponse,
   type RegisterRequest,
   type RegisterVendorRequest,
   type User,
@@ -66,16 +64,4 @@ export function resendVerificationRequest(): Promise<VerificationSentResponse> {
 /** Put a different address on the account. */
 export function changeEmailRequest(body: ChangeEmailRequest): Promise<User> {
   return apiRequest("/auth/change-email", { method: "POST", body });
-}
-
-/** The providers this deployment offers. */
-export function oauthProvidersRequest(): Promise<OAuthProvidersResponse> {
-  return apiRequest("/auth/oauth/providers", { retryOnUnauthorized: false });
-}
-
-/** The address to open to sign in with a provider. */
-export function oauthStartRequest(
-  provider: string,
-): Promise<OAuthStartResponse> {
-  return apiRequest(`/auth/oauth/${provider}/start`, { method: "POST" });
 }

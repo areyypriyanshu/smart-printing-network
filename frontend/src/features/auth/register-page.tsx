@@ -12,14 +12,11 @@ import {
 } from "../../components/ui";
 import { fieldErrorsFor, messageForError } from "../../lib/errors";
 import { registerRequest } from "./api";
-import { GoogleButton } from "./google-button";
 import { AuthLayout } from "./auth-layout";
 import { registerSchema, type RegisterValues } from "./schemas";
-import { useOAuthProviders } from "./use-oauth-providers";
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const providers = useOAuthProviders();
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -97,15 +94,6 @@ export function RegisterPage() {
           Create an account
         </Button>
       </form>
-      {providers.includes("google") && (
-        <div className="flex flex-col gap-2">
-          <GoogleButton label="Sign up with Google" />
-          <p className="text-xs text-steel">
-            Google tells us your email address is proved, so you can order a
-            print straight away.
-          </p>
-        </div>
-      )}
     </AuthLayout>
   );
 }

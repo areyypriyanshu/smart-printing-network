@@ -7,12 +7,6 @@ const MESSAGES: Record<string, string> = {
   INVALID_VERIFICATION_TOKEN:
     "This link is not valid any more. Ask for a new one and try again.",
   PASSWORD_MISMATCH: "That password is not right.",
-  OAUTH_ACCOUNT_EXISTS:
-    "There is already an account with that email address. Sign in with your password and connect Google from your account.",
-  OAUTH_STATE_INVALID: "That sign in did not work. Try again.",
-  OAUTH_PROVIDER_UNAVAILABLE:
-    "Signing in with Google is not available on this deployment.",
-  OAUTH_PROVIDER_ERROR: "Google could not be reached. Try again in a moment.",
   UNAUTHENTICATED: "Invalid email or password.",
   FORBIDDEN: "You do not have access to this page.",
   NOT_FOUND: "We could not find what you asked for.",

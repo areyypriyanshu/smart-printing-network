@@ -115,6 +115,13 @@ were sent to an address nobody reads.
    has no Google account. The two can sit next to each other later, and
    the table that holds them is the same shape either way.
 
+   *(Updated 2026-10-21. The two do now sit next to each other, in the
+   other order: the identity provider sends the verification message
+   and proves the address, and this application keeps a copy of the
+   answer. The hand written OAuth client that the alternative referred
+   to has been removed. See
+   [ADR 029](029-clerk-authentication-with-local-authorization.md).)*
+
 ## Consequences
 
 - A customer can order a print only after the address is proved, and a

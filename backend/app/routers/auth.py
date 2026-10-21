@@ -18,7 +18,6 @@ from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     RegisterVendorRequest,
-    SetPasswordRequest,
     TestingVerifyEmailRequest,
     UserResponse,
     VerificationSentResponse,
@@ -152,16 +151,6 @@ def testing_verify_email(
     user.email_verified = True
     session.commit()
     return {"status": "verified", "email": user.email}
-
-
-@router.post("/auth/set-password", response_model=UserResponse)
-def set_password(
-    body: SetPasswordRequest,
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_db),
-) -> User:
-    """Give a Google-only account a local password."""
-    return auth_service.set_password(session, user=user, password=body.password)
 
 
 @router.post("/auth/verify-email", response_model=UserResponse)

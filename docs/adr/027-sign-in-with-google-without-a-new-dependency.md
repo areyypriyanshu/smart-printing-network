@@ -1,18 +1,30 @@
 # ADR 027: Sign in with Google, without a new dependency
 
 Date: 2026-10-20
-Status: Accepted, superseded in part by [ADR 029](029-clerk-authentication-with-local-authorization.md)
+Status: Superseded by [ADR 029](029-clerk-authentication-with-local-authorization.md)
 Requirement: FR-20 (Sprint 5.8, hardening)
 
-> **Superseded in part (2026-10-21).** The hand written OAuth client
-> in this record is retired: the authentication provider migration
-> moves social sign-in to Clerk's own social connections, which are
-> included in the free tier. The *rule* in this record outlives the
-> implementation and is restated for the Clerk world in
+> **Superseded (2026-10-21).** The hand written OAuth client in this
+> record is gone, not merely retired. The authentication provider
+> migration moves social sign-in to Clerk's own social connections,
+> which are included in the free tier, and this record's implementation
+> was removed rather than left to rot alongside it: the gateway, the
+> service, the routes, the errors, the configuration, the front end
+> button, the tests, and the `oauth_identities` table behind them.
+>
+> The *rule* in this record outlives the implementation and is restated
+> for the Clerk world in
 > [ADR 029](029-clerk-authentication-with-local-authorization.md): the
 > local account is keyed on the Clerk subject and never on the email
 > address, so a provider cannot take over a local account here, even
 > though Clerk links accounts inside its own store by email.
+>
+> One consequence is worth recording. The `users.has_password` column
+> was added for this feature, to mark an account that had no usable
+> local password, and it outlives it: an account the identity provider
+> provisions has no local password either, so the column keeps its job
+> until the local password machinery is removed in the contraction
+> phase.
 
 ## Context
 

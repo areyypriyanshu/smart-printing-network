@@ -244,30 +244,6 @@ themselves, from **/account/email** in the app. It asks for the
 password, because changing the address is how an account is taken over.
 See [ADR 026](docs/adr/026-the-email-address-has-to-be-proved.md).
 
-### Signing in with Google
-
-A customer can sign in with a Google account instead of a password. The
-address comes from Google, and Google says it is proved, so the account
-can order a print straight away.
-
-The button only appears when the deployment has the credentials. To set
-them up, create an OAuth client in the Google Cloud console, and
-register the callback address as the redirect URI:
-
-```
-{API_BASE_URL}/api/v1/auth/oauth/google/callback
-```
-
-Then set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`. The
-client secret is only ever used to exchange the code for a token; it is
-never sent to the browser and never stored.
-
-An address that is already an account here is not taken over by Google.
-The customer is told to sign in with their password and connect Google
-from their account, and the connection is only made for the account
-they are signed in to. See
-[ADR 027](docs/adr/027-sign-in-with-google-without-a-new-dependency.md).
-
 ### Looking at the data
 
 The database is PostgreSQL 16 with PostGIS. It runs in the `db` container
