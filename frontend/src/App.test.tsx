@@ -3,12 +3,14 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
-import { createTestQueryClient } from "./test/render";
+import { createTestQueryClient, TestSession } from "./test/render";
 
 function renderApp() {
   return render(
     <QueryClientProvider client={createTestQueryClient()}>
-      <App />
+      <TestSession signedIn={false}>
+        <App />
+      </TestSession>
     </QueryClientProvider>,
   );
 }

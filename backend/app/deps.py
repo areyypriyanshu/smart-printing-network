@@ -5,27 +5,81 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import security
 from app.db import get_db
-from app.errors import EmailNotVerified, Forbidden, NotFound, Unauthenticated
+from app.errors import AccountNotProvisioned, Forbidden, NotFound, Unauthenticated
 from app.gateways.email import EmailSender
+from app.gateways.identity import TokenVerifier, VerifiedIdentity
+from app.gateways.identity.clerk_admin import ClerkAdminClient
 from app.gateways.payments import PaymentGatewayRouter
 from app.gateways.storage import Storage
 from app.models import Shop, User
+from app.services import identity_service
 
 _bearer = HTTPBearer(auto_error=False)
 
 
-def get_current_user(
+def get_token_verifier(request: Request) -> TokenVerifier:
+    """The verifier this deployment uses to read a token."""
+    verifier: TokenVerifier = request.app.state.token_verifier
+    return verifier
+
+
+def get_identity_reader(request: Request) -> ClerkAdminClient:
+    """The reader this deployment uses to ask the provider about a person."""
+    reader: ClerkAdminClient = request.app.state.identity_reader
+    return reader
+
+
+def get_current_identity(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    session: Session = Depends(get_db),
-) -> User:
+    verifier: TokenVerifier = Depends(get_token_verifier),
+) -> VerifiedIdentity:
+    """Who the caller says they are, with no local account behind it yet.
+
+    This is what the route that creates the account uses. A person who
+    has signed in but has not chosen yet has a good token and no row,
+    and asking for the row would refuse them for the very thing they
+    came to do.
+    """
     if credentials is None:
         raise Unauthenticated("Authentication required")
-    user_id, _role = security.decode_access_token(credentials.credentials)
-    user = session.get(User, user_id)
-    if user is None or not user.is_active:
+    return verifier.verify(credentials.credentials)
+
+
+def get_current_user(
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    session: Session = Depends(get_db),
+) -> User:
+    """The caller, if the token they presented names one.
+
+    The token says who they are. The role comes from the database, and
+    so does whether the account is allowed in: a token that names an
+    account that has been switched off is refused here even though the
+    token itself is perfectly good.
+    """
+    user = identity_service.find_by_subject(session, identity.subject)
+    if user is None:
+        # The token is good and the person has signed in, but they have
+        # not said what they are here for, so there is no account yet.
+        # The front end reads this and sends them to the page that asks.
+        raise AccountNotProvisioned(
+            "This account has not been set up yet. Choose what you are here for."
+        )
+    if not user.is_active:
         raise Unauthenticated("Authentication required")
+    return user
+
+
+def get_provisioned_user(
+    user: User = Depends(get_current_user),
+) -> User:
+    """The caller, once they have said what they are here for.
+
+    A person who has signed in but has not chosen yet has no local
+    account, and the request that needs one is answered with a refusal
+    that says so, so that the front end can send them to the page that
+    asks.
+    """
     return user
 
 
@@ -65,39 +119,24 @@ def get_email_sender(request: Request) -> EmailSender:
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     session: Session = Depends(get_db),
+    verifier: TokenVerifier = Depends(get_token_verifier),
 ) -> User | None:
     """The caller, if there is one.
 
     Some routes are for everybody and behave differently for a signed in
-    caller. Starting a sign in with a provider is one: the address it
-    sends the browser to is the same either way, and the only thing
-    that changes is whether the account it comes back to is connected to
-    the one the caller is already signed in to.
+    caller. The list of shops is one: it is the same list either way,
+    and the only thing that changes is whether the signed in caller can
+    see the shop they own.
     """
     if credentials is None:
         return None
     try:
-        user_id, _role = security.decode_access_token(credentials.credentials)
+        identity = verifier.verify(credentials.credentials)
     except Unauthenticated:
         return None
-    user = session.get(User, user_id)
+    user = identity_service.find_by_subject(session, identity.subject)
     if user is None or not user.is_active:
         return None
-    return user
-
-
-def require_verified_email(user: User = Depends(get_customer)) -> User:
-    """A customer whose address has been proved.
-
-    The account works without it. This is for the one thing that needs
-    the address to be real, because the address is what the printout
-    and the pickup code are tied to.
-    """
-    if not user.email_verified:
-        raise EmailNotVerified(
-            "Confirm your email address before you order a print. "
-            "We sent a link to it when you signed up."
-        )
     return user
 
 

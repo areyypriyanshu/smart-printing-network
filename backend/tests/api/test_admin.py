@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
-    DEFAULT_PASSWORD,
     create_full_rate_table,
     create_paid_order,
     create_shop,
@@ -28,7 +27,7 @@ def _admin(session: Session) -> object:
 
 def _admin_headers(client: TestClient, session: Session) -> dict[str, str]:
     _admin(session)
-    return login_headers(client, "admin@example.com", DEFAULT_PASSWORD)
+    return login_headers(client, "admin@example.com")
 
 
 def test_an_admin_sees_the_shops_waiting_for_a_decision(
@@ -64,7 +63,7 @@ def test_a_customer_cannot_reach_the_admin_endpoints(
     client: TestClient, db_session: Session
 ) -> None:
     create_user(db_session, email="customer@example.com", role="customer")
-    headers = login_headers(client, "customer@example.com", DEFAULT_PASSWORD)
+    headers = login_headers(client, "customer@example.com")
 
     response = client.get("/api/v1/admin/shops", headers=headers)
 
@@ -74,7 +73,7 @@ def test_a_customer_cannot_reach_the_admin_endpoints(
 
 def test_a_vendor_cannot_reach_the_admin_endpoints(client: TestClient, db_session: Session) -> None:
     create_user(db_session, email="vendor@example.com", role="vendor")
-    headers = login_headers(client, "vendor@example.com", DEFAULT_PASSWORD)
+    headers = login_headers(client, "vendor@example.com")
 
     response = client.get("/api/v1/admin/shops", headers=headers)
 
@@ -123,7 +122,7 @@ def test_a_customer_cannot_approve_a_shop(client: TestClient, db_session: Sessio
     owner = create_user(db_session, email="shop@example.com", role="vendor")
     shop = create_shop(db_session, owner=owner, is_verified=False)
     create_user(db_session, email="customer@example.com", role="customer")
-    headers = login_headers(client, "customer@example.com", DEFAULT_PASSWORD)
+    headers = login_headers(client, "customer@example.com")
 
     response = client.post(f"/api/v1/admin/shops/{shop.id}/approve", headers=headers)
 
@@ -135,7 +134,7 @@ def test_a_customer_cannot_approve_a_shop(client: TestClient, db_session: Sessio
 def test_a_vendor_cannot_approve_a_shop(client: TestClient, db_session: Session) -> None:
     owner = create_user(db_session, email="shop@example.com", role="vendor")
     shop = create_shop(db_session, owner=owner, is_verified=False)
-    headers = login_headers(client, "shop@example.com", DEFAULT_PASSWORD)
+    headers = login_headers(client, "shop@example.com")
 
     response = client.post(f"/api/v1/admin/shops/{shop.id}/approve", headers=headers)
 
@@ -258,7 +257,7 @@ def test_a_suspended_shop_disappears_from_the_customer_shop_list(
     owner = create_user(db_session, email="shop@example.com", role="vendor")
     shop = create_shop(db_session, owner=owner, name="Live Shop", is_verified=True)
     create_user(db_session, email="customer@example.com", role="customer")
-    headers = login_headers(client, "customer@example.com", DEFAULT_PASSWORD)
+    headers = login_headers(client, "customer@example.com")
     assert shop.id is not None
 
     client.post(
@@ -298,7 +297,7 @@ def test_the_action_log_lists_the_decisions_newest_first(
 
 def test_a_customer_cannot_read_the_action_log(client: TestClient, db_session: Session) -> None:
     create_user(db_session, email="customer@example.com", role="customer")
-    headers = login_headers(client, "customer@example.com", DEFAULT_PASSWORD)
+    headers = login_headers(client, "customer@example.com")
 
     response = client.get("/api/v1/admin/actions", headers=headers)
 

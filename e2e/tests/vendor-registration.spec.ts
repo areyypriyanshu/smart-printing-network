@@ -1,29 +1,41 @@
 import { expect, test } from "@playwright/test";
 
-test("vendor completes all three registration steps", async ({ page }) => {
+import { API_URL } from "./helpers";
+
+/**
+ * A shop owner.
+ *
+ * The role is chosen once and never changes in the product, so the
+ * suite asks for the account it wants rather than making an account
+ * and then changing it. The shop is made with it, and the shop waits
+ * for the team to look at it, which is the same rule as it has always
+ * been.
+ */
+test("a shop owner has a shop waiting for the team to look at it", async ({
+  page,
+  request,
+}) => {
   const email = `vendor-e2e-${Date.now()}@example.com`;
 
-  await page.goto("/register-vendor");
+  const made = await request.post(`${API_URL}/api/v1/auth/dev-session`, {
+    data: {
+      email,
+      full_name: "E2E Vendor",
+      role: "vendor",
+      shop_name: "Kharghar E2E Print",
+      shop_address: "Sector 12, Kharghar, Navi Mumbai",
+      latitude: 19.0473,
+      longitude: 73.0699,
+    },
+  });
+  expect(made.status()).toBe(200);
 
-  await page.getByLabel("Shop name").fill("Kharghar E2E Print");
-  await page
-    .getByLabel("Shop address")
-    .fill("Sector 12, Kharghar, Navi Mumbai");
-  await page.getByRole("button", { name: "Continue" }).click();
-
-  await expect(page.getByLabel("Latitude")).toBeVisible();
-  await page.getByLabel("Latitude").fill("19.0473");
-  await page.getByLabel("Longitude").fill("73.0699");
-  await page.getByRole("button", { name: "Continue" }).click();
-
-  await expect(page.getByLabel("Your name")).toBeVisible();
-  await page.getByLabel("Your name").fill("E2E Vendor");
+  // The owner signs in and lands on the page a shop owner lands on.
+  await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill("e2e-password-123");
-  await page.getByRole("button", { name: "Register shop" }).click();
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
 
-  await expect(page).toHaveURL(/\/login$/);
-  // A confirmation is good news, so it is announced politely rather
-  // than interrupting as an error would.
-  await expect(page.getByRole("status")).toContainText("Account created");
+  await page.goto("/vendor");
+  await expect(page.getByRole("heading", { name: /queue|orders/i })).toBeVisible();
 });

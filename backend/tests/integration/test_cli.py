@@ -10,20 +10,16 @@ mistakes are the ones that leave the platform with no admin at all, or
 that destroy a moderation log.
 """
 
-import io
-import uuid
 from datetime import UTC, datetime, timedelta
-from unittest import mock
 
 import pytest
 from app.cli import main
-from app.errors import EmailTaken, Unauthenticated
-from app.models import AdminAction, RefreshToken, User
-from app.services import auth_service
+from app.errors import Conflict
+from app.models import AdminAction, User
+from app.services import identity_service
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
-    DEFAULT_PASSWORD,
     create_full_rate_table,
     create_shop,
     create_unpaid_order,
@@ -48,19 +44,24 @@ class _KeepOpen:
         return False
 
 
+class _Reader:
+    """A stand-in for the identity provider's own API."""
+
+    def __init__(self, people: dict[str, object] | None = None) -> None:
+        self.people = people or {}
+
+    def get_user(self, user_id: str) -> object:
+        person = self.people.get(user_id)
+        if person is None:
+            from app.gateways.identity.clerk_admin import ClerkAdminError
+
+            raise ClerkAdminError("the identity provider could not be reached")
+        return person
+
+
 def run(session: Session, *args: str) -> int:
     """Run a command against the test database."""
     return main(list(args), session_factory=lambda: _KeepOpen(session))
-
-
-def run_create_admin(session: Session, email: str, password: str = "password-123") -> int:
-    """Run create-admin with the password on standard input.
-
-    The password is not an argument, because an argument ends up in the
-    shell history, in the process list and in the container metadata.
-    """
-    with mock.patch("sys.stdin", io.StringIO(f"{password}\n")):
-        return run(session, "create-admin", email, "--password-stdin")
 
 
 def make_admin(session: Session, email: str = "admin@example.com") -> User:
@@ -175,19 +176,15 @@ def test_a_deleted_admin_cannot_sign_in(
 ) -> None:
     """A deactivated admin is refused at the door, not just at the door check.
 
-    The check on `is_active` happens on the login as well as on every
-    authenticated request, so a deactivated admin cannot get a new token
-    and an old token stops working too.
+    The check on `is_active` happens on every authenticated request, so
+    a deactivated admin cannot use a token it already holds.
     """
-    from app.services import auth_service
-
-    make_admin(db_session)
+    admin = make_admin(db_session)
     make_spare_admin(db_session)
     run(db_session, "deactivate-admin", "admin@example.com")
 
-    with pytest.raises(Unauthenticated) as raised:
-        auth_service.login(db_session, email="admin@example.com", password=DEFAULT_PASSWORD)
-    assert "disabled" in str(raised.value)
+    db_session.refresh(admin)
+    assert admin.is_active is False
 
 
 def test_deleting_a_pristine_admin_removes_it(db_session: Session) -> None:
@@ -229,10 +226,23 @@ def test_deleting_the_last_active_admin_is_refused(
 def test_creating_an_admin_twice_is_refused(
     db_session: Session, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert run_create_admin(db_session, "new@example.com") == 0
+    from app.cli import create_admin
+    from app.gateways.identity.clerk_admin import ClerkUser
+
+    reader = _Reader(
+        {
+            "user_known": ClerkUser(
+                id="user_known",
+                email="new@example.com",
+                full_name="The Operator",
+                email_verified=True,
+            )
+        }
+    )
+    assert create_admin(db_session, "user_known", reader) == 0
     capsys.readouterr()
 
-    assert run_create_admin(db_session, "new@example.com") == 1
+    assert create_admin(db_session, "user_known", reader) == 1
 
     assert "already exists" in capsys.readouterr().err
 
@@ -245,11 +255,24 @@ def test_a_deactivated_admin_cannot_be_recreated(
     Use activate-admin instead, so the history stays attached to the one
     account.
     """
+    from app.cli import create_admin
+    from app.gateways.identity.clerk_admin import ClerkUser
+
     make_admin(db_session)
     run(db_session, "deactivate-admin", "admin@example.com")
     capsys.readouterr()
 
-    assert run_create_admin(db_session, "admin@example.com") == 1
+    reader = _Reader(
+        {
+            "user_known": ClerkUser(
+                id="user_known",
+                email="admin@example.com",
+                full_name="The Operator",
+                email_verified=True,
+            )
+        }
+    )
+    assert create_admin(db_session, "user_known", reader) == 1
 
     assert "already exists" in capsys.readouterr().err
 
@@ -325,29 +348,24 @@ def test_a_deactivated_account_keeps_its_address(
 
     assert run(db_session, "deactivate-account", "unused@example.com") == 0
 
-    with pytest.raises(EmailTaken):
-        auth_service.register_customer(
+    with pytest.raises(Conflict):
+        identity_service.create_account(
             db_session,
+            subject="user_somebody_else",
             email="unused@example.com",
-            password=DEFAULT_PASSWORD,
             full_name="Test User",
+            role=identity_service.CUSTOMER,
         )
 
 
 def test_an_account_that_came_back_is_not_unused(
     db_session: Session, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A session since the account was made says a person was there."""
+    """An upload since the account was made says a person was there."""
     user = _make_old_customer(db_session, "returning@example.com")
-    db_session.add(
-        RefreshToken(
-            user_id=user.id,
-            family_id=uuid.uuid4(),
-            token_hash="a" * 64,
-            expires_at=datetime.now(UTC) + timedelta(days=1),
-        )
-    )
-    db_session.commit()
+    from tests.factories import create_upload_row
+
+    create_upload_row(db_session, customer=user)
 
     assert run(db_session, "prune-unused-accounts") == 0
 

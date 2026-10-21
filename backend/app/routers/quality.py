@@ -21,7 +21,7 @@ def _response(report: QualityReport) -> QualityReportResponse:
 @router.post(
     "/uploads/{upload_id}/quality",
     response_model=QualityReportResponse,
-    dependencies=[Depends(user_rate_limit(20, 60, "quality_trigger"))],
+    dependencies=[Depends(user_rate_limit(60, 60, "quality_trigger"))],
 )
 def trigger_quality(
     upload_id: uuid.UUID,
@@ -32,7 +32,9 @@ def trigger_quality(
 
     The check itself happens in the worker, so this answers at once. The
     report is one per file, so asking twice does not start a second
-    analysis.
+    analysis, which is why the limit here is not tight: the front end
+    asks for the check when the customer reaches the review step, and
+    the answer is cheap.
     """
     upload = quality_service.get_owned_upload(session, upload_id, user.id)
     return _response(quality_service.trigger(session, upload=upload))
@@ -60,7 +62,7 @@ def acknowledge_quality(
 @router.get(
     "/uploads/{upload_id}/quality",
     response_model=QualityReportResponse,
-    dependencies=[Depends(user_rate_limit(120, 60, "quality_read"))],
+    dependencies=[Depends(user_rate_limit(600, 60, "quality_read"))],
 )
 def get_quality(
     upload_id: uuid.UUID,
@@ -71,6 +73,11 @@ def get_quality(
 
     Another customer's file is not found, rather than refused, so the
     answer does not tell a stranger that it exists.
+
+    The read limit is generous because the front end polls while the
+    worker measures the file, and the worker runs every thirty seconds.
+    A customer with a few files open is a few reads every two seconds,
+    which is well inside the limit.
     """
     upload = quality_service.get_owned_upload(session, upload_id, user.id)
     return _response(quality_service.get_report(session, upload=upload, customer_id=user.id))

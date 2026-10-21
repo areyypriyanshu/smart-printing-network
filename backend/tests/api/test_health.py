@@ -34,7 +34,7 @@ def test_a_body_that_cannot_be_parsed_uses_the_standard_error_shape(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/api/v1/auth/login",
+        "/api/v1/auth/onboarding",
         content=b"\x7f\xfe\x00%",
         headers={"Content-Type": "application/json"},
     )
@@ -53,7 +53,7 @@ def test_an_unknown_route_uses_the_standard_error_shape(client: TestClient) -> N
 
 
 def test_a_wrong_method_uses_the_standard_error_shape(client: TestClient) -> None:
-    response = client.get("/api/v1/auth/login")
+    response = client.get("/api/v1/auth/onboarding")
 
     assert response.status_code == 405
     assert response.json()["error"]["code"] == "METHOD_NOT_ALLOWED"

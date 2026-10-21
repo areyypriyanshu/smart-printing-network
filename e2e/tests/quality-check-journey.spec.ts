@@ -39,11 +39,13 @@ test("a customer is warned about a low resolution file and still orders", async 
   await shop.getByRole("button", { name: "Choose this shop" }).click();
   await customer.getByRole("button", { name: "Continue to payment" }).click();
 
-  // The warning appears once the worker has measured the file.
+  // The warning appears once the worker has measured the file. The
+  // worker runs every thirty seconds, so this waits for two of its
+  // rounds rather than guessing at a time.
   const warning = customer.getByRole("region", { name: "File quality" });
   await expect(
     warning.getByRole("heading", { name: /check your file quality/i }),
-  ).toBeVisible({ timeout: 60_000 });
+  ).toBeVisible({ timeout: 120_000 });
   await expect(warning.getByText(/page 1/i)).toBeVisible();
   await expect(warning.getByText(/too few pixels/i)).toBeVisible();
 

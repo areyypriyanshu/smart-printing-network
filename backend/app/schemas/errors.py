@@ -26,6 +26,13 @@ def _response(description: str) -> dict[str, Any]:
 # The error responses every endpoint can return. Documenting them makes
 # the OpenAPI contract honest: a client generated from it knows which
 # failures to expect, and the contract test can check them.
+#: The answer when the identity provider could not be read. It is
+#: not in the list above, because most of the API does not talk to the
+#: provider and should not claim that it can fail this way.
+PROVIDER_UNAVAILABLE_RESPONSE = _response(
+    "The identity provider could not be reached. Try again in a moment."
+)
+
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: _response("The request was rejected, for example a wrong pickup code."),
     401: _response("The access token is missing or expired."),

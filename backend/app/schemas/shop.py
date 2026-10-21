@@ -4,7 +4,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.schemas.auth import UserResponse
+from app.schemas.identity import UserResponse
 from app.schemas.phone import Phone
 from app.schemas.text import MultiLine, SingleLine
 

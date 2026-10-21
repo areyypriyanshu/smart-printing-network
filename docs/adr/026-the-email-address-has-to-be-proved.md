@@ -1,8 +1,26 @@
 # ADR 026: The email address has to be proved
 
 Date: 2026-10-20
-Status: Accepted
+Status: Accepted, superseded in part by [ADR 029](029-clerk-authentication-with-local-authorization.md)
 Requirement: FR-19 (Sprint 5.7, hardening)
+
+> **Superseded in part (2026-10-21, and again on the day of the
+> cutover).** The *rule* in this record is unchanged and is the
+> important half of it: an address is a claim until it is proved, and
+> an unproved account cannot order a print, because the printout and
+> the pickup code are tied to the address. What changed is who proves
+> it and who sends the message. After the authentication provider
+> migration, Clerk sends the message and proves the address, and
+> **this application keeps no copy of the answer at all**. The column
+> `users.email_verified` is gone, the banner that told a customer
+> their address was not confirmed is gone, and the upload gate that
+> refused the order is gone, because the provider does not let anybody
+> sign in until the address is proved. A copy of an answer that
+> another server owns can only ever disagree with the truth, and it
+> disagreed in the way that costs a customer. The `EmailSender`
+> interface stays in the codebase for the product email that the
+> notification backlog will need. See
+> [ADR 029](029-clerk-authentication-with-local-authorization.md).
 
 ## Context
 
@@ -102,6 +120,13 @@ were sent to an address nobody reads.
    the same idea with fewer parts, and it works for an address that
    has no Google account. The two can sit next to each other later, and
    the table that holds them is the same shape either way.
+
+   *(Updated 2026-10-21. The two do now sit next to each other, in the
+   other order: the identity provider sends the verification message
+   and proves the address, and this application keeps a copy of the
+   answer. The hand written OAuth client that the alternative referred
+   to has been removed. See
+   [ADR 029](029-clerk-authentication-with-local-authorization.md).)*
 
 ## Consequences
 

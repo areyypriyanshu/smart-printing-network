@@ -7,7 +7,6 @@ import {
 
 import {
   API_URL,
-  SEEDED_PASSWORD,
   signIn as signInHelper,
   signInAsCustomer,
 } from "./helpers";
@@ -33,8 +32,8 @@ async function printedFileLink(
   request: APIRequestContext,
   orderId: string,
 ): Promise<string> {
-  const login = await request.post(`${API_URL}/api/v1/auth/login`, {
-    data: { email: VENDOR_EMAIL, password: SEEDED_PASSWORD },
+  const login = await request.post(`${API_URL}/api/v1/auth/dev-session`, {
+    data: { email: VENDOR_EMAIL },
   });
   const token = (await login.json()).access_token as string;
   const link = await request.get(
@@ -91,7 +90,7 @@ test("a Word document is printed like any other file", async ({
   // opens is a PDF even though the customer sent a Word document.
   const vendorContext = await browser.newContext();
   const vendor = await vendorContext.newPage();
-  await signInHelper(vendor, VENDOR_EMAIL, SEEDED_PASSWORD);
+  await signInHelper(vendor, VENDOR_EMAIL);
   await vendor.goto("/vendor");
 
   // The card is found by the order number, so another order in the

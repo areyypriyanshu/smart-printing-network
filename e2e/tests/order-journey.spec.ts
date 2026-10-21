@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
-  SEEDED_PASSWORD,
   signIn as signInHelper,
   signInAsCustomer,
 } from "./helpers";
@@ -73,7 +72,7 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   // The shop works the order. A second browser, a different person.
   const vendorContext = await browser.newContext();
   const vendor = await vendorContext.newPage();
-  await signInHelper(vendor, VENDOR_EMAIL, SEEDED_PASSWORD);
+  await signInHelper(vendor, VENDOR_EMAIL);
   await vendor.goto("/vendor");
 
   // The board has one card per active order, and the card moves between

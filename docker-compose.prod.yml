@@ -22,6 +22,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        # The publishable key is public and is baked into the bundle, so
+        # it is a build argument rather than a run time one.
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     image: ${SPN_WEB_IMAGE:-ghcr.io/areyypriyanshu/smart-printing-network/web:latest}
     restart: unless-stopped
     ports:
@@ -44,6 +48,12 @@ services:
       # Caddy needs a value for the ACME account address even when it never
       # talks to ACME, which is the case for a local run.
       ACME_EMAIL: ${ACME_EMAIL:-admin@localhost}
+      # The identity provider's host, for the content security policy.
+      # The browser loads the provider's script and talks to it from the
+      # page, so the policy has to allow it. There is no default: a
+      # policy that allows the wrong host is a policy that does not mean
+      # anything.
+      CLERK_FAPI_URL: ${CLERK_FAPI_URL:?set CLERK_FAPI_URL in the instance's .env}
     volumes:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -66,11 +76,23 @@ services:
       # keyed on ENV, so it must not be left to an untracked file. A Compose
       # "environment" entry overrides "env_file".
       ENV: production
-      JWT_SECRET: ${JWT_SECRET:?set a generated JWT_SECRET in the instance's .env}
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?set PAYMENT_PROVIDER in the instance's .env}
+      # The identity provider. These are the instance's own settings and
+      # they are pinned here so that a deployment cannot start with the
+      # wrong ones: the key set is fetched from the host, and the tokens
+      # are checked against the origins listed.
+      CLERK_FAPI_URL: ${CLERK_FAPI_URL:?set CLERK_FAPI_URL in the instance's .env}
+      CLERK_ALLOWED_ORIGINS: ${CLERK_ALLOWED_ORIGINS:?set CLERK_ALLOWED_ORIGINS in the instance's .env}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?set CLERK_SECRET_KEY in the instance's .env}
+      CLERK_WEBHOOK_SIGNING_SECRET: ${CLERK_WEBHOOK_SIGNING_SECRET:?set CLERK_WEBHOOK_SIGNING_SECRET in the instance's .env}
       # The testing surface has no business in production, whatever the
       # instance's .env says.
       TESTING_ENDPOINTS_ENABLED: "false"
+      # The local bypass mints a session without the identity provider,
+      # so a deployment with it on would accept a session that was never
+      # proved. It is off here whatever the instance's .env says, and the
+      # application refuses it in production as well.
+      SPN_DEV_AUTH: "false"
     # --proxy-headers makes uvicorn read the X-Forwarded-For that Caddy
     # sets. Without it the rate limiter sees the proxy address for every
     # request and one busy client can lock everyone else out. The peer is
@@ -102,9 +124,17 @@ services:
     environment:
       # The worker runs the same code as the API, so it is in the same mode.
       ENV: production
-      JWT_SECRET: ${JWT_SECRET:?set a generated JWT_SECRET in the instance's .env}
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?set PAYMENT_PROVIDER in the instance's .env}
+      # The identity provider. These are the instance's own settings and
+      # they are pinned here so that a deployment cannot start with the
+      # wrong ones: the key set is fetched from the host, and the tokens
+      # are checked against the origins listed.
+      CLERK_FAPI_URL: ${CLERK_FAPI_URL:?set CLERK_FAPI_URL in the instance's .env}
+      CLERK_ALLOWED_ORIGINS: ${CLERK_ALLOWED_ORIGINS:?set CLERK_ALLOWED_ORIGINS in the instance's .env}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?set CLERK_SECRET_KEY in the instance's .env}
+      CLERK_WEBHOOK_SIGNING_SECRET: ${CLERK_WEBHOOK_SIGNING_SECRET:?set CLERK_WEBHOOK_SIGNING_SECRET in the instance's .env}
       TESTING_ENDPOINTS_ENABLED: "false"
+      SPN_DEV_AUTH: "false"
     command: python -m app.jobs.scheduler
     healthcheck:
       test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/spn-worker-heartbeat') < 120 else 1)"]

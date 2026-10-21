@@ -1,8 +1,16 @@
 # ADR 019: Rate limiting a login per account and per address
 
 Date: 2026-10-20
-Status: Accepted
+Status: Accepted, superseded in part by [ADR 029](029-clerk-authentication-with-local-authorization.md)
 Requirement: FR-1 (Sprint 6)
+
+> **Superseded in part (2026-10-21).** The login this record limits is
+> Clerk's after the authentication provider migration, and the provider
+> does the limiting. The *rule* is kept, not the endpoint: the shape
+> here, an account limit and a wider address limit counted separately,
+> is what the endpoints that remain ours need, and the reasoning about
+> a campus sharing one address still holds. See
+> [ADR 029](029-clerk-authentication-with-local-authorization.md).
 
 ## Context
 

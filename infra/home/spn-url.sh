@@ -97,7 +97,6 @@ if [ "$SYNC" -eq 1 ]; then
         current="$(grep '^APP_BASE_URL=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
         if [ "$current" != "$URL" ]; then
             sed -i "s|^APP_BASE_URL=.*|APP_BASE_URL=${URL}|" "$ENV_FILE"
-            sed -i "s|^API_BASE_URL=.*|API_BASE_URL=${URL}|" "$ENV_FILE"
             echo "spn-url: the application was told the new address" >&2
             "${COMPOSE[@]}" up -d api worker >/dev/null
             # The API and the worker are restarting, and the edge

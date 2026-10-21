@@ -10,12 +10,14 @@ put next to each other.
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import DataError
+from tests.factories import identity_headers
 
-REGISTER = "/api/v1/auth/register"
+ONBOARDING = "/api/v1/auth/onboarding"
+SUBJECT = "user_test_newcomer"
 
 
-def register_payload(email: str = "new.user@example.com") -> dict[str, str]:
-    return {"email": email, "password": "abcd1234", "full_name": "New User"}
+def onboarding_payload(role: str = "customer") -> dict[str, str]:
+    return {"role": role}
 
 
 def test_a_server_error_names_the_request_it_came_from(
@@ -26,9 +28,13 @@ def test_a_server_error_names_the_request_it_came_from(
     def explode(*args: object, **kwargs: object) -> None:
         raise RuntimeError("something nobody planned for")
 
-    monkeypatch.setattr("app.routers.auth.auth_service.register_customer", explode)
+    monkeypatch.setattr("app.services.identity_service.create_account", explode)
 
-    response = client_that_reports_failures.post(REGISTER, json=register_payload())
+    response = client_that_reports_failures.post(
+        ONBOARDING,
+        json=onboarding_payload(),
+        headers=identity_headers(client_that_reports_failures, SUBJECT),
+    )
 
     assert response.status_code == 500
     body = response.json()
@@ -55,9 +61,13 @@ def test_a_value_the_database_refuses_is_a_validation_error(
             Exception("PostgreSQL text fields cannot contain NUL (0x00) bytes"),
         )
 
-    monkeypatch.setattr("app.routers.auth.auth_service.register_customer", refuse)
+    monkeypatch.setattr("app.services.identity_service.create_account", refuse)
 
-    response = client_that_reports_failures.post(REGISTER, json=register_payload())
+    response = client_that_reports_failures.post(
+        ONBOARDING,
+        json=onboarding_payload(),
+        headers=identity_headers(client_that_reports_failures, SUBJECT),
+    )
 
     assert response.status_code == 422
     body = response.json()

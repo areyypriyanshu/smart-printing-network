@@ -49,7 +49,21 @@ test-jobs:
 test-fe:
 	cd frontend && npm run test
 
+# The end to end suite signs in through the local way in, because it has
+# to run offline and the same way every time. The route behind it is
+# refused in production, so the suite cannot be run against a deployment
+# that matters.
+#
+# The local stack signs people in through the real identity provider by
+# default, so the suite needs the local way in switched on first:
+#
+#   SPN_DEV_AUTH=true VITE_SPN_DEV_AUTH=true docker compose up -d
+#
 e2e:
+	@grep -qE '^SPN_DEV_AUTH=true' .env 2>/dev/null || \
+		echo "note: the end to end suite signs in through the local way in." \
+		echo "      set SPN_DEV_AUTH=true and VITE_SPN_DEV_AUTH=true in .env," \
+		echo "      then: docker compose up -d"
 	cd e2e && npm test
 
 e2e-install:
@@ -113,6 +127,13 @@ coverage:
 openapi:
 	cd backend && FAKE_WEBHOOK_SECRET=test-only-fake-webhook-secret uv run python scripts/export_openapi.py
 	cd frontend && npx openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts
+
+# Is the identity provider set up the way this project needs it? Reads
+# CLERK_FAPI_URL and CLERK_ALLOWED_ORIGINS from the environment, and
+# checks a token too if one is given:
+#   make check-clerk CLERK_TOKEN=...
+check-clerk:
+	cd backend && uv run python scripts/check_clerk.py $(if $(CLERK_TOKEN),--token "$(CLERK_TOKEN)",)
 
 reset:
 	docker compose --profile tools down -v

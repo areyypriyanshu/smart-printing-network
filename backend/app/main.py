@@ -11,16 +11,20 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.config import get_settings
 from app.errors import AppError, exception_handler, http_exception_handler
 from app.gateways.email import build_email_sender
-from app.gateways.oauth import build_oauth_provider
+from app.gateways.identity import (
+    ClerkAdminClient,
+    ClerkTokenVerifier,
+    FakeTokenVerifier,
+)
 from app.gateways.payments import build_payment_gateway
 from app.gateways.storage import S3Storage
 from app.logging import RequestIdMiddleware, setup_logging
 from app.rate_limit import RateLimiter
 from app.routers import (
     admin,
-    auth,
+    dev_auth,
     health,
-    oauth,
+    identity,
     orders,
     quality,
     quotes,
@@ -28,6 +32,7 @@ from app.routers import (
     uploads,
     vendor,
     webhooks,
+    webhooks_clerk,
 )
 
 API_PREFIX = "/api/v1"
@@ -89,13 +94,21 @@ def create_app() -> FastAPI:
     app.state.rate_limiter = RateLimiter()
     app.state.payment_gateway = build_payment_gateway(settings)
     app.state.email_sender = build_email_sender(settings)
-    # The providers that this deployment offers. A provider that is not
-    # configured is not there at all, and the front end hides the button.
-    app.state.oauth_providers = {
-        name: provider
-        for name in ("google",)
-        if (provider := build_oauth_provider(settings, name)) is not None
-    }
+    # The verifier reads a token and says who it names. The local
+    # bypass is a different implementation of the same interface, so
+    # the application cannot tell which one it is talking to.
+    app.state.token_verifier = (
+        FakeTokenVerifier()
+        if settings.spn_dev_auth
+        else ClerkTokenVerifier(
+            jwks_url=settings.clerk_jwks_url,
+            issuer=settings.clerk_fapi_url,
+            allowed_origins=tuple(settings.clerk_origin_list),
+        )
+    )
+    # The reader asks the identity provider about a person, when a
+    # local account is being created.
+    app.state.identity_reader = ClerkAdminClient(secret_key=settings.clerk_secret_key)
     app.state.storage = S3Storage(
         endpoint_url=settings.s3_endpoint_url or None,
         bucket=settings.s3_bucket,
@@ -112,8 +125,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, exception_handler)
     app.include_router(health.router)
-    app.include_router(auth.router, prefix=API_PREFIX)
-    app.include_router(oauth.router, prefix=API_PREFIX)
+    app.include_router(identity.router, prefix=API_PREFIX)
+    app.include_router(dev_auth.router, prefix=API_PREFIX)
     app.include_router(shops.router, prefix=API_PREFIX)
     app.include_router(vendor.router, prefix=API_PREFIX)
     app.include_router(uploads.router, prefix=API_PREFIX)
@@ -122,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(orders.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(webhooks.router, prefix=API_PREFIX)
+    app.include_router(webhooks_clerk.router, prefix=API_PREFIX)
     # Shadowing the method on the instance is the documented way to change
     # the OpenAPI document FastAPI produces.
     app.openapi = lambda: build_openapi(app)  # type: ignore[method-assign]

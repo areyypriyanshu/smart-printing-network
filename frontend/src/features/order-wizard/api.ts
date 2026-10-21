@@ -3,8 +3,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   ApiError,
   apiRequest,
-  currentAccessToken,
-  refreshAccessToken,
+  currentToken,
   type ApiErrorBody,
   type QuoteRequest,
   type QuoteResponse,
@@ -61,11 +60,11 @@ export function uploadPdf(
   const xhr = new XMLHttpRequest();
   let retried = false;
 
-  const attempt = () => {
+  const attempt = async () => {
     const form = new FormData();
     form.append("file", file, file.name);
+    const token = await currentToken();
     xhr.open("POST", "/api/v1/uploads");
-    const token = currentAccessToken();
     if (token !== null)
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(form);
@@ -80,10 +79,12 @@ export function uploadPdf(
     xhr.onload = () => {
       void (async () => {
         if (xhr.status === 401 && !retried) {
+          // The token may have expired between the browser asking for
+          // it and the server checking it. It is asked for again, and
+          // the upload is tried once more.
           retried = true;
-          const token = await refreshAccessToken();
-          if (token !== null) {
-            attempt();
+          if ((await currentToken()) !== null) {
+            void attempt();
             return;
           }
         }

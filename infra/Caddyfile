@@ -12,6 +12,11 @@
 # SPN_TRUSTED_PROXIES  the networks whose forwarded headers are believed.
 #             Empty on a VPS, where the browser is the only client. A
 #             deployment behind a tunnel sets it to the tunnel's network.
+# CLERK_FAPI_URL  the identity provider's own host. The browser loads
+#             the provider's script and talks to it from the page, so
+#             the content security policy has to allow it. It has no
+#             default, because a policy that allows the wrong host is a
+#             policy that does not mean anything.
 
 {
 	# The address Caddy registers the ACME account with. It has to have a
@@ -50,10 +55,20 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
-		# The policy allows the Razorpay checkout and the web fonts, and
-		# nothing else from a third party. The app itself ships no inline
-		# scripts.
-		Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com; frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com; connect-src 'self' https://api.razorpay.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		# The policy allows the Razorpay checkout, the web fonts and the
+		# identity provider, and nothing else from a third party. The app
+		# itself ships no inline scripts.
+		#
+		# The provider's own host is needed in three places, and the
+		# reasons are the provider's: it serves the script the browser
+		# loads, the browser talks to it directly, and it frames its own
+		# components. The hosts under protect.clerk.com are where the
+		# provider's abuse and fraud protection lives, and the port
+		# wildcard in connect-src is needed because they are not served
+		# on 443. The images come from the provider's own host, and the
+		# styles need unsafe-inline because the provider styles its
+		# components at run time.
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; connect-src 'self' https://api.razorpay.com {$CLERK_FAPI_URL} https://*.protect.clerk.com:*; img-src 'self' data: https://img.clerk.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 

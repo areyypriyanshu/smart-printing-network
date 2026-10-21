@@ -1,81 +1,21 @@
 import {
   apiRequest,
-  type AccessTokenResponse,
-  type ChangeEmailRequest,
-  type LoginRequest,
-  type OAuthProvidersResponse,
-  type OAuthStartResponse,
-  type RegisterRequest,
-  type RegisterVendorRequest,
+  type OnboardingRequest,
   type User,
-  type VendorRegistrationResponse,
-  type VerificationSentResponse,
 } from "../../api/client";
 
-export function loginRequest(body: LoginRequest): Promise<AccessTokenResponse> {
-  return apiRequest("/auth/login", {
-    method: "POST",
-    body,
-    retryOnUnauthorized: false,
-  });
-}
-
-export function registerRequest(body: RegisterRequest): Promise<User> {
-  return apiRequest("/auth/register", {
-    method: "POST",
-    body,
-    retryOnUnauthorized: false,
-  });
-}
-
-export function registerVendorRequest(
-  body: RegisterVendorRequest,
-): Promise<VendorRegistrationResponse> {
-  return apiRequest("/auth/register-vendor", {
-    method: "POST",
-    body,
-    retryOnUnauthorized: false,
-  });
-}
-
-export function logoutRequest(): Promise<void> {
-  return apiRequest("/auth/logout", {
-    method: "POST",
-    retryOnUnauthorized: false,
-  });
-}
-
+/** The account the caller is. */
 export function meRequest(): Promise<User> {
-  return apiRequest("/me", { retryOnUnauthorized: false });
+  return apiRequest("/me");
 }
 
-/** Prove the address from the token in the link that was sent to it. */
-export function verifyEmailRequest(token: string): Promise<User> {
-  return apiRequest("/auth/verify-email", {
-    method: "POST",
-    body: { token },
-    retryOnUnauthorized: false,
-  });
-}
-
-/** Ask for the link again, to the address the account holds. */
-export function resendVerificationRequest(): Promise<VerificationSentResponse> {
-  return apiRequest("/auth/resend-verification", { method: "POST" });
-}
-
-/** Put a different address on the account. */
-export function changeEmailRequest(body: ChangeEmailRequest): Promise<User> {
-  return apiRequest("/auth/change-email", { method: "POST", body });
-}
-
-/** The providers this deployment offers. */
-export function oauthProvidersRequest(): Promise<OAuthProvidersResponse> {
-  return apiRequest("/auth/oauth/providers", { retryOnUnauthorized: false });
-}
-
-/** The address to open to sign in with a provider. */
-export function oauthStartRequest(
-  provider: string,
-): Promise<OAuthStartResponse> {
-  return apiRequest(`/auth/oauth/${provider}/start`, { method: "POST" });
+/**
+ * Make the account, once the person has said what they are here for.
+ *
+ * The body carries the intent and nothing else. The address and the
+ * name are read by the server from the identity provider, because the
+ * provider proved them and the browser did not.
+ */
+export function onboardRequest(body: OnboardingRequest): Promise<User> {
+  return apiRequest("/auth/onboarding", { method: "POST", body });
 }

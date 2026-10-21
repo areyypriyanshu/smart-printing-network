@@ -2,14 +2,12 @@ import { expect, type Page } from "@playwright/test";
 
 // The customer every journey test uses.
 //
-// Registration is rate limited per address, and every test in this
-// suite comes from the same one. Creating a customer per test would
-// trip that limit and make the suite flaky, so one customer is created
-// once, before the tests start, and shared.
+// The account is created once, before the tests start, and shared. The
+// end to end suite signs in through the local way in, which is the one
+// the application offers when the identity provider is not in the
+// picture, and the local way in makes the account if it is not there.
 
 export const CUSTOMER_EMAIL = "e2e-customer@example.com";
-export const CUSTOMER_PASSWORD = "e2e-password-123";
-export const SEEDED_PASSWORD = "spn-demo-password";
 
 // The API the tests call directly.
 //
@@ -19,19 +17,14 @@ export const SEEDED_PASSWORD = "spn-demo-password";
 // machine may already have it.
 export const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000";
 
-export async function signIn(
-  page: Page,
-  email: string,
-  password: string,
-): Promise<void> {
+export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/login$/);
 }
 
 /** Sign in as the shared customer. */
 export function signInAsCustomer(page: Page): Promise<void> {
-  return signIn(page, CUSTOMER_EMAIL, CUSTOMER_PASSWORD);
+  return signIn(page, CUSTOMER_EMAIL);
 }

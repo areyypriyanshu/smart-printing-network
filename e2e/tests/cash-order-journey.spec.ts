@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
-  SEEDED_PASSWORD,
   signIn as signInHelper,
   signInAsCustomer,
 } from "./helpers";
@@ -67,7 +66,7 @@ test("a customer reserves a job and pays for it at the counter", async ({
   // The shop sees it in the queue, marked as one to pay for in cash.
   const vendorContext = await browser.newContext();
   const vendor = await vendorContext.newPage();
-  await signInHelper(vendor, VENDOR_EMAIL, SEEDED_PASSWORD);
+  await signInHelper(vendor, VENDOR_EMAIL);
   await vendor.goto("/vendor");
 
   const newColumn = vendor.getByRole("region", { name: "New" });

@@ -2,21 +2,33 @@
 
 The command line is how an admin account is managed, and it is the only
 way one is created. Three things about it are guards rather than
-features: the password policy, the rule about which accounts may be
-deleted, and the rule that the demo data is never seeded into a
-production deployment.
+features: the rule that an administrator has to be somebody the
+identity provider knows, the rule about which accounts may be deleted,
+and the rule that the demo data is never seeded into a production
+deployment.
 """
-
-import io
-from datetime import UTC, datetime, timedelta
-from unittest import mock
 
 import pytest
 from app.cli import main, seed
-from app.models import AdminAction, RefreshToken, Shop, User
+from app.gateways.identity.clerk_admin import ClerkAdminError, ClerkUser
+from app.models import AdminAction, Shop, User
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tests.factories import create_user
+from tests.factories import create_shop, create_user
+
+
+class _Reader:
+    """A stand-in for the identity provider's own API."""
+
+    def __init__(self, people: dict[str, ClerkUser] | None = None) -> None:
+        self.people = people or {}
+        self.known = "user_known"
+
+    def get_user(self, user_id: str) -> ClerkUser:
+        person = self.people.get(user_id)
+        if person is None:
+            raise ClerkAdminError("the identity provider could not be reached")
+        return person
 
 
 class _KeepOpen:
@@ -36,57 +48,60 @@ def run(session: Session, *args: str) -> int:
     return main(list(args), session_factory=lambda: _KeepOpen(session))
 
 
-def run_create_admin(session: Session, email: str, password: str = "password-123") -> int:
-    with mock.patch("sys.stdin", io.StringIO(f"{password}\n")):
-        return run(session, "create-admin", email, "--password-stdin")
-
-
-def test_a_weak_admin_password_is_refused(
+def test_an_admin_the_provider_does_not_know_is_refused(
     db_session: Session, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The same policy that the sign-up form holds.
+    """An administrator is somebody who can sign in.
 
-    The form is the front door, so the policy belongs to the application
-    and not to the form. The command line creates the account that can
-    do the most damage, so it has to hold the same rule.
+    The account is created from the identity provider's own record of
+    the person, so a subject the provider has never heard of cannot
+    become an administrator here.
     """
-    assert run_create_admin(db_session, "new@example.com", password="short") == 1
-    assert "at least" in capsys.readouterr().err
+    from app.cli import create_admin
+
+    reader = _Reader()
+    assert create_admin(db_session, "user_nobody", reader) == 1
+    assert "identity provider" in capsys.readouterr().err
 
     found = db_session.scalar(select(User).where(User.email == "new@example.com"))
     assert found is None
 
 
-def test_a_strong_admin_password_is_accepted(db_session: Session) -> None:
-    assert run_create_admin(db_session, "new@example.com", password="a-long-enough-password") == 0
+def test_an_admin_the_provider_knows_is_accepted(db_session: Session) -> None:
+    from app.cli import create_admin
+
+    reader = _Reader(
+        {
+            "user_known": ClerkUser(
+                id="user_known",
+                email="new@example.com",
+                full_name="The Operator",
+                email_verified=True,
+            )
+        }
+    )
+    assert create_admin(db_session, "user_known", reader) == 0
 
     found = db_session.scalar(select(User).where(User.email == "new@example.com"))
     assert found is not None
     assert found.role == "admin"
+    assert found.clerk_user_id == "user_known"
 
 
-def test_an_admin_with_a_session_cannot_be_deleted(
+def test_an_admin_with_a_shop_cannot_be_deleted(
     db_session: Session, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A session row points at the account and does not cascade.
+    """A shop row points at the account and does not cascade.
 
-    Deleting the account would leave the session behind, pointing at a
+    Deleting the account would leave the shop behind, pointing at a
     user that is no longer there.
     """
     admin = create_user(db_session, email="admin@example.com", role="admin", full_name="Owner")
     create_user(db_session, email="spare@example.com", role="admin", full_name="Spare")
-    db_session.add(
-        RefreshToken(
-            user_id=admin.id,
-            token_hash="a" * 64,
-            family_id=admin.id,
-            expires_at=datetime.now(UTC) + timedelta(days=7),
-        )
-    )
-    db_session.commit()
+    create_shop(db_session, owner=admin)
 
     assert run(db_session, "delete-admin", "admin@example.com") == 1
-    assert "session" in capsys.readouterr().err
+    assert "shop" in capsys.readouterr().err
 
     found = db_session.scalar(select(User).where(User.email == "admin@example.com"))
     assert found is not None
