@@ -276,6 +276,19 @@ webhook keeps in step.
   If Brevo also sends from the domain, the SPF record holds both
   mechanisms and the two DKIM selectors are separate. This is one
   deliberate change, not two.
+- **The sign-up form asks for an email and a name, and nothing else.**
+  A new Clerk instance requires a phone number at sign-up, and Clerk
+  does not support Indian (+91) phone numbers, so left alone **no
+  Indian customer could register at all**. The phone number is
+  therefore optional, and not used for sign-up. It stays enabled as a
+  second factor, which is the one thing it could still be used for,
+  though that is a paid plan feature for production use and it has
+  the same country limitation, so multi factor authentication is not
+  available to this product on the free tier.
+- Clerk's own password rules apply once it owns the password: a
+  minimum of 15 characters, and a check against a list of breached
+  passwords at sign-in, which is a call to a third party and a
+  network dependency the test suite has to know about.
 
 ## Revisit if
 
