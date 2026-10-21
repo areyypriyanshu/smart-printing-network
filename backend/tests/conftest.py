@@ -56,6 +56,21 @@ def cash_at_store_is_on() -> Iterator[None]:
     settings.cash_at_store_enabled = original
 
 
+@pytest.fixture(autouse=True, scope="session")
+def the_local_way_in_is_on() -> Iterator[None]:
+    """The local way in is on for the test suite.
+
+    The end to end suite signs in through it, because it has to run
+    offline, and the tests here do the same. The setting is refused in
+    production, and the route behind it is the only place it is used.
+    """
+    settings = get_settings()
+    original = settings.spn_dev_auth
+    settings.spn_dev_auth = True
+    yield
+    settings.spn_dev_auth = original
+
+
 @pytest.fixture(scope="session")
 def test_database() -> Iterator[str]:
     """The test database, built from scratch for every run.

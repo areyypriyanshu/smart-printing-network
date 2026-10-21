@@ -96,9 +96,9 @@ export interface paths {
          * Dev Session
          * @description A session for an account the suite already has.
          *
-         *     The account has to exist. The suite creates it through the same
-         *     route a person would, so that the account is a real one with a
-         *     real role, and this route only signs it in.
+         *     The account is made if it is not there, so that the suite does not
+         *     have to know how an account is made, and the account it names is a
+         *     real one with a real role.
          */
         post: operations["dev_session_api_v1_auth_dev_session_post"];
         delete?: never;

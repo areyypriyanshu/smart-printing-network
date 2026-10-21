@@ -306,6 +306,15 @@ jobs:
       # route is public and a key in the repository is a key everybody
       # knows. This one is thrown away with the runner.
       FAKE_WEBHOOK_SECRET: ci-only-fake-webhook-secret-0123456789abcdef
+      # The identity provider. Exporting the schema builds the
+      # application, and the application refuses to start without the
+      # provider's settings, because there is one way to sign in. These
+      # values are placeholders and the export never reaches the
+      # provider.
+      CLERK_FAPI_URL: https://placeholder.clerk.accounts.dev
+      CLERK_ALLOWED_ORIGINS: http://localhost:5173
+      CLERK_SECRET_KEY: ci-placeholder-not-a-real-secret-0123456789
+      CLERK_WEBHOOK_SIGNING_SECRET: ci-placeholder-webhook-secret-0123456789
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.3.0

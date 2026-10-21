@@ -25,6 +25,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.errors import Conflict, NotFound
 from app.gateways.identity.fake import FakeTokenVerifier, dev_subject_for
+from app.models import User
 from app.schemas.errors import ERROR_RESPONSES
 from app.services import identity_service
 
@@ -62,9 +63,9 @@ def dev_session(
 ) -> DevSessionResponse:
     """A session for an account the suite already has.
 
-    The account has to exist. The suite creates it through the same
-    route a person would, so that the account is a real one with a
-    real role, and this route only signs it in.
+    The account is made if it is not there, so that the suite does not
+    have to know how an account is made, and the account it names is a
+    real one with a real role.
     """
     settings = get_settings()
     if not settings.spn_dev_auth:
@@ -76,33 +77,14 @@ def dev_session(
 
     user = identity_service.find_by_email(session, body.email)
     if user is None:
-        if body.role == identity_service.VENDOR:
-            if (
-                body.shop_name is None
-                or body.shop_address is None
-                or body.latitude is None
-                or body.longitude is None
-            ):
-                raise Conflict("A shop needs a name, an address and a place")
-            user, _shop = identity_service.create_vendor_account(
-                session,
-                subject=dev_subject_for(body.email),
-                email=body.email,
-                full_name=body.full_name,
-                shop_name=body.shop_name,
-                shop_address=body.shop_address,
-                phone=None,
-                latitude=body.latitude,
-                longitude=body.longitude,
-            )
-        else:
-            user = identity_service.create_account(
-                session,
-                subject=dev_subject_for(body.email),
-                email=body.email,
-                full_name=body.full_name,
-                role=identity_service.CUSTOMER,
-            )
+        try:
+            user = _make_account(session, body)
+        except Conflict:
+            # Two requests for the same address at the same time. The
+            # other one made it, so that is the account.
+            user = identity_service.find_by_email(session, body.email)
+            if user is None:
+                raise
     if user.clerk_user_id is None:
         # An account made before the cutover has no identifier, because
         # the identity provider did not exist then. It is given the one
@@ -111,3 +93,34 @@ def dev_session(
         session.commit()
 
     return DevSessionResponse(access_token=verifier.issue(user.clerk_user_id))
+
+
+def _make_account(session: Session, body: DevSessionRequest) -> User:
+    """The account the suite asked for, made."""
+    if body.role == identity_service.VENDOR:
+        if (
+            body.shop_name is None
+            or body.shop_address is None
+            or body.latitude is None
+            or body.longitude is None
+        ):
+            raise Conflict("A shop needs a name, an address and a place")
+        user, _shop = identity_service.create_vendor_account(
+            session,
+            subject=dev_subject_for(body.email),
+            email=body.email,
+            full_name=body.full_name,
+            shop_name=body.shop_name,
+            shop_address=body.shop_address,
+            phone=None,
+            latitude=body.latitude,
+            longitude=body.longitude,
+        )
+        return user
+    return identity_service.create_account(
+        session,
+        subject=dev_subject_for(body.email),
+        email=body.email,
+        full_name=body.full_name,
+        role=identity_service.CUSTOMER,
+    )

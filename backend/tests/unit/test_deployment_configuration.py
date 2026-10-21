@@ -305,23 +305,31 @@ def test_the_restore_drill_cannot_drop_the_live_database() -> None:
 def test_the_example_environment_holds_no_working_clerk_key() -> None:
     """The Clerk settings in the template carry no working secret.
 
-    The template is in the repository, so anything in it is public. The
-    instance's host is not a secret, since the publishable key the front
-    end carries encodes it, and the switches are meant to be read. A
-    secret key and a webhook signing secret are secrets, and neither may
-    appear here with a value.
+    The template is in the repository, so anything in it is public.
+
+    The instance's host and the origins are not secrets, and the
+    template has to carry them: the application refuses to start
+    without them, and the continuous integration starts the whole stack
+    from this file. The secret key and the webhook signing secret are
+    secrets, and the template carries a value that says out loud that
+    it is a placeholder. A deployment sets its own.
     """
     example = _read(".env.example")
-
+    values: dict[str, str] = {}
     for line in example.splitlines():
-        if not line.startswith("CLERK_"):
-            continue
-        name, _, value = line.partition("=")
-        if name in ("CLERK_ENABLED",):
-            # A switch, not a secret. The template shows it off.
-            assert value.strip() in ("true", "false"), name
-            continue
-        assert value.strip() == "", f"{name} carries a value in the template"
+        if line.startswith("CLERK_") and "=" in line:
+            name, _, value = line.partition("=")
+            values[name] = value.strip()
+
+    # The host and the origins are read by everybody and are not
+    # secrets, and the application cannot start without them.
+    assert values["CLERK_FAPI_URL"] != ""
+    assert values["CLERK_ALLOWED_ORIGINS"] != ""
+
+    # The two that are secrets carry a placeholder, and a placeholder
+    # that says so rather than one that looks like a key.
+    for name in ("CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET"):
+        assert "placeholder" in values[name], name
 
 
 def test_the_production_stack_cannot_run_the_local_bypass() -> None:

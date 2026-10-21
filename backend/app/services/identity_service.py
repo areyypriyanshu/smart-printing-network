@@ -77,7 +77,14 @@ def create_account(
         is_active=True,
     )
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        # Two requests for the same address at the same time both find
+        # that the address is free, and one of them loses. That is a
+        # conflict and not a fault, and the answer says so.
+        session.rollback()
+        raise Conflict("An account already uses that email address") from exc
     return user
 
 
