@@ -4,6 +4,8 @@ from pathlib import Path
 from app.gateways.storage import MemoryStorage
 from app.jobs import analyze_quality
 from app.models import QualityReport
+from app.quality.analyzer import AnalysisTimeout
+from app.services import quality_service
 from app.services.quality_service import run_one
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -111,6 +113,39 @@ def test_quality_worker_completes_report_from_private_memory_storage(
     assert report.status == "DONE"
     assert len(report.pages) == 1
     assert report.algorithm_version
+
+
+def test_a_file_that_takes_too_long_fails_the_report_without_blocking_the_order(
+    client: TestClient, db_session: Session, tmp_path: Path, monkeypatch
+) -> None:
+    """A file that will not finish in time gives a failed report.
+
+    The report says the check was stopped rather than that the file is
+    bad, and the order is not affected: the customer can still order.
+    """
+    customer = create_user(db_session, email="slow@example.com")
+    upload = create_upload_row(session=db_session, customer=customer)
+    pdf = make_pdf(tmp_path / "quality.pdf", pages=1)
+    storage: MemoryStorage = client.app.state.storage
+    storage.put_file(upload.file_key, pdf)
+    report = QualityReport(upload_id=upload.id, status="PENDING", pages=[], summary={})
+    db_session.add(report)
+    db_session.commit()
+
+    def too_slow(*_args: object, **_kwargs: object) -> None:
+        raise AnalysisTimeout("The quality check took too long and was stopped")
+
+    monkeypatch.setattr(quality_service, "analyze_pdf", too_slow)
+
+    assert run_one(
+        db_session,
+        report_id=report.id,
+        storage=storage,
+        now=datetime.now(UTC),
+    )
+    db_session.refresh(report)
+    assert report.status == "FAILED"
+    assert report.error == "The quality check took too long and was stopped"
 
 
 def test_the_job_does_not_analyse_the_same_report_twice(
