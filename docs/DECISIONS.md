@@ -16,7 +16,7 @@ enforced in more than one place.
 
 ---
 
-## The five decisions that shape everything else
+## The six decisions that shape everything else
 
 ### 1. The webhook, not the browser, decides that an order is paid
 
@@ -81,6 +81,30 @@ debug. A second worker is safe by construction.
 [ADR 003](adr/003-database-driven-jobs.md),
 [ADR 008](adr/008-single-instance-docker-compose.md)
 
+### 6. Clerk proves who someone is, this database decides what they may do
+
+Sign-up, sign-in, passwords, the verification email, sessions and
+social sign-in are Clerk's. The role, the shop, the order, the money,
+the file and **every ownership check** stay here, in the services,
+where a missing router check cannot leak anything. The role is read
+from the database row, never from the token, and a cross-tenant
+request is still a 404.
+
+The local account is created exactly once, by the import for an
+existing person or by an explicit onboarding step for a new one, and
+the role is chosen there and never changes. A webhook keeps the local
+copy in step, and it can only do a closed list of things: it cannot
+write a role.
+
+This reverses an earlier decision, and the reversal is written down
+rather than slipped in. The previous version rejected third-party
+providers because they "hide the thing being demonstrated"; the
+authentication was the interesting part then, and the ownership rules
+are what is interesting now. The cost is named too: on the free tier
+the verification email and the sign-in screen carry Clerk's branding
+and cannot be edited.
+[ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
+
 ---
 
 ## What was deliberately left out
@@ -95,7 +119,7 @@ build.
 | A CNN for blur detection | No labelled dataset and no evaluation. Effective DPI plus Laplacian variance on a labelled fixture set answers the same question and can be explained. |
 | Machine learning for price or wait estimates | Price is arithmetic. Wait estimates start as a rolling median and are only replaced by a model if they measurably lose to it on real data. |
 | Vendor payouts, GST invoicing | Marketplace money movement needs KYC, split payments and legal review. |
-| Email and SMS notifications | In app status only, for now. |
+| Email and SMS notifications | In app status only, for now. Clerk sends the one message that proves an address; the `EmailSender` interface is kept for the product email that this backlog will need, and Brevo plugs into it without code. |
 | Page ranges, binding, multi file orders | Whole document printing only. |
 | Kubernetes, Redis, a managed database | One instance is enough, and each would add cost and failure modes without users to justify them. |
 
@@ -166,7 +190,10 @@ rather than in a policy page.
 **A login is rate limited per account as well as per address.** Ten
 guesses a minute against one account stops a brute force. Ten logins a
 minute for a whole address locks out a college, because a campus shares
-one address. The end-to-end suite found this by tripping it.
+one address. The end-to-end suite found this by tripping it. The
+endpoint this protected is Clerk's after the migration, and the
+provider does the limiting; the rule is kept here because the same
+shape is needed for the endpoints that are still ours.
 [ADR 019](adr/019-rate-limiting-a-login-per-account.md)
 
 **A value the database cannot hold is refused at the door.** A NUL byte
@@ -182,6 +209,11 @@ share of it.** Creating an account hashes a password, and that is CPU
 the server cannot refuse once it has started it. There are four limits
 on registration, and the last one is per deployment rather than per
 caller: sixty accounts a minute, however many machines are asking.
+The hashing is Clerk's after the migration, so the CPU argument goes
+with it, but the rule survives in a new form: the endpoints that are
+still ours, such as the public webhook and the onboarding step, are
+limited for the same reason, because an anonymous caller must not be
+able to make the server do unbounded work.
 [ADR 025](adr/025-the-limits-on-creating-an-account.md)
 
 **An email address is a claim until it is proved.** A link is sent to
@@ -189,7 +221,10 @@ the address, and opening it proves it. The account works while it is
 unproved, but it cannot order a print, because the printout and the
 pickup code are tied to the address. A customer who typed the address
 wrong can put the right one there, which is the only way out of a
-mistyped address.
+mistyped address. The claim is still a claim and the rule is still the
+rule; after the migration Clerk sends the link and proves the address,
+and this application keeps a copy of the answer and still refuses the
+upload.
 [ADR 026](adr/026-the-email-address-has-to-be-proved.md)
 
 **A provider never takes over an account here.** Signing in with
@@ -197,8 +232,24 @@ Google is the authorization code flow with PKCE, the state lives in a
 signed cookie and nowhere else, and the tokens of the provider are used
 once and thrown away. An address the provider says is proved is not a
 claim on an account that somebody else claimed here: the customer signs
-in with their password and connects the provider themselves.
-[ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md)
+in with their password and connects the provider themselves. The rule
+outlives the implementation. Clerk links accounts inside its own store
+by email, and the local account is still keyed on the Clerk subject and
+never on the address, so a provider cannot take over a local account
+here either.
+[ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md),
+[ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
+
+**The verification email is Clerk's, and the product email is
+Brevo's.** A verification link, a magic link and a password reset all
+carry a token only the identity provider can validate, so they have to
+come from Clerk, and Clerk cannot be pointed at a different mail
+server. An order receipt or a campaign carries no such token, so it
+belongs to the application, and it goes out through the `EmailSender`
+interface and SMTP. The application keeps that interface, which is
+already a protocol with a test double, and Brevo plugs into it with no
+code at all.
+[ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
 
 **The quality check is measured, and it never blocks an order.** The
 analysis runs in the worker on a file that came from a stranger, so it is

@@ -1,8 +1,16 @@
 # ADR 025: The limits on creating an account
 
 Date: 2026-10-20
-Status: Accepted
+Status: Accepted, superseded in part by [ADR 029](029-clerk-authentication-with-local-authorization.md)
 Requirement: FR-1 (Sprint 5.6, hardening)
+
+> **Superseded in part (2026-10-21).** The password hashing that
+> motivated the per-deployment CPU limit is Clerk's after the
+> authentication provider migration, and registration is the provider's
+> too. The *rule* is kept, not the endpoint: an anonymous caller must
+> not be able to make the server do unbounded work, so the public
+> webhook and the onboarding step carry limits in the same shape.
+> See [ADR 029](029-clerk-authentication-with-local-authorization.md).
 
 ## Context
 
