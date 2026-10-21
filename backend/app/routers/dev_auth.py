@@ -15,24 +15,38 @@ one is, so the path through the application is the same path. The only
 thing that is different is who signed the token.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.errors import NotFound
+from app.errors import Conflict, NotFound
 from app.gateways.identity.fake import FakeTokenVerifier, dev_subject_for
+from app.schemas.errors import ERROR_RESPONSES
 from app.services import identity_service
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"], responses=ERROR_RESPONSES)
 
 
 class DevSessionRequest(BaseModel):
-    """Which account the suite wants to be signed in as."""
+    """Which account the suite wants to be signed in as.
+
+    The role is here because the suite needs an account that is already
+    a shop owner, and the role is chosen once and never changes in the
+    product. The suite therefore asks for the role it wants rather than
+    making an account and then changing it.
+    """
 
     email: str = Field(min_length=3, max_length=320)
     full_name: str = Field(default="End To End Customer", min_length=1, max_length=200)
+    role: Literal["customer", "vendor"] = "customer"
+    shop_name: str | None = Field(default=None, min_length=1, max_length=200)
+    shop_address: str | None = Field(default=None, min_length=1, max_length=500)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
 class DevSessionResponse(BaseModel):
@@ -62,14 +76,38 @@ def dev_session(
 
     user = identity_service.find_by_email(session, body.email)
     if user is None:
-        user = identity_service.create_account(
-            session,
-            subject=dev_subject_for(body.email),
-            email=body.email,
-            full_name=body.full_name,
-            role=identity_service.CUSTOMER,
-        )
+        if body.role == identity_service.VENDOR:
+            if (
+                body.shop_name is None
+                or body.shop_address is None
+                or body.latitude is None
+                or body.longitude is None
+            ):
+                raise Conflict("A shop needs a name, an address and a place")
+            user, _shop = identity_service.create_vendor_account(
+                session,
+                subject=dev_subject_for(body.email),
+                email=body.email,
+                full_name=body.full_name,
+                shop_name=body.shop_name,
+                shop_address=body.shop_address,
+                phone=None,
+                latitude=body.latitude,
+                longitude=body.longitude,
+            )
+        else:
+            user = identity_service.create_account(
+                session,
+                subject=dev_subject_for(body.email),
+                email=body.email,
+                full_name=body.full_name,
+                role=identity_service.CUSTOMER,
+            )
     if user.clerk_user_id is None:
-        raise NotFound("Account not found")
+        # An account made before the cutover has no identifier, because
+        # the identity provider did not exist then. It is given the one
+        # the local way in signs it in with.
+        user.clerk_user_id = dev_subject_for(user.email)
+        session.commit()
 
     return DevSessionResponse(access_token=verifier.issue(user.clerk_user_id))

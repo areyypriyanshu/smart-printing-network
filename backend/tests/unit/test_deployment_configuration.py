@@ -60,12 +60,68 @@ def test_the_production_stack_does_not_trust_every_forwarded_address() -> None:
     assert "forwarded-allow-ips" in compose
 
 
-def test_the_production_stack_needs_a_real_jwt_secret() -> None:
-    """The placeholder secret is refused in production, so it has to be set."""
+def test_the_production_stack_needs_the_identity_provider() -> None:
+    """There is one way to sign in, so a deployment cannot start without it.
+
+    The settings are pinned in the compose file rather than left to an
+    untracked file on the instance, and the ones that name the provider
+    have to be set for real. A Compose "environment" entry overrides
+    "env_file", so the two cannot disagree.
+    """
     compose = _read("docker-compose.prod.yml")
 
-    assert "JWT_SECRET: ${JWT_SECRET:?" in compose
     assert "PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?" in compose
+    for setting in (
+        "CLERK_FAPI_URL",
+        "CLERK_ALLOWED_ORIGINS",
+        "CLERK_SECRET_KEY",
+        "CLERK_WEBHOOK_SIGNING_SECRET",
+    ):
+        assert f"{setting}: ${{{setting}:?" in compose, setting
+
+
+def test_the_content_security_policy_allows_the_identity_provider() -> None:
+    """The browser loads the provider's script and talks to it from the page.
+
+    A policy that does not allow the provider is a policy that stops
+    people signing in, and a policy that allows the wrong host is a
+    policy that does not mean anything. The host is read from the
+    environment, so it is the instance's own and not a guess.
+    """
+    caddyfile = _read("infra/Caddyfile")
+
+    policy = re.search(r'Content-Security-Policy "([^"]+)"', caddyfile)
+    assert policy is not None
+    directives = policy.group(1)
+    assert directives.count("{$CLERK_FAPI_URL}") == 3, directives
+    for directive in ("script-src", "connect-src", "frame-src"):
+        assert directive in directives
+    # The provider's images and the abuse protection hosts.
+    assert "https://img.clerk.com" in directives
+    assert "https://*.protect.clerk.com" in directives
+    # The port wildcard matters: the protection hosts are not on 443.
+    assert "https://*.protect.clerk.com:*" in directives
+    # And the host is not guessed.
+    assert "{$CLERK_FAPI_URL:}" not in caddyfile
+
+
+def test_the_web_image_is_built_with_the_publishable_key() -> None:
+    """The bundle is static, so the key has to be in it at build time.
+
+    The key is public, and the build is where a static bundle gets it.
+    """
+    dockerfile = _read("frontend/Dockerfile.prod")
+    compose = _read("docker-compose.prod.yml")
+
+    assert "ARG VITE_CLERK_PUBLISHABLE_KEY" in dockerfile
+    assert "VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}" in compose
+
+
+def test_the_local_bypass_cannot_be_on_in_production() -> None:
+    """The local way in mints a session without the identity provider."""
+    compose = _read("docker-compose.prod.yml")
+
+    assert 'SPN_DEV_AUTH: "false"' in compose
 
 
 def test_the_edge_does_not_trust_the_forwarded_address_by_default() -> None:

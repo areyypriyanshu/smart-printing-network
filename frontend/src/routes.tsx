@@ -5,14 +5,12 @@ import { Layout } from "./components/Layout";
 import { NotFoundPage } from "./components/StatusPages";
 import { AdminShopsPage } from "./features/admin";
 import {
-  ChangeEmailPage,
-  CheckEmailPage,
-  LoginPage,
-  RegisterPage,
-  RegisterVendorPage,
+  OnboardingPage,
   RequireAuth,
+  RequireOnboarding,
   RequireRole,
-  VerifyEmailPage,
+  SignInPage,
+  SignUpPage,
 } from "./features/auth";
 import { HomePage } from "./features/home/home-page";
 import { OrderPage, OrdersPage } from "./features/orders";
@@ -36,19 +34,17 @@ export function AppRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/register-vendor" element={<RegisterVendorPage />} />
-        <Route path="/check-your-email" element={<CheckEmailPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        {/* The identity provider's own routing puts its second steps
+            under the sign in and sign up paths, so the routes have to
+            cover what is under them and not only the path itself. */}
+        <Route path="/login/*" element={<SignInPage />} />
+        <Route path="/register/*" element={<SignUpPage />} />
         <Route
-          path="/account/email"
+          path="/onboarding"
           element={
-            <RequireAuth>
-              <RequireRole role="customer">
-                <ChangeEmailPage />
-              </RequireRole>
-            </RequireAuth>
+            <RequireOnboarding>
+              <OnboardingPage />
+            </RequireOnboarding>
           }
         />
         <Route

@@ -56,16 +56,17 @@ checks.positive_data_acceptance.expected-statuses = [
   "5xx",
 ]
 
-# These endpoints have deliberately meaningful refusal paths that the
-# schema cannot express: an unverified account, a token that was not sent,
-# and an OAuth provider that is not configured or a request without the
-# signed state cookie. They are still fuzzed; the expected status list
-# documents that the refusal is correct rather than a server failure.
+# The quality endpoints are about one file, and the fuzzer has no file.
+# It sends an id of its own making, and the answer is 404 because that
+# upload belongs to nobody, which is the correct answer. The endpoints
+# are also rate limited, because the analysis they ask for is work, and
+# a fuzzer that asks for the same work in a loop is the thing a rate
+# limit is for. The refusal is correct rather than a server failure, so
+# it is listed here.
 [[operations]]
 include-path = [
-  "/api/v1/auth/change-email",
-  "/api/v1/auth/verify-email",
-  "/api/v1/auth/oauth/{provider}/start",
+  "/api/v1/uploads/{upload_id}/quality",
+  "/api/v1/uploads/{upload_id}/quality/acknowledge",
 ]
 checks.positive_data_acceptance.expected-statuses = [
   "2xx",
@@ -78,4 +79,39 @@ checks.positive_data_acceptance.expected-statuses = [
   "422",
   "429",
   "5xx",
+]
+
+# The account is made by reading the person from the identity
+# provider, and the provider is another server. A request that reaches
+# it while the provider is unreachable is answered with a gateway
+# error, and the fuzzer has no provider, so that answer is correct
+# rather than a fault in this application. The local way in, which is
+# the route the end to end suite signs in through, is refused outside
+# development and refuses a body it cannot read.
+[[operations]]
+include-path = [
+  "/api/v1/auth/onboarding",
+  "/api/v1/auth/dev-session",
+]
+checks.positive_data_acceptance.expected-statuses = [
+  "2xx",
+  "3xx",
+  "400",
+  "401",
+  "403",
+  "404",
+  "409",
+  "422",
+  "429",
+  "5xx",
+]
+# The provider being unreachable is a fault in another server, and the
+# answer that says so is the correct one rather than a failure of this
+# application. The check that looks for server errors is told that a
+# gateway error is one of the right answers here.
+checks.not_a_server_error.expected-statuses = [
+  "2xx",
+  "3xx",
+  "4xx",
+  "502",
 ]

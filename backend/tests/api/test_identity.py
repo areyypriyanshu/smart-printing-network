@@ -34,10 +34,17 @@ def _tell_the_provider_about(client: TestClient, subject: str, **details: str) -
 
 
 def test_a_person_who_has_signed_in_has_no_account_yet(client: TestClient) -> None:
-    """The account is made by the onboarding, not by the sign in."""
+    """The account is made by the onboarding, not by the sign in.
+
+    The answer says so, and it is not a refusal: the token is good and
+    the person simply has to answer one question first. The front end
+    reads the code and sends them to the page that asks.
+    """
     response = client.get(ME, headers=identity_headers(client, SUBJECT))
 
-    assert response.status_code == 401
+    assert response.status_code == 403
+    body = response.json()
+    assert body["error"]["code"] == "ACCOUNT_NOT_PROVISIONED"
 
 
 def test_a_person_who_says_they_are_here_to_print_gets_an_account(
@@ -175,6 +182,59 @@ def test_an_address_that_is_already_taken_is_refused(
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "CONFLICT"
+
+
+def test_a_person_the_provider_does_not_know_is_not_a_gateway_error(
+    client: TestClient,
+) -> None:
+    """A person who is not there is not the provider being down.
+
+    The two are different: one says the account was removed, and the
+    other says to try again in a moment. The provider answers a
+    question about somebody it has never heard of with a 404, and that
+    is not a fault in another server.
+    """
+    from app.gateways.identity.clerk_admin import ClerkUserNotFound
+
+    def unknown(*args: object, **kwargs: object) -> None:
+        raise ClerkUserNotFound("the identity provider does not know the person")
+
+    reader = client.app.state.identity_reader
+    original = reader.get_user
+    reader.get_user = unknown  # type: ignore[method-assign]
+    try:
+        response = client.post(
+            ONBOARDING,
+            json={"role": "customer"},
+            headers=identity_headers(client, SUBJECT),
+        )
+    finally:
+        reader.get_user = original  # type: ignore[method-assign]
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_the_provider_being_unreachable_is_a_gateway_error(client: TestClient) -> None:
+    """A fault in another server is a gateway error, not a refusal."""
+    from app.gateways.identity.clerk_admin import ClerkAdminError
+
+    def unreachable(*args: object, **kwargs: object) -> None:
+        raise ClerkAdminError("the identity provider could not be reached")
+
+    reader = client.app.state.identity_reader
+    original = reader.get_user
+    reader.get_user = unreachable  # type: ignore[method-assign]
+    try:
+        response = client.post(
+            ONBOARDING,
+            json={"role": "customer"},
+            headers=identity_headers(client, SUBJECT),
+        )
+    finally:
+        reader.get_user = original  # type: ignore[method-assign]
+
+    assert response.status_code == 502
 
 
 def test_a_caller_with_no_token_cannot_reach_the_onboarding(client: TestClient) -> None:

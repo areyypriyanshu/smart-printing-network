@@ -77,6 +77,13 @@ services:
     build:
       context: ./backend
     env_file: .env
+    environment:
+      # The local way in, for the end to end suite. It mints a session
+      # without the identity provider, and the application refuses it
+      # in production. It is off by default, so the application signs
+      # people in through the real identity provider, and the end to
+      # end job turns it on.
+      SPN_DEV_AUTH: ${SPN_DEV_AUTH:-false}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "127.0.0.1:8000:8000"
@@ -122,6 +129,10 @@ services:
       # either way. It is named here rather than the whole .env, so the
       # back end's secrets are not handed to the front end container.
       VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
+      # The local way in, for the end to end suite. It is off by
+      # default, so the application signs people in through the real
+      # identity provider, and the end to end job turns it on.
+      VITE_SPN_DEV_AUTH: ${VITE_SPN_DEV_AUTH:-false}
     command: npm run dev -- --host 0.0.0.0
     ports:
       - "127.0.0.1:5173:5173"

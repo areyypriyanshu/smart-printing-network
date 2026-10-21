@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.errors import Forbidden, NotFound, Unauthenticated
+from app.errors import AccountNotProvisioned, Forbidden, NotFound, Unauthenticated
 from app.gateways.email import EmailSender
 from app.gateways.identity import TokenVerifier, VerifiedIdentity
 from app.gateways.identity.clerk_admin import ClerkAdminClient
@@ -58,7 +58,14 @@ def get_current_user(
     token itself is perfectly good.
     """
     user = identity_service.find_by_subject(session, identity.subject)
-    if user is None or not user.is_active:
+    if user is None:
+        # The token is good and the person has signed in, but they have
+        # not said what they are here for, so there is no account yet.
+        # The front end reads this and sends them to the page that asks.
+        raise AccountNotProvisioned(
+            "This account has not been set up yet. Choose what you are here for."
+        )
+    if not user.is_active:
         raise Unauthenticated("Authentication required")
     return user
 

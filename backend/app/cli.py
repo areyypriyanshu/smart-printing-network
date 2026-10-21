@@ -81,6 +81,7 @@ def seed(session: Session) -> None:
     for spec in SEED_SHOPS:
         existing = session.scalar(select(User).where(User.email == spec["email"]))
         if existing is not None:
+            _link_local_account(session, existing)
             logger.info("seed: %s already exists, skipping", spec["email"])
             continue
         user, shop = identity_service.create_vendor_account(
@@ -115,11 +116,28 @@ def seed(session: Session) -> None:
             role=identity_service.CUSTOMER,
         )
         logger.info("seed: created customer %s", SEED_CUSTOMER["email"])
+    else:
+        _link_local_account(session, customer)
 
     print("Seed complete. The local accounts are:", SEED_CUSTOMER["email"])
     for spec in SEED_SHOPS:
         print(f"  vendor: {spec['email']}")
     print("  customer:", SEED_CUSTOMER["email"])
+
+
+def _link_local_account(session: Session, user: User) -> None:
+    """Give a local account the identifier the local way in signs it in with.
+
+    An account made before the cutover has no identifier, because the
+    identity provider did not exist then. The seed is what makes the
+    demo accounts usable, so it gives one that is missing the
+    identifier it needs.
+    """
+    if user.clerk_user_id is not None:
+        return
+    user.clerk_user_id = dev_subject_for(user.email)
+    session.commit()
+    logger.info("seed: linked %s to the local way in", user.email)
 
 
 def _full_rate_table(shop_id: uuid.UUID, base_paise: int) -> list[ShopRate]:

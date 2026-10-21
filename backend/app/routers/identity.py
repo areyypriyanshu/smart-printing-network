@@ -20,10 +20,14 @@ from app.gateways.identity.base import VerifiedIdentity
 from app.gateways.identity.clerk_admin import ClerkAdminClient
 from app.models import User
 from app.rate_limit import onboarding_limit
+from app.schemas.errors import ERROR_RESPONSES, PROVIDER_UNAVAILABLE_RESPONSE
 from app.schemas.identity import OnboardingRequest, UserResponse
 from app.services import identity_service
 
-router = APIRouter(tags=["identity"])
+router = APIRouter(
+    tags=["identity"],
+    responses=ERROR_RESPONSES,
+)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -41,6 +45,7 @@ def me(user: User = Depends(get_current_user)) -> User:
     "/auth/onboarding",
     response_model=UserResponse,
     dependencies=[Depends(onboarding_limit(5, 60))],
+    responses={**ERROR_RESPONSES, 502: PROVIDER_UNAVAILABLE_RESPONSE},
 )
 def onboard(
     body: OnboardingRequest,

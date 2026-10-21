@@ -31,7 +31,20 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://spn:spn@localhost:5432/spn
-      JWT_SECRET: ci-placeholder-not-a-real-secret-0123456789
+      # The identity provider. The test suite never reaches it: the
+      # tests use the local verifier and the local reader. These values
+      # are here because a deployment that has not been configured for
+      # the provider cannot start, and that is true in continuous
+      # integration too.
+      CLERK_FAPI_URL: https://placeholder.clerk.accounts.dev
+      CLERK_ALLOWED_ORIGINS: http://localhost:5173
+      CLERK_SECRET_KEY: ci-placeholder-not-a-real-secret-0123456789
+      CLERK_WEBHOOK_SIGNING_SECRET: ci-placeholder-webhook-secret-0123456789
+      # The local way in, which mints a session without the identity
+      # provider. The fuzzer needs a token and cannot reach the
+      # provider. The setting is refused in production, so it is here
+      # rather than being a way to weaken a deployment.
+      SPN_DEV_AUTH: "true"
       # The key the fake payment gateway signs its webhooks with. The
       # application refuses to start without one, because the webhook
       # route is public and a key in the repository is a key everybody
@@ -137,7 +150,20 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://spn:spn@localhost:5432/spn
-      JWT_SECRET: ci-placeholder-not-a-real-secret-0123456789
+      # The identity provider. The test suite never reaches it: the
+      # tests use the local verifier and the local reader. These values
+      # are here because a deployment that has not been configured for
+      # the provider cannot start, and that is true in continuous
+      # integration too.
+      CLERK_FAPI_URL: https://placeholder.clerk.accounts.dev
+      CLERK_ALLOWED_ORIGINS: http://localhost:5173
+      CLERK_SECRET_KEY: ci-placeholder-not-a-real-secret-0123456789
+      CLERK_WEBHOOK_SIGNING_SECRET: ci-placeholder-webhook-secret-0123456789
+      # The local way in, which mints a session without the identity
+      # provider. The fuzzer needs a token and cannot reach the
+      # provider. The setting is refused in production, so it is here
+      # rather than being a way to weaken a deployment.
+      SPN_DEV_AUTH: "true"
       # The key the fake payment gateway signs its webhooks with. The
       # application refuses to start without one, because the webhook
       # route is public and a key in the repository is a key everybody
@@ -188,12 +214,9 @@ jobs:
       - name: Get a token for the authenticated endpoints
         working-directory: backend
         run: |
-          curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register \
+          curl -s -X POST http://127.0.0.1:8000/api/v1/auth/dev-session \
             -H 'Content-Type: application/json' \
-            -d '{"email":"fuzzer@example.com","password":"fuzzer-password-1","full_name":"Fuzzer"}' > /dev/null
-          curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
-            -H 'Content-Type: application/json' \
-            -d '{"email":"fuzzer@example.com","password":"fuzzer-password-1"}' \
+            -d '{"email":"fuzzer@example.com"}' \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])' > token.txt
       - name: Fuzz the API against its own schema
         working-directory: backend
@@ -222,6 +245,13 @@ jobs:
     # Runs the Playwright journeys and the accessibility checks against the
     # whole stack, the way a person would use it.
     runs-on: ubuntu-latest
+    env:
+      # The end to end suite signs in through the local way in, because it
+      # has to run offline and the same way every time. The route behind
+      # it is refused in production, so the suite cannot be run against a
+      # deployment that matters.
+      SPN_DEV_AUTH: "true"
+      VITE_SPN_DEV_AUTH: "true"
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.1.0

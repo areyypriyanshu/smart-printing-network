@@ -16,8 +16,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.errors import Conflict, EmailTaken, ProviderUnavailable
-from app.gateways.identity.clerk_admin import ClerkAdminClient, ClerkAdminError, ClerkUser
+from app.errors import Conflict, EmailTaken, NotFound, ProviderUnavailable
+from app.gateways.identity.clerk_admin import (
+    ClerkAdminClient,
+    ClerkAdminError,
+    ClerkUser,
+    ClerkUserNotFound,
+)
 from app.models import Shop, User
 
 #: The role a person has when they come here to print something.
@@ -128,6 +133,8 @@ def read_person(reader: ClerkAdminClient, subject: str) -> ClerkUser:
     """
     try:
         return reader.get_user(subject)
+    except ClerkUserNotFound as exc:
+        raise NotFound("That account no longer exists") from exc
     except ClerkAdminError as exc:
         raise ProviderUnavailable(
             "The identity provider could not be reached. Try again in a moment."

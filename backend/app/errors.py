@@ -93,6 +93,18 @@ class PasswordMismatch(AppError):
     status_code = 422
 
 
+class AccountNotProvisioned(AppError):
+    """The caller has signed in but has not said what they are here for.
+
+    It is not a failure and it is not a refusal: the token is good and
+    the person simply has no account yet. The front end reads this and
+    sends them to the page that asks.
+    """
+
+    status_code = 403
+    code = "ACCOUNT_NOT_PROVISIONED"
+
+
 class ProviderUnavailable(AppError):
     """The identity provider could not be read.
 

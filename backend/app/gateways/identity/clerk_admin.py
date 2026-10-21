@@ -21,6 +21,13 @@ from typing import Any
 
 CLERK_API = "https://api.clerk.com/v1"
 
+#: What this application calls itself when it asks the provider
+#: something. The provider's API sits behind a bot protection that
+#: refuses a request with no agent of its own, and the one the
+#: standard library sends by default is refused. Naming the
+#: application is the honest answer to that question.
+USER_AGENT = "SmartPrintingNetwork/0.1"
+
 
 class ClerkAdminError(Exception):
     """The provider's API could not be read.
@@ -28,6 +35,16 @@ class ClerkAdminError(Exception):
     It is not an `AppError`: it is a fault in a dependency, and the
     route that hit it turns it into a 502 rather than pretending the
     caller did something wrong.
+    """
+
+
+class ClerkUserNotFound(ClerkAdminError):
+    """The provider does not know the person.
+
+    It is a different thing from the provider being unreachable. The
+    token named somebody and the provider has no record of them, which
+    means the account was removed between the token being made and the
+    question being asked.
     """
 
 
@@ -62,6 +79,7 @@ def build_get_user_request(*, secret_key: str, user_id: str) -> HttpRequest:
         headers={
             "Authorization": f"Bearer {secret_key}",
             "Accept": "application/json",
+            "User-Agent": USER_AGENT,
         },
     )
 
@@ -126,6 +144,10 @@ class ClerkAdminClient:
                 timeout=self._timeout,
             ) as response:
                 body = response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise ClerkUserNotFound("the identity provider does not know the person") from exc
+            raise ClerkAdminError("the identity provider could not be reached") from exc
         except (OSError, urllib.error.URLError) as exc:
             raise ClerkAdminError("the identity provider could not be reached") from exc
         try:
