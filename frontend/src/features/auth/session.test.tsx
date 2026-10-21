@@ -1,11 +1,12 @@
-import { screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
-import { errorResponse, handlers } from "../../test/msw/handlers";
+import { ApiError, apiRequest } from "../../api/client";
+import { errorResponse } from "../../test/msw/handlers";
 import { server } from "../../test/msw/server";
 import { renderWithProviders } from "../../test/render";
-import { useSession } from "./session";
+import { SessionProvider, useSession } from "./session";
 
 function Probe() {
   const { status, user } = useSession();
@@ -76,14 +77,52 @@ describe("the session", () => {
   });
 });
 
-describe("the default handlers", () => {
-  it("answer the account route with a refusal", async () => {
-    const response = await fetch("/api/v1/me");
-    expect(response.status).toBe(401);
-  });
+describe("a session that goes away", () => {
+  it("does not change the state after it is gone", async () => {
+    // The answer arrives after an await, and the screen can be gone by
+    // then. Writing the answer to a component that is no longer on the
+    // page is a change to nothing, and once the test file is finished
+    // and the page is torn down it is an error the runner reports as a
+    // failure of the file.
+    let release: (token: string | null) => void = () => {};
+    const answer = new Promise<string | null>((resolve) => {
+      release = resolve;
+    });
 
-  it("are the ones the suite starts with", () => {
-    expect(handlers.length).toBeGreaterThan(0);
+    const { unmount } = render(
+      <SessionProvider
+        getToken={() => answer}
+        signOut={async () => {}}
+        signedIn
+        loaded
+      >
+        <Probe />
+      </SessionProvider>,
+    );
+
+    // The screen goes while the answer is still on its way.
+    unmount();
+    release("test-token");
+    await answer;
+
+    // Let the answer land on a provider that is no longer there.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText("status: authenticated")).toBeNull();
+  });
+});
+
+describe("a caller with no token", () => {
+  it("is refused by the account route", async () => {
+    // The request goes through the API client, which is the way the
+    // application makes it, and the token source is empty, so the
+    // request carries no token at all.
+    const error = await apiRequest("/me").then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(401);
   });
 });
 

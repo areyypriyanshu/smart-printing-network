@@ -95,24 +95,26 @@ export function SessionProvider({
     return () => setTokenSource(null);
   }, [getToken]);
 
-  const read = useCallback(async () => {
+  // The answer is returned rather than written straight into the state,
+  // because the answer arrives after an await and the component may be
+  // gone by then. Writing it from here would be a change to a
+  // component that is no longer on the page.
+  const read = useCallback(async (): Promise<SessionState | null> => {
     if (!loaded) {
       // The provider has not finished looking yet. Nothing is decided
       // until it has.
-      return;
+      return null;
     }
     if (!signedIn) {
-      setState({ status: "anonymous", user: null });
-      return;
+      return { status: "anonymous", user: null };
     }
     const token = await getToken();
     if (token === null) {
-      setState({ status: "anonymous", user: null });
-      return;
+      return { status: "anonymous", user: null };
     }
     try {
       const user = await apiRequest<User>("/me");
-      setState({ status: "authenticated", user });
+      return { status: "authenticated", user };
     } catch (error) {
       if (
         error instanceof ApiError &&
@@ -120,18 +122,18 @@ export function SessionProvider({
         error.code === "ACCOUNT_NOT_PROVISIONED"
       ) {
         // The token is good and the person has not chosen yet.
-        setState({ status: "needs-onboarding", user: null });
-        return;
+        return { status: "needs-onboarding", user: null };
       }
-      setState({ status: "anonymous", user: null });
+      return { status: "anonymous", user: null };
     }
   }, [getToken, loaded, signedIn]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      await read();
-      if (cancelled) return;
+      const next = await read();
+      if (cancelled || next === null) return;
+      setState(next);
     })();
     return () => {
       cancelled = true;

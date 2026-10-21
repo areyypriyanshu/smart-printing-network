@@ -183,7 +183,7 @@ describe("OrderWizardPage", () => {
     await user.click(await screen.findByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("Alpha Prints")).toBeInTheDocument();
-    expect(screen.getByText(/₹\s?10\.00/)).toBeInTheDocument();
+    expect(await screen.findByText(/₹\s?10\.00/)).toBeInTheDocument();
 
     const betaItem = screen
       .getByRole("heading", { name: "Beta Print Hub" })
