@@ -151,6 +151,9 @@ class Order(Base):
     # When the order became ready for pickup. It starts the clock on the
     # customer not turning up.
     ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    quality_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

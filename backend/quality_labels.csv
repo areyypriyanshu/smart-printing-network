@@ -1,0 +1,47 @@
+fixture,kind,split,expected_flags,note
+good-vector_text-0,vector_text,calibration,none,vector text is sharp by definition
+good-vector_text-1,vector_text,calibration,none,vector text is sharp by definition
+good-vector_text-2,vector_text,calibration,none,vector text is sharp by definition
+good-vector_text-3,vector_text,calibration,none,vector text is sharp by definition
+good-sharp_photo-0,sharp_photo,calibration,none,a sharp photograph printed large
+good-sharp_photo-1,sharp_photo,calibration,none,a sharp photograph printed large
+good-sharp_photo-2,sharp_photo,calibration,none,a sharp photograph printed large
+good-sharp_photo-3,sharp_photo,calibration,none,a sharp photograph printed large
+good-sharp_photo-4,sharp_photo,calibration,none,a sharp photograph printed large
+good-sharp_photo-5,sharp_photo,calibration,none,a sharp photograph printed large
+good-good_scan-0,good_scan,calibration,none,a clean scan printed large
+good-good_scan-1,good_scan,calibration,none,a clean scan printed large
+good-good_scan-2,good_scan,calibration,none,a clean scan printed large
+good-good_scan-3,good_scan,calibration,none,a clean scan printed large
+good-good_scan-4,good_scan,calibration,none,a clean scan printed large
+good-text_with_sharp_image-0,text_with_sharp_image,calibration,none,a page with text and a sharp picture
+good-text_with_sharp_image-1,text_with_sharp_image,calibration,none,a page with text and a sharp picture
+good-text_with_sharp_image-2,text_with_sharp_image,calibration,none,a page with text and a sharp picture
+bad-low_resolution-0,low_resolution,calibration,VERY_LOW_RESOLUTION,a 120 pixel image printed large
+bad-low_resolution-1,low_resolution,calibration,VERY_LOW_RESOLUTION,a 120 pixel image printed large
+bad-low_resolution-2,low_resolution,calibration,VERY_LOW_RESOLUTION,a 120 pixel image printed large
+bad-low_resolution-3,low_resolution,calibration,VERY_LOW_RESOLUTION,a 120 pixel image printed large
+bad-low_resolution-4,low_resolution,calibration,VERY_LOW_RESOLUTION,a 120 pixel image printed large
+bad-tiny_image-0,tiny_image,calibration,VERY_LOW_RESOLUTION,a 20 pixel image blown up to fill the page
+bad-tiny_image-1,tiny_image,calibration,VERY_LOW_RESOLUTION,a 20 pixel image blown up to fill the page
+bad-tiny_image-2,tiny_image,calibration,VERY_LOW_RESOLUTION,a 20 pixel image blown up to fill the page
+bad-blurred_scan-0,blurred_scan,calibration,BLURRY,a scan blurred with a wide kernel
+bad-blurred_scan-1,blurred_scan,calibration,BLURRY,a scan blurred with a wide kernel
+bad-blurred_scan-2,blurred_scan,calibration,BLURRY,a scan blurred with a wide kernel
+bad-blurred_scan-3,blurred_scan,calibration,BLURRY,a scan blurred with a wide kernel
+good-vector_art-0,vector_art,holdout,none,vector art has no resolution limit
+good-vector_art-1,vector_art,holdout,none,vector art has no resolution limit
+good-vector_art-2,vector_art,holdout,none,vector art has no resolution limit
+bad-text_with_low_resolution_image-0,text_with_low_resolution_image,holdout,VERY_LOW_RESOLUTION,readable text with a pixelated picture
+bad-text_with_low_resolution_image-1,text_with_low_resolution_image,holdout,VERY_LOW_RESOLUTION,readable text with a pixelated picture
+bad-text_with_low_resolution_image-2,text_with_low_resolution_image,holdout,VERY_LOW_RESOLUTION,readable text with a pixelated picture
+bad-upscaled_thumbnail-0,upscaled_thumbnail,holdout,VERY_LOW_RESOLUTION,a 60 pixel thumbnail stretched across the page
+bad-upscaled_thumbnail-1,upscaled_thumbnail,holdout,VERY_LOW_RESOLUTION,a 60 pixel thumbnail stretched across the page
+bad-upscaled_thumbnail-2,upscaled_thumbnail,holdout,VERY_LOW_RESOLUTION,a 60 pixel thumbnail stretched across the page
+bad-upscaled_thumbnail-3,upscaled_thumbnail,holdout,VERY_LOW_RESOLUTION,a 60 pixel thumbnail stretched across the page
+bad-very_blurred_scan-0,very_blurred_scan,holdout,BLURRY,a scan blurred past the point of detail
+bad-very_blurred_scan-1,very_blurred_scan,holdout,BLURRY,a scan blurred past the point of detail
+bad-very_blurred_scan-2,very_blurred_scan,holdout,BLURRY,a scan blurred past the point of detail
+bad-motion_blurred_scan-0,motion_blurred_scan,holdout,BLURRY,a scan blurred by camera movement
+bad-motion_blurred_scan-1,motion_blurred_scan,holdout,BLURRY,a scan blurred by camera movement
+bad-motion_blurred_scan-2,motion_blurred_scan,holdout,BLURRY,a scan blurred by camera movement

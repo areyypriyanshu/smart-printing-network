@@ -22,6 +22,7 @@ from app.routers import (
     health,
     oauth,
     orders,
+    quality,
     quotes,
     shops,
     uploads,
@@ -117,6 +118,7 @@ def create_app() -> FastAPI:
     app.include_router(vendor.router, prefix=API_PREFIX)
     app.include_router(uploads.router, prefix=API_PREFIX)
     app.include_router(quotes.router, prefix=API_PREFIX)
+    app.include_router(quality.router, prefix=API_PREFIX)
     app.include_router(orders.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(webhooks.router, prefix=API_PREFIX)

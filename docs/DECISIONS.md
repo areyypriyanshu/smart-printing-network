@@ -200,6 +200,17 @@ claim on an account that somebody else claimed here: the customer signs
 in with their password and connects the provider themselves.
 [ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md)
 
+**The quality check is measured, and it never blocks an order.** The
+analysis runs in the worker on a file that came from a stranger, so it is
+bounded on every axis: pages, pictures on a page, the size of every
+rendered region and the time the file may take. A file that breaks a
+bound gives a failed report, not a hung worker. The thresholds are not
+folklore: they are chosen on the calibration half of a labelled fixture
+set and reported on the half that was held out, and the evaluation is in
+the repository. The report is advisory, so acknowledging it is a fact
+about the customer rather than a permission the server asks for.
+[ADR 028](adr/028-the-quality-check-runs-in-the-worker.md)
+
 [ADR 016](adr/016-office-file-upload.md) has the full reasoning for the
 conversion, including the alternatives that were rejected and why.
 
@@ -227,6 +238,9 @@ rule is broken.
 | A converted document is a PDF | The stored object is read back and has to start with `%PDF-`, and the shop's download has to be named `report.pdf` for a `report.docx`. |
 | A reprint never breaks the retention promise | The two uploads are shown to have different storage keys and different retention windows, and a reprint after the purge answers `FILE_UNAVAILABLE`. |
 | A shop's phone number is optional and sane | The database is asked to store a number with too few digits, too many digits and letters, and refuses all three. |
+| The quality rules find the bad pages | The labelled fixture set is measured, and the test asserts the targets on the half that was held out: at least 90% of the bad pages flagged, at most 10% of the good ones. |
+| A quality warning never blocks an order | An order is placed with the warnings unacknowledged, and with them acknowledged, and both go through. |
+| A quality report belongs to one customer | Another customer's report is 404, not 403, so the answer never confirms that it exists. |
 
 ---
 

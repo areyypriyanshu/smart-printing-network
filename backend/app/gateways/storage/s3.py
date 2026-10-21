@@ -35,6 +35,9 @@ class S3Storage:
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self._bucket, Key=key)
 
+    def download_to_path(self, key: str, path: Path) -> None:
+        self.client.download_file(self._bucket, key, str(path))
+
     def copy_file(self, source_key: str, target_key: str) -> None:
         """Copy the object server side, so nothing travels twice."""
         self._ensure_bucket()

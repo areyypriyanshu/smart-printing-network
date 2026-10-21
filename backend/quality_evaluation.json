@@ -1,0 +1,950 @@
+{
+  "targets": {
+    "recall_on_bad_pages": 0.9,
+    "false_positive_rate_on_good_pages": 0.1
+  },
+  "chosen_blur_threshold": 390.0,
+  "calibration": {
+    "pages": 30,
+    "bad_pages": 12,
+    "good_pages": 18,
+    "flagged_bad_pages": 12,
+    "flagged_good_pages": 0,
+    "recall_on_bad_pages": 1.0,
+    "false_positive_rate_on_good_pages": 0.0
+  },
+  "holdout": {
+    "pages": 16,
+    "bad_pages": 13,
+    "good_pages": 3,
+    "flagged_bad_pages": 13,
+    "flagged_good_pages": 0,
+    "recall_on_bad_pages": 1.0,
+    "false_positive_rate_on_good_pages": 0.0
+  },
+  "sweep": [
+    {
+      "min_blur_score": 0.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 15,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 0.6,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 10.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 22,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 0.88,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 20.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 22,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 0.88,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 30.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 22,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 0.88,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 40.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 22,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 0.88,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 50.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 22,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 0.88,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 60.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 70.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 80.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 90.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 100.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 110.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 120.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 130.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 140.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 150.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 160.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 170.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 180.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 190.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 200.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 210.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 220.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 230.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 240.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 250.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 260.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 270.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 280.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 290.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 300.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 310.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 320.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 330.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 340.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 350.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 360.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 370.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 380.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    },
+    {
+      "min_blur_score": 390.0,
+      "pages": 46,
+      "bad_pages": 25,
+      "good_pages": 21,
+      "flagged_bad_pages": 25,
+      "flagged_good_pages": 0,
+      "recall_on_bad_pages": 1.0,
+      "false_positive_rate_on_good_pages": 0.0
+    }
+  ],
+  "measurements": [
+    {
+      "fixture": "good-vector_text-0",
+      "kind": "vector_text",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "good-vector_text-1",
+      "kind": "vector_text",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "good-vector_text-2",
+      "kind": "vector_text",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "good-vector_text-3",
+      "kind": "vector_text",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "good-sharp_photo-0",
+      "kind": "sharp_photo",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2353.681410625593,
+      "flags": []
+    },
+    {
+      "fixture": "good-sharp_photo-1",
+      "kind": "sharp_photo",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2350.7599728817763,
+      "flags": []
+    },
+    {
+      "fixture": "good-sharp_photo-2",
+      "kind": "sharp_photo",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2353.6370116479557,
+      "flags": []
+    },
+    {
+      "fixture": "good-sharp_photo-3",
+      "kind": "sharp_photo",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2352.493483802864,
+      "flags": []
+    },
+    {
+      "fixture": "good-sharp_photo-4",
+      "kind": "sharp_photo",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2345.2153304463927,
+      "flags": []
+    },
+    {
+      "fixture": "good-sharp_photo-5",
+      "kind": "sharp_photo",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2342.020177051193,
+      "flags": []
+    },
+    {
+      "fixture": "good-good_scan-0",
+      "kind": "good_scan",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 3123.161348245614,
+      "flags": []
+    },
+    {
+      "fixture": "good-good_scan-1",
+      "kind": "good_scan",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 3123.021159375224,
+      "flags": []
+    },
+    {
+      "fixture": "good-good_scan-2",
+      "kind": "good_scan",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 3129.536439008296,
+      "flags": []
+    },
+    {
+      "fixture": "good-good_scan-3",
+      "kind": "good_scan",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 3135.397521579665,
+      "flags": []
+    },
+    {
+      "fixture": "good-good_scan-4",
+      "kind": "good_scan",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 3134.332278058215,
+      "flags": []
+    },
+    {
+      "fixture": "good-text_with_sharp_image-0",
+      "kind": "text_with_sharp_image",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2364.1760742402207,
+      "flags": []
+    },
+    {
+      "fixture": "good-text_with_sharp_image-1",
+      "kind": "text_with_sharp_image",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2364.74428090533,
+      "flags": []
+    },
+    {
+      "fixture": "good-text_with_sharp_image-2",
+      "kind": "text_with_sharp_image",
+      "split": "calibration",
+      "expected_flags": [],
+      "lowest_dpi": 387.8787878787879,
+      "blur_score": 2365.3915280050496,
+      "flags": []
+    },
+    {
+      "fixture": "bad-low_resolution-0",
+      "kind": "low_resolution",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 794.1886773333333,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-low_resolution-1",
+      "kind": "low_resolution",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 789.6942533333333,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-low_resolution-2",
+      "kind": "low_resolution",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 795.56068,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-low_resolution-3",
+      "kind": "low_resolution",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 792.6575173333333,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-low_resolution-4",
+      "kind": "low_resolution",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 794.6235546666667,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-tiny_image-0",
+      "kind": "tiny_image",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 4.848484848484849,
+      "blur_score": 121.46702933333333,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-tiny_image-1",
+      "kind": "tiny_image",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 4.848484848484849,
+      "blur_score": 105.073984,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-tiny_image-2",
+      "kind": "tiny_image",
+      "split": "calibration",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 4.848484848484849,
+      "blur_score": 113.464064,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-blurred_scan-0",
+      "kind": "blurred_scan",
+      "split": "calibration",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 1.3864979013154677,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-blurred_scan-1",
+      "kind": "blurred_scan",
+      "split": "calibration",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 1.3900545448892365,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-blurred_scan-2",
+      "kind": "blurred_scan",
+      "split": "calibration",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 1.393251748202846,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-blurred_scan-3",
+      "kind": "blurred_scan",
+      "split": "calibration",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 1.3820195804195805,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "good-vector_art-0",
+      "kind": "vector_art",
+      "split": "holdout",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "good-vector_art-1",
+      "kind": "vector_art",
+      "split": "holdout",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "good-vector_art-2",
+      "kind": "vector_art",
+      "split": "holdout",
+      "expected_flags": [],
+      "lowest_dpi": null,
+      "blur_score": null,
+      "flags": []
+    },
+    {
+      "fixture": "bad-text_with_low_resolution_image-0",
+      "kind": "text_with_low_resolution_image",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 793.7612533937435,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-text_with_low_resolution_image-1",
+      "kind": "text_with_low_resolution_image",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 805.4287683022703,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-text_with_low_resolution_image-2",
+      "kind": "text_with_low_resolution_image",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 29.09090909090909,
+      "blur_score": 783.1644094919727,
+      "flags": [
+        "VERY_LOW_RESOLUTION"
+      ]
+    },
+    {
+      "fixture": "bad-upscaled_thumbnail-0",
+      "kind": "upscaled_thumbnail",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 14.545454545454545,
+      "blur_score": 373.9949466666667,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-upscaled_thumbnail-1",
+      "kind": "upscaled_thumbnail",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 14.545454545454545,
+      "blur_score": 377.37833866666665,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-upscaled_thumbnail-2",
+      "kind": "upscaled_thumbnail",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 14.545454545454545,
+      "blur_score": 359.179384,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-upscaled_thumbnail-3",
+      "kind": "upscaled_thumbnail",
+      "split": "holdout",
+      "expected_flags": [
+        "VERY_LOW_RESOLUTION"
+      ],
+      "lowest_dpi": 14.545454545454545,
+      "blur_score": 383.161432,
+      "flags": [
+        "VERY_LOW_RESOLUTION",
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-very_blurred_scan-0",
+      "kind": "very_blurred_scan",
+      "split": "holdout",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 0.9385398544359137,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-very_blurred_scan-1",
+      "kind": "very_blurred_scan",
+      "split": "holdout",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 0.9382979015325932,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-very_blurred_scan-2",
+      "kind": "very_blurred_scan",
+      "split": "holdout",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 0.898489507038975,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-motion_blurred_scan-0",
+      "kind": "motion_blurred_scan",
+      "split": "holdout",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 52.48779276043034,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-motion_blurred_scan-1",
+      "kind": "motion_blurred_scan",
+      "split": "holdout",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 53.18878626184362,
+      "flags": [
+        "BLURRY"
+      ]
+    },
+    {
+      "fixture": "bad-motion_blurred_scan-2",
+      "kind": "motion_blurred_scan",
+      "split": "holdout",
+      "expected_flags": [
+        "BLURRY"
+      ],
+      "lowest_dpi": 339.3939951918263,
+      "blur_score": 52.4336732318177,
+      "flags": [
+        "BLURRY"
+      ]
+    }
+  ]
+}

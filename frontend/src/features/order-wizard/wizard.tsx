@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
 import type { UploadResponse } from "../../api/client";
@@ -10,6 +10,12 @@ import {
 } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { useUpload } from "./api";
+import {
+  QualityReportCard,
+  useAcknowledgeQualityReport,
+  useQualityReport,
+  useRequestQualityReport,
+} from "../quality";
 import { OptionsStep } from "./options-step";
 import { PayStep } from "./pay-step";
 import { ShopStep, type ShopSelection } from "./shop-step";
@@ -59,10 +65,33 @@ export function OrderWizardPage() {
   // The same query the shop step uses, so the choice is only offered when
   // the server says it is on.
   const shops = useShops();
-
   const activeUpload =
     upload ?? (resumeDismissed ? null : (resume.data ?? null));
+  const qualityUploadId = activeUpload?.id;
   const currentStep = step ?? (activeUpload !== null ? 1 : 0);
+  const quality = useQualityReport(qualityUploadId, currentStep === 3);
+  const requestQuality = useRequestQualityReport(qualityUploadId);
+  const acknowledgeQuality = useAcknowledgeQualityReport(qualityUploadId);
+
+  // The check is asked for once, when the customer reaches the review
+  // step. Asking again would not start a second analysis: the server
+  // keeps one report per file.
+  const askedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentStep !== 3 || qualityUploadId === undefined) return;
+    if (askedFor.current === qualityUploadId) return;
+    if (quality.isPending) return;
+    askedFor.current = qualityUploadId;
+    if (quality.data === undefined) {
+      void requestQuality.mutateAsync();
+    }
+  }, [
+    currentStep,
+    qualityUploadId,
+    quality.isPending,
+    quality.data,
+    requestQuality,
+  ]);
 
   const handleUploaded = (result: UploadResponse) => {
     setUpload(result);
@@ -170,16 +199,29 @@ export function OrderWizardPage() {
         activeUpload !== null &&
         options !== null &&
         selection !== null && (
-          <PayStep
-            upload={activeUpload}
-            options={options}
-            shop={selection.shop}
-            quote={selection.quote}
-            paymentMethod={paymentMethod}
-            cashAtStoreEnabled={shops.data?.cash_at_store_enabled ?? false}
-            onPaymentMethodChange={setPaymentMethod}
-            onBack={() => setStep(2)}
-          />
+          <>
+            <QualityReportCard
+              report={quality.data}
+              isLoading={quality.isPending}
+              isRequesting={requestQuality.isPending}
+              isAcknowledging={acknowledgeQuality.isPending}
+              error={quality.error}
+              acknowledgeError={acknowledgeQuality.error}
+              onRequest={() => void requestQuality.mutateAsync()}
+              onAcknowledge={() => void acknowledgeQuality.mutateAsync()}
+            />
+            <PayStep
+              upload={activeUpload}
+              options={options}
+              shop={selection.shop}
+              quote={selection.quote}
+              paymentMethod={paymentMethod}
+              cashAtStoreEnabled={shops.data?.cash_at_store_enabled ?? false}
+              qualityAcknowledged={quality.data?.acknowledged ?? false}
+              onPaymentMethodChange={setPaymentMethod}
+              onBack={() => setStep(2)}
+            />
+          </>
         )}
     </section>
   );

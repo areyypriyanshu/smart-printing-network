@@ -17,6 +17,7 @@ class OrderCreateRequest(BaseModel):
     # "at_store" is in cash at the counter. The price is the same either
     # way, so the quote does not mention it.
     payment_method: Literal["online", "at_store"] = "online"
+    quality_acknowledged: bool = False
 
 
 class OrderResponse(BaseModel):
@@ -37,6 +38,7 @@ class OrderResponse(BaseModel):
     pickup_code: str | None
     payment_method: str
     paid_at: datetime | None
+    quality_acknowledged: bool
     created_at: datetime
 
 

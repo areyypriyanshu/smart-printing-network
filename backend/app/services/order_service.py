@@ -123,6 +123,7 @@ def create_order(
         # the shop has work to do, from the moment it is placed.
         status="RESERVED" if is_cash else "PENDING_PAYMENT",
         payment_method=method,
+        quality_acknowledged=request.quality_acknowledged,
         pickup_code=generate_pickup_code() if is_cash else None,
         reserved_at=current if is_cash else None,
         paper_size=request.paper_size,
@@ -451,6 +452,7 @@ def order_response(order: Order) -> OrderResponse:
         pickup_code=order.pickup_code,
         payment_method=order.payment_method,
         paid_at=order.paid_at,
+        quality_acknowledged=order.quality_acknowledged,
         created_at=order.created_at,
     )
 

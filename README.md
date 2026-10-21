@@ -31,7 +31,7 @@ orders from a counter screen.
 | 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, payment and signed webhooks, pickup code, vendor queue, refunds, timeouts, file retention. Pickup only. | **Built** |
 | 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
 | 1.6 | Print the file the customer actually has: Word, Excel and PowerPoint files are converted to PDF and printed. An error that names the fix. Print it again, share the pickup code, a phone number for the shop, and the shops near you. | **Built** |
-| 2 | PDF quality checker (effective DPI and blur), price comparison, map view. The list of shops by distance is built. | Planned |
+| 2 | PDF quality checker (effective DPI and blur), price comparison, map view. The quality checker and the list of shops by distance are built. | In progress |
 | 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
 
 ## What it deliberately does not do
@@ -65,7 +65,7 @@ first party.
 - **Frontend:** React 19, TypeScript, Vite, TanStack Query, React Hook Form, Zod, Tailwind CSS
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
 - **Data:** PostgreSQL with PostGIS, S3-compatible object storage (MinIO locally)
-- **PDF and images (Phase 2):** PyMuPDF, OpenCV
+- **PDF and images:** PyMuPDF, OpenCV (headless). The quality checker measures effective DPI and blur with classical methods, calibrated on a labelled fixture set
 - **Payments:** Razorpay (test mode) behind a gateway interface, with a fake gateway for tests. A second method, cash at the counter, sits behind the same interface
 - **Infra:** Docker Compose, Caddy, GitHub Actions, single instance with S3
 
@@ -345,10 +345,11 @@ Then the app is on <https://localhost>.
 ## Try the whole flow in one command
 
 `infra/scripts/smoke-test.sh` walks the product the way a person would:
-the customer signs in, uploads a PDF, sees a price, pays; the shop finds
-the order in the queue, accepts it, starts printing, marks it ready; the
-customer downloads the file; a wrong pickup code is refused; the right one
-completes the order.
+the customer signs in, uploads a PDF, asks for the quality check and
+waits for the worker to measure the file, sees a price, pays; the shop
+finds the order in the queue, accepts it, starts printing, marks it
+ready; the customer downloads the file; a wrong pickup code is refused;
+the right one completes the order.
 
 ```bash
 make smoke                                   # against the dev stack
@@ -378,7 +379,8 @@ printing a summary that looks fine.
 ## Testing
 
 - **Unit:** the pricing rule, the order state machine and the refund
-  backoff, including property-based tests with Hypothesis.
+  backoff, including property-based tests with Hypothesis, and the quality
+  rules against a labelled fixture set.
 - **API and integration:** real PostgreSQL with PostGIS, the fake payment
   gateway and in-memory storage. Covers webhook replay, parallel webhook
   delivery, concurrent accept, authorization on every endpoint, and the
@@ -444,7 +446,11 @@ committed. The decisions are.
    the whole money path runs the same way in the tests, locally and in
    the demo.
 6. **Background work is database driven**, with no Redis and no Celery.
-   Five functions, rows claimed with `SKIP LOCKED`, safe to run twice.
+   Six functions, rows claimed with `SKIP LOCKED`, safe to run twice.
+7. **The quality check is measured, not guessed.** The thresholds come
+   from a labelled fixture set: chosen on one half and reported on the
+   half that was held out. The report is advice, so it never stops an
+   order.
 
 ## Known limitations
 
@@ -464,6 +470,11 @@ committed. The decisions are.
   and per address, so a campus behind one address is not locked out.
 - The vendor board polls every five seconds. WebSockets arrive in the
   phase where a live board needs them.
+- The quality thresholds are calibrated on a generated fixture set, not on
+  real customer files. The set is reproducible and free of personal
+  documents, but real uploads would be better evidence, and adding a
+  labelled real file is the next step. See
+  [ADR 028](docs/adr/028-the-quality-check-runs-in-the-worker.md).
 
 ## Author
 

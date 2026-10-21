@@ -20,6 +20,7 @@ export type OrderCreateBody = {
   copies: number;
   expected_price_paise?: number;
   payment_method?: PaymentMethod;
+  quality_acknowledged?: boolean;
 };
 
 export const ORDER_STATUSES = [

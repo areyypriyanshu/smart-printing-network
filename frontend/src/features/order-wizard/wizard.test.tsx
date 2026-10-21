@@ -84,6 +84,9 @@ function useWizardHandlers() {
         return HttpResponse.json(quoteFor(beta, 5000, 500));
       return errorResponse(409, "RATE_NOT_SET", "No rate for these options");
     }),
+    http.get("/api/v1/uploads/:id/quality", () =>
+      errorResponse(404, "NOT_FOUND", "Quality report not found"),
+    ),
   );
 }
 
@@ -210,6 +213,56 @@ describe("OrderWizardPage", () => {
     });
     expect(within(selection).getByText("Alpha Prints")).toBeInTheDocument();
     expect(within(selection).getByText(/₹\s?10\.00/)).toBeInTheDocument();
+  });
+});
+
+describe("the quality check in the review step", () => {
+  it("asks for the check and shows the warnings without blocking the order", async () => {
+    useWizardHandlers();
+    server.use(
+      http.post("/api/v1/uploads/:id/quality", () =>
+        HttpResponse.json({
+          id: "report-1",
+          upload_id: uploadFixture.id,
+          status: "DONE",
+          pages: [
+            {
+              page_number: 2,
+              flags: ["BLURRY"],
+              min_effective_dpi: 300,
+              blur_score: 12,
+            },
+          ],
+          summary: { page_count: 5, flagged_pages: 1, flagged: true },
+          error: null,
+          acknowledged: false,
+          algorithm_version: "1",
+          created_at: "2026-01-01T00:00:00Z",
+          started_at: null,
+          completed_at: null,
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<OrderWizardPage />, {
+      route: `/new?upload=${uploadFixture.id}`,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    await user.click(
+      (await screen.findAllByRole("button", { name: "Choose this shop" }))[0],
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /continue to payment/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /check your file quality/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/page 2/i)).toBeInTheDocument();
+    // The order is still there: the warnings do not take the checkout
+    // away.
+    expect(screen.getByRole("button", { name: /pay/i })).toBeInTheDocument();
   });
 });
 

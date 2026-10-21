@@ -105,6 +105,47 @@ UPLOAD_ID="$(printf '%s' "${UPLOAD}" | python3 -c 'import json,sys; print(json.l
 	fail "the upload was refused: ${UPLOAD}"
 echo "uploaded ${UPLOAD_ID}"
 
+step "the customer asks for the quality check"
+QUALITY="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" -X POST "${API}/uploads/${UPLOAD_ID}/quality" \
+	-H "Authorization: Bearer ${CUSTOMER_TOKEN}")" || fail "the quality check was refused: ${QUALITY}"
+printf '%s' "${QUALITY}" | python3 -c '
+import json,sys
+body = json.load(sys.stdin)
+status = body["status"]
+if status not in ("PENDING", "RUNNING", "DONE"):
+    raise SystemExit("the report should be waiting or done, it is " + status)
+' || fail "the quality report is not in a sensible state: ${QUALITY}"
+echo "the report is queued"
+
+step "the worker finishes the quality check"
+QUALITY_STATUS=""
+for attempt in $(seq 1 30); do
+	QUALITY="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/uploads/${UPLOAD_ID}/quality" \
+		-H "Authorization: Bearer ${CUSTOMER_TOKEN}")"
+	QUALITY_STATUS="$(printf '%s' "${QUALITY}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+	[ "${QUALITY_STATUS}" != "PENDING" ] && [ "${QUALITY_STATUS}" != "RUNNING" ] && break
+	sleep 1
+done
+[ "${QUALITY_STATUS}" = "DONE" ] || fail "the quality check should be DONE, it is ${QUALITY_STATUS}"
+printf '%s' "${QUALITY}" | python3 -c '
+import json,sys
+body = json.load(sys.stdin)
+if len(body["pages"]) != 1:
+    raise SystemExit("the report should have one page")
+if body["algorithm_version"] != "1":
+    raise SystemExit("the report should say which algorithm made it")
+' || fail "the quality report is not what it should be: ${QUALITY}"
+echo "done, one page measured"
+
+step "the warnings never block the order"
+printf '%s' "${QUALITY}" | python3 -c '
+import json,sys
+body = json.load(sys.stdin)
+flags = {flag for page in body["pages"] for flag in page["flags"]}
+if flags - {"LOW_RESOLUTION", "VERY_LOW_RESOLUTION", "BLURRY"}:
+    raise SystemExit(f"unexpected flags: {flags}")
+' || fail "the report carried an unexpected flag"
+
 step "the shop signs in and the customer can see it"
 VENDOR_TOKEN="$(login "${VENDOR_EMAIL}")" || fail "the vendor could not sign in"
 SHOP_ID="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/vendor/shop" -H "Authorization: Bearer ${VENDOR_TOKEN}" |

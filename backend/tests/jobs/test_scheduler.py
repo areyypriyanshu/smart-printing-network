@@ -42,6 +42,7 @@ def test_run_once_reports_every_job(db_session: Session) -> None:
     assert set(results) == {
         "expire_orders",
         "auto_reject",
+        "analyze_quality",
         "expire_no_shows",
         "process_refunds",
         "purge_files",

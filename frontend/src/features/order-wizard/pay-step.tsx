@@ -49,6 +49,7 @@ type PayStepProps = {
   cashAtStoreEnabled: boolean;
   onPaymentMethodChange: (method: PaymentMethod) => void;
   onBack: () => void;
+  qualityAcknowledged?: boolean;
   deadlineMs?: number;
 };
 
@@ -82,6 +83,7 @@ export function PayStep({
   cashAtStoreEnabled,
   onPaymentMethodChange,
   onBack,
+  qualityAcknowledged = false,
   deadlineMs = POLL_DEADLINE_MS,
 }: PayStepProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "review" });
@@ -136,6 +138,7 @@ export function PayStep({
           copies: options.copies,
           expected_price_paise: quote.price_paise,
           payment_method: paymentMethod,
+          quality_acknowledged: qualityAcknowledged,
         },
         idempotencyKey.current,
       );

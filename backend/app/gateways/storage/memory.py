@@ -13,6 +13,9 @@ class MemoryStorage:
     def delete(self, key: str) -> None:
         self.objects.pop(key, None)
 
+    def download_to_path(self, key: str, path: Path) -> None:
+        path.write_bytes(self.objects[key])
+
     def copy_file(self, source_key: str, target_key: str) -> None:
         if source_key not in self.objects:
             raise KeyError(source_key)

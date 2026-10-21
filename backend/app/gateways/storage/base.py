@@ -7,6 +7,8 @@ class Storage(Protocol):
 
     def delete(self, key: str) -> None: ...
 
+    def download_to_path(self, key: str, path: Path) -> None: ...
+
     def copy_file(self, source_key: str, target_key: str) -> None:
         """Copy an object to a new key.
 

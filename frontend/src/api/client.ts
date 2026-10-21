@@ -26,6 +26,9 @@ export type VerificationSentResponse =
 export type OAuthProvidersResponse = {
   providers: string[];
 };
+export type QualityReportResponse =
+  components["schemas"]["QualityReportResponse"];
+export type QualityPageResponse = components["schemas"]["QualityPageResponse"];
 export type OAuthStartResponse = { url: string };
 
 export type ApiErrorBody = {

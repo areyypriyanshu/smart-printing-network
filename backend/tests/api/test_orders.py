@@ -77,6 +77,36 @@ def test_create_order_requires_an_idempotency_key(client: TestClient, db_session
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_an_order_records_that_the_customer_saw_the_quality_warnings(
+    client: TestClient, db_session: Session
+) -> None:
+    _customer_id, shop_id, upload_id = _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.post(
+        ORDERS,
+        headers={**headers, "Idempotency-Key": "key-quality"},
+        json=_payload(upload_id, shop_id, quality_acknowledged=True),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["order"]["quality_acknowledged"] is True
+
+
+def test_the_quality_warnings_never_stop_an_order(client: TestClient, db_session: Session) -> None:
+    _customer_id, shop_id, upload_id = _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.post(
+        ORDERS,
+        headers={**headers, "Idempotency-Key": "key-no-acknowledgement"},
+        json=_payload(upload_id, shop_id),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["order"]["quality_acknowledged"] is False
+
+
 def test_duplicate_idempotency_key_creates_one_order(
     client: TestClient, db_session: Session
 ) -> None:
