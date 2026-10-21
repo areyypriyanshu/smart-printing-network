@@ -244,3 +244,38 @@ def test_the_restore_drill_cannot_drop_the_live_database() -> None:
 
     assert "refusing to run" in script
     assert "printenv POSTGRES_DB" in script
+
+
+def test_the_example_environment_holds_no_working_clerk_key() -> None:
+    """The Clerk settings in the template carry no working secret.
+
+    The template is in the repository, so anything in it is public. The
+    instance's host is not a secret, since the publishable key the front
+    end carries encodes it, and the switches are meant to be read. A
+    secret key and a webhook signing secret are secrets, and neither may
+    appear here with a value.
+    """
+    example = _read(".env.example")
+
+    for line in example.splitlines():
+        if not line.startswith("CLERK_"):
+            continue
+        name, _, value = line.partition("=")
+        if name in ("CLERK_ENABLED",):
+            # A switch, not a secret. The template shows it off.
+            assert value.strip() in ("true", "false"), name
+            continue
+        assert value.strip() == "", f"{name} carries a value in the template"
+
+
+def test_the_production_stack_cannot_run_the_local_bypass() -> None:
+    """The local bypass mints a session nobody proved.
+
+    It is refused by the application in production, and the compose
+    file pins the mode, so the two cannot disagree about whether it is
+    on.
+    """
+    compose = _read("docker-compose.prod.yml")
+
+    assert 'SPN_DEV_AUTH: "false"' in compose
+    assert "SPN_DEV_AUTH: ${SPN_DEV_AUTH" not in compose

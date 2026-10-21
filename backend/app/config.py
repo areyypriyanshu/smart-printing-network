@@ -23,6 +23,30 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 7
 
+    # Clerk, the identity provider. It proves who someone is; this
+    # application decides what they may do. See ADR 029.
+    #
+    # The Frontend API URL is the instance's own host, and it is two
+    # things: it is the issuer the token claims, and the key set is
+    # published at that host with /.well-known/jwks.json appended. The
+    # key set is public, so the backend does not need a secret to
+    # verify a token, and it does not need to know the instance id.
+    clerk_fapi_url: str = ""
+    # The origins whose tokens are accepted. The token carries the
+    # origin that asked for it, and a token minted for a different
+    # application on the same instance is not a token for this one.
+    # Comma separated, because a deployment has more than one origin:
+    # the local front end and the deployed one.
+    clerk_allowed_origins: str = ""
+    # Whether the Clerk path is in use at all. Off by default, so a
+    # deployment that has not been configured cannot reach it, and so
+    # the migration is a configuration change rather than a code change.
+    clerk_enabled: bool = False
+    # A local bypass that mints a token without Clerk, for the end to
+    # end suite. It is refused in production, and it is never a way to
+    # skip a check: the role still comes from the database.
+    spn_dev_auth: bool = False
+
     s3_endpoint_url: str = "http://localhost:9000"
     s3_bucket: str = "spn-files"
     s3_access_key: str = "spn"
@@ -115,6 +139,12 @@ class Settings(BaseSettings):
             raise ValueError(f"ENV must be local, test or production, not {self.env!r}")
         if self.testing_endpoints_enabled and self.env == "production":
             raise ValueError("the testing endpoints cannot be enabled when ENV=production")
+        if self.spn_dev_auth and self.env == "production":
+            raise ValueError(
+                "SPN_DEV_AUTH cannot be enabled when ENV=production. It mints "
+                "a session without the identity provider, so a deployment that "
+                "has it on would accept a session that was never proved."
+            )
         if self.env == "production" and (
             not self.jwt_secret or self.jwt_secret == PLACEHOLDER_JWT_SECRET
         ):
@@ -143,7 +173,38 @@ class Settings(BaseSettings):
                 "It writes the verification link to the log, and that link is "
                 "a secret. Use SMTP."
             )
+        if self.clerk_enabled:
+            if not self.clerk_fapi_url:
+                raise ValueError(
+                    "CLERK_FAPI_URL is required when CLERK_ENABLED=true. It is "
+                    "the instance's own host, and the key set is published "
+                    "there."
+                )
+            if not self.clerk_allowed_origins:
+                raise ValueError(
+                    "CLERK_ALLOWED_ORIGINS is required when CLERK_ENABLED=true. "
+                    "A token carries the origin that asked for it, and a token "
+                    "minted for another application on the same instance is not "
+                    "a token for this one."
+                )
         return self
+
+    @property
+    def clerk_jwks_url(self) -> str:
+        """Where the instance's public signing keys are published.
+
+        Clerk serves them from the Frontend API host with a fixed path
+        appended, so the key set needs no secret and no instance id to
+        be fetched.
+        """
+        return f"{self.clerk_fapi_url.rstrip('/')}/.well-known/jwks.json"
+
+    @property
+    def clerk_origin_list(self) -> list[str]:
+        """The origins whose tokens are accepted, as a list."""
+        return [
+            origin.strip() for origin in self.clerk_allowed_origins.split(",") if origin.strip()
+        ]
 
 
 @lru_cache

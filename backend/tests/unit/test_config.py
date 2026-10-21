@@ -106,3 +106,123 @@ def test_local_defaults_are_valid_once_the_fake_key_is_set() -> None:
     assert settings.env == "local"
     assert settings.payment_provider == "fake"
     assert settings.max_upload_mb == 50
+
+
+def test_clerk_is_off_until_it_is_switched_on() -> None:
+    """A deployment that has not heard of Clerk cannot reach it.
+
+    The migration is a configuration change rather than a code change,
+    and the switch defaults to off so that a deployment which was never
+    configured cannot end up talking to an identity provider it did not
+    choose.
+    """
+    settings = _settings()
+
+    assert settings.clerk_enabled is False
+    assert settings.clerk_fapi_url == ""
+    assert settings.clerk_allowed_origins == ""
+
+
+def test_clerk_needs_an_instance_when_it_is_switched_on() -> None:
+    """The instance's host is where the key set is published.
+
+    Without it there is no key set to fetch and no issuer to check the
+    token against, so a token from anywhere would be refused, which is
+    safe but is not a working deployment.
+    """
+    with pytest.raises(ValidationError, match="CLERK_FAPI_URL is required"):
+        _settings(
+            clerk_enabled=True, clerk_fapi_url="", clerk_allowed_origins="http://localhost:5173"
+        )
+
+
+def test_clerk_needs_the_origins_whose_tokens_are_accepted() -> None:
+    """A token carries the origin that asked for it.
+
+    An instance can hold more than one application, so a token minted
+    for a different one on the same instance is not a token for this
+    one. Without the list, every token would be accepted, which is the
+    thing the check exists to prevent.
+    """
+    with pytest.raises(ValidationError, match="CLERK_ALLOWED_ORIGINS is required"):
+        _settings(
+            clerk_enabled=True, clerk_fapi_url="https://app.accounts.dev", clerk_allowed_origins=""
+        )
+
+
+def test_clerk_with_an_instance_and_the_origins_is_valid() -> None:
+    settings = _settings(
+        clerk_enabled=True,
+        clerk_fapi_url="https://app.accounts.dev",
+        clerk_allowed_origins="http://localhost:5173,https://spn.example.com",
+    )
+
+    assert settings.clerk_enabled is True
+
+
+def test_the_key_set_is_published_at_the_instance_host() -> None:
+    """The key set is public, so the backend needs no secret to verify.
+
+    Clerk serves the instance's public signing keys from the Frontend
+    API host with a fixed path appended. Reading it from the same
+    setting as the issuer means the two cannot disagree about which
+    instance they are talking about.
+    """
+    settings = _settings(
+        clerk_enabled=True,
+        clerk_fapi_url="https://app.accounts.dev",
+        clerk_allowed_origins="http://localhost:5173",
+    )
+
+    assert settings.clerk_jwks_url == "https://app.accounts.dev/.well-known/jwks.json"
+
+
+def test_a_trailing_slash_does_not_double_up_in_the_key_set_address() -> None:
+    settings = _settings(
+        clerk_enabled=True,
+        clerk_fapi_url="https://app.accounts.dev/",
+        clerk_allowed_origins="http://localhost:5173",
+    )
+
+    assert settings.clerk_jwks_url == "https://app.accounts.dev/.well-known/jwks.json"
+
+
+def test_the_origins_are_read_as_a_list() -> None:
+    """A deployment has more than one origin, and spaces are not origins."""
+    settings = _settings(
+        clerk_enabled=True,
+        clerk_fapi_url="https://app.accounts.dev",
+        clerk_allowed_origins="http://localhost:5173, https://spn.example.com ,",
+    )
+
+    assert settings.clerk_origin_list == ["http://localhost:5173", "https://spn.example.com"]
+
+
+def test_the_local_bypass_cannot_be_on_in_production() -> None:
+    """The local bypass mints a session nobody proved.
+
+    A deployment with it on would accept a session that was never
+    proved, which is the whole thing the identity provider is for. The
+    check is refused in production the way the testing surface is.
+    """
+    with pytest.raises(ValidationError, match="SPN_DEV_AUTH cannot be enabled"):
+        _settings(
+            env="production",
+            jwt_secret="a-real-secret-that-is-not-the-placeholder",
+            payment_provider="razorpay",
+            razorpay_key_id="rzp_test_placeholder",
+            razorpay_key_secret="placeholder",
+            razorpay_webhook_secret="placeholder",
+            spn_dev_auth=True,
+        )
+
+
+def test_the_local_bypass_is_allowed_outside_production() -> None:
+    """The end to end suite needs a session without a network.
+
+    It runs against the local stack, where the identity provider is not
+    reachable, so the bypass has to be usable outside production.
+    """
+    settings = _settings(spn_dev_auth=True)
+
+    assert settings.spn_dev_auth is True
