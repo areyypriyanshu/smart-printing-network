@@ -114,6 +114,13 @@ openapi:
 	cd backend && FAKE_WEBHOOK_SECRET=test-only-fake-webhook-secret uv run python scripts/export_openapi.py
 	cd frontend && npx openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts
 
+# Is the identity provider set up the way this project needs it? Reads
+# CLERK_FAPI_URL and CLERK_ALLOWED_ORIGINS from the environment, and
+# checks a token too if one is given:
+#   make check-clerk CLERK_TOKEN=...
+check-clerk:
+	cd backend && uv run python scripts/check_clerk.py $(if $(CLERK_TOKEN),--token "$(CLERK_TOKEN)",)
+
 reset:
 	docker compose --profile tools down -v
 	docker compose --profile tools up -d --build
