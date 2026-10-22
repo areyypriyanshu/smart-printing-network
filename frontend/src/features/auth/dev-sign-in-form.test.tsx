@@ -67,7 +67,8 @@ describe("the local way in", () => {
       (
         _success: (position: GeolocationPosition) => void,
         failure?: ((error: GeolocationPositionError) => void) | null,
-      ) => failure?.({ code: 1, message: "denied" } as GeolocationPositionError),
+      ) =>
+        failure?.({ code: 1, message: "denied" } as GeolocationPositionError),
     );
     vi.stubGlobal("navigator", {
       ...navigator,
