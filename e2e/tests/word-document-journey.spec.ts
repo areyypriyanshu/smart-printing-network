@@ -13,6 +13,11 @@ import { API_URL, signIn as signInHelper, signInAsCustomer } from "./helpers";
 // turns it into a PDF and prints that, so the journey is the same as
 // for a PDF, and the file the shop opens is a PDF.
 
+// The worker turns the document into a PDF in the background, and it
+// looks at the queue every thirty seconds, so the file can take a
+// minute to arrive. The test's own limit is longer than that.
+test.setTimeout(120_000);
+
 const SHOP_NAME = "Central Prints";
 const VENDOR_EMAIL = "vendor1@example.com";
 

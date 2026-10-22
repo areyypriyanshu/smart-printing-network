@@ -11,6 +11,13 @@ import { signInAsCustomer } from "./helpers";
 //
 // It runs against the local stack, where the worker does the analysis
 // and the fake payment gateway takes the money.
+//
+// The worker measures the file in the background, and it looks at the
+// queue every thirty seconds, so the report can take a minute to
+// arrive. The test's own limit is longer than that, because the wait
+// is the worker's and not the browser's.
+
+test.setTimeout(120_000);
 
 const SHOP_NAME = "Central Prints";
 
