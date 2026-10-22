@@ -55,14 +55,37 @@ def call(secret_key: str, path: str, body: dict | None = None) -> dict:
         return json.load(response)
 
 
+def matches(user: dict, email: str) -> bool:
+    """Does the provider's record hold this address?
+
+    The provider's list is by address already, but the case is the
+    caller's and the provider's own is not always the same, and an
+    address that differs only in case is the same address.
+    """
+    for address in user.get("email_addresses", []):
+        if address.get("email_address", "").lower() == email.lower():
+            return True
+    return False
+
+
 def find_by_email(secret_key: str, email: str) -> dict | None:
     """The provider's record for an address, if it has one."""
     users = call(secret_key, f"/users?email_address={email}")
     for user in users:
-        for address in user.get("email_addresses", []):
-            if address.get("email_address", "").lower() == email.lower():
-                return user
+        if matches(user, email):
+            return user
     return None
+
+
+def test_address(email: str) -> str:
+    """The provider's address for an account whose inbox is not real.
+
+    A test address never receives mail and its code is always the same,
+    so an account whose address is not a real inbox can be signed in to.
+    The local account keeps the address it had.
+    """
+    local, _, domain = email.partition("@")
+    return f"{local}+clerk_test@{domain}"
 
 
 def create(secret_key: str, email: str, name: str, password: str) -> dict:
@@ -124,8 +147,7 @@ def main() -> int:
             password = f"SPN-{secrets.token_urlsafe(18)}"
             address = account.email
             if arguments.test_addresses:
-                local, _, domain = address.partition("@")
-                address = f"{local}+clerk_test@{domain}"
+                address = test_address(address)
             person = create(secret_key, address, account.full_name, password)
             account.clerk_user_id = person["id"]
             session.commit()
