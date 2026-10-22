@@ -1,5 +1,10 @@
 export { onboardRequest, meRequest } from "./api";
-export { RequireAuth, RequireOnboarding, RequireRole } from "./guards";
+export {
+  RequireAuth,
+  RequireOnboarding,
+  RequireRole,
+  SendToOnboarding,
+} from "./guards";
 export { useSession, SessionProvider } from "./session";
 export { ClerkSession } from "./clerk-session";
 export { DevSession, useDevAuth } from "./dev-session";

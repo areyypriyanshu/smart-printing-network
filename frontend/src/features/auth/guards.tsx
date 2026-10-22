@@ -48,6 +48,24 @@ export function RequireRole({
 }
 
 /**
+ * The landing page, for the person who has signed in and not chosen yet.
+ *
+ * A person who signs in lands on the front page, and a person who has
+ * signed in and has no account can do nothing at all until they have
+ * said what they are here for. So they are asked the one question
+ * first, rather than being left on a page with a sign in button they
+ * have already used.
+ */
+export function SendToOnboarding({ children }: { children: ReactNode }) {
+  const { status } = useSession();
+
+  if (status === "needs-onboarding") {
+    return <Navigate to="/onboarding" replace />;
+  }
+  return <>{children}</>;
+}
+
+/**
  * The page for the person who has not chosen yet.
  *
  * It is here rather than behind a guard, because a person who has

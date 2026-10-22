@@ -9,6 +9,7 @@ import {
   RequireAuth,
   RequireOnboarding,
   RequireRole,
+  SendToOnboarding,
   SignInPage,
   SignUpPage,
 } from "./features/auth";
@@ -33,7 +34,17 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<HomePage />} />
+        {/* A person who has signed in and has no account lands here,
+            and there is nothing they can do until they have said what
+            they are here for. */}
+        <Route
+          index
+          element={
+            <SendToOnboarding>
+              <HomePage />
+            </SendToOnboarding>
+          }
+        />
         {/* The identity provider's own routing puts its second steps
             under the sign in and sign up paths, so the routes have to
             cover what is under them and not only the path itself. */}

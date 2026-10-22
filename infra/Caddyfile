@@ -68,7 +68,17 @@
 		# on 443. The images come from the provider's own host, and the
 		# styles need unsafe-inline because the provider styles its
 		# components at run time.
-		Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; connect-src 'self' https://api.razorpay.com {$CLERK_FAPI_URL} https://*.protect.clerk.com:*; img-src 'self' data: https://img.clerk.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		#
+		# The two allowances below are the provider's fraud protection
+		# and nothing else. It is a widget from Cloudflare, it runs in
+		# this page, and it does two things the policy has to allow: it
+		# evaluates the code it is given, and it fetches an empty
+		# address to see whether the page is allowed to fetch at all.
+		# Without them the widget cannot start, and the check it exists
+		# for never finishes, so nobody can create an account. The empty
+		# address reaches no host: a data address is the bytes in the
+		# address itself.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' https://checkout.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; connect-src 'self' data: https://api.razorpay.com {$CLERK_FAPI_URL} https://*.protect.clerk.com:*; img-src 'self' data: https://img.clerk.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 

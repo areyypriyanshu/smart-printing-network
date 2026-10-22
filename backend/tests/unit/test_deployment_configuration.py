@@ -105,6 +105,27 @@ def test_the_content_security_policy_allows_the_identity_provider() -> None:
     assert "{$CLERK_FAPI_URL:}" not in caddyfile
 
 
+def test_the_content_security_policy_allows_the_fraud_protection_to_run() -> None:
+    """The provider's abuse protection is a widget in this page.
+
+    It is a widget from Cloudflare, and it does two things the policy
+    has to allow: it evaluates the code it is given, and it fetches an
+    empty address to see whether the page is allowed to fetch at all.
+    Without them the widget cannot start, the check it exists for never
+    finishes, and nobody can create an account.
+
+    The empty address reaches no host. A data address is the bytes in
+    the address itself.
+    """
+    caddyfile = _read("infra/Caddyfile")
+
+    policy = re.search(r'Content-Security-Policy "([^"]+)"', caddyfile)
+    assert policy is not None
+    directives = policy.group(1)
+    assert "'unsafe-eval'" in directives
+    assert "connect-src 'self' data:" in directives
+
+
 def test_the_web_image_is_built_with_the_publishable_key() -> None:
     """The bundle is static, so the key has to be in it at build time.
 
