@@ -159,6 +159,26 @@ def test_a_token_minted_for_another_origin_is_refused(jwks_server: _Jwks) -> Non
         _verifier(jwks_server.url).verify(_token(private_pem, origin="https://other.example.com"))
 
 
+def test_a_token_that_names_no_origin_is_accepted(jwks_server: _Jwks) -> None:
+    """The origin names the application a token was minted for.
+
+    A token that names none is one the provider minted for something
+    other than a browser, and the provider's own API is the only way
+    to get one: it takes the instance's secret key, and the secret key
+    can already do everything this application can do and more. So a
+    token like that is not a way in that was not there before, and
+    refusing it would break the machine's own use of the instance for
+    no gain.
+    """
+    private_pem = jwks_server.publish()
+    token = _token(private_pem, origin=None)
+
+    identity = _verifier(jwks_server.url).verify(token)
+
+    assert identity.subject == "user_abc"
+    assert identity.origin is None
+
+
 def test_a_token_with_no_subject_is_refused(jwks_server: _Jwks) -> None:
     private_pem = jwks_server.publish()
     token = jwt.encode(

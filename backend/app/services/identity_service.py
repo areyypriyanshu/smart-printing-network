@@ -80,10 +80,16 @@ def create_account(
     try:
         session.commit()
     except IntegrityError as exc:
-        # Two requests for the same address at the same time both find
-        # that the address is free, and one of them loses. That is a
-        # conflict and not a fault, and the answer says so.
+        # Two requests for the same person at the same time both find
+        # that the account is not there, and one of them loses. The
+        # account the other one made is the right answer, so it is
+        # read back and handed over.
         session.rollback()
+        made = find_by_subject(session, subject)
+        if made is not None:
+            return made
+        # The address is taken by somebody else, and there is no way to
+        # tell them apart. That is a conflict and not a fault.
         raise Conflict("An account already uses that email address") from exc
     return user
 
@@ -106,15 +112,38 @@ def create_vendor_account(
     same rule as it has always been: an account can run a shop before
     anybody has looked at it.
     """
-    user = create_account(session, subject=subject, email=email, full_name=full_name, role=VENDOR)
-    if user.role != VENDOR:
-        raise Conflict("That account is not a shop owner")
-    # The shop needs the owner's id, so the user row is flushed before
-    # the shop is built. That flush is where the unique email constraint
-    # is hit, so it has to sit inside the same guard as the commit.
-    # Otherwise a duplicate email escapes as a 500 instead of the 409
-    # the API promises.
+    existing = find_by_subject(session, subject)
+    if existing is not None:
+        # The account is already there, so the other request made it.
+        # Its shop is its own; the person is not given a second one.
+        if existing.role != VENDOR:
+            raise Conflict("That account is not a shop owner")
+        shop = session.scalar(select(Shop).where(Shop.owner_id == existing.id))
+        if shop is None:
+            raise Conflict("That account has no shop")
+        return existing, shop
+    if find_by_email(session, email) is not None:
+        raise Conflict("An account already uses that email address")
+
+    user = User(
+        email=email,
+        clerk_user_id=subject,
+        full_name=full_name,
+        role=VENDOR,
+        is_active=True,
+    )
+    session.add(user)
+    # The account and the shop are made together, in one transaction.
+    # A shop owner with no shop cannot print anything, and the page
+    # that asks for a shop hands the account it already has back, so
+    # an account left without its shop is a person who can never get
+    # one.
     try:
+        # The shop needs the owner's id, so the user row is flushed
+        # before the shop is built. That flush is where the unique
+        # email constraint is hit, so it has to sit inside the same
+        # guard as the commit. Otherwise a duplicate email escapes as a
+        # 500 instead of the 409 the API promises.
         session.flush()
         shop = Shop(
             owner_id=user.id,
@@ -127,6 +156,11 @@ def create_vendor_account(
         session.commit()
     except IntegrityError as exc:
         session.rollback()
+        made = find_by_subject(session, subject)
+        if made is not None:
+            other = session.scalar(select(Shop).where(Shop.owner_id == made.id))
+            if other is not None:
+                return made, other
         raise EmailTaken("An account with this email already exists") from exc
     return user, shop
 

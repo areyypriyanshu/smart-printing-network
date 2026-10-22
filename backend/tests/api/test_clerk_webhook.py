@@ -186,3 +186,79 @@ def test_the_same_delivery_twice_changes_nothing_new(
     assert second.status_code == 200
     db_session.refresh(user)
     assert user.full_name == "Twice Name"
+
+
+def test_a_delivery_is_acted_on_once(client: TestClient, db_session: Session) -> None:
+    """The provider retries a delivery it does not get an answer for.
+
+    A delivery that arrives twice is still a valid signature, so the
+    record of what has been seen is what stops it being applied twice.
+    """
+    subject = "user_once"
+    user = create_user(db_session, email="once@example.com", role="customer")
+    user.clerk_user_id = subject
+    db_session.commit()
+
+    body = {"type": "user.updated", "data": {"id": subject, "first_name": "Once"}}
+    raw, headers = _delivery(body, message_id="msg_once")
+
+    first = client.post(WEBHOOK, content=raw, headers=headers)
+    second = client.post(WEBHOOK, content=raw, headers=headers)
+
+    assert first.status_code == 200
+    assert first.json()["status"] == "ok"
+    assert second.status_code == 200
+    assert second.json()["status"] == "duplicate"
+
+
+def test_a_replayed_delivery_does_not_set_an_older_name(
+    client: TestClient, db_session: Session
+) -> None:
+    """A delivery that is replayed is a delivery from the past.
+
+    The name on the account is the newer one, and a replay must not put
+    the older one back.
+    """
+    subject = "user_replay"
+    user = create_user(db_session, email="replay@example.com", role="customer")
+    user.clerk_user_id = subject
+    user.full_name = "Newer"
+    db_session.commit()
+
+    old, old_headers = _delivery(
+        {"type": "user.updated", "data": {"id": subject, "first_name": "Older"}},
+        message_id="msg_old",
+    )
+    new, new_headers = _delivery(
+        {"type": "user.updated", "data": {"id": subject, "first_name": "Newer"}},
+        message_id="msg_new",
+    )
+
+    assert client.post(WEBHOOK, content=old, headers=old_headers).status_code == 200
+    assert client.post(WEBHOOK, content=new, headers=new_headers).status_code == 200
+    # The older delivery, sent again.
+    replay = client.post(WEBHOOK, content=old, headers=old_headers)
+
+    assert replay.status_code == 200
+    assert replay.json()["status"] == "duplicate"
+    db_session.expire_all()
+    assert db_session.get(type(user), user.id).full_name == "Newer"
+
+
+def test_a_name_the_database_cannot_hold_does_not_stop_the_delivery(
+    client: TestClient, db_session: Session
+) -> None:
+    """The byte that cannot be stored carries no meaning in a name."""
+    subject = "user_nul"
+    user = create_user(db_session, email="nul@example.com", role="customer")
+    user.clerk_user_id = subject
+    db_session.commit()
+
+    body = {"type": "user.updated", "data": {"id": subject, "first_name": "Na\u0000me"}}
+    raw, headers = _delivery(body, message_id="msg_nul")
+
+    response = client.post(WEBHOOK, content=raw, headers=headers)
+
+    assert response.status_code == 200
+    db_session.expire_all()
+    assert db_session.get(type(user), user.id).full_name == "Name"

@@ -13,22 +13,28 @@ from a provider is not allowed to make them.
 """
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_db, storable_json
 from app.errors import Unauthenticated
 from app.gateways.webhooks.svix import verify_signature
-from app.models import User
+from app.models import User, WebhookEvent
 from app.schemas.errors import ERROR_RESPONSES
 
 # The route is public, so it has no session to be refused, but it
 # can still be refused for a body that is too large or a request
 # that is not valid, and it says so.
 router = APIRouter(prefix="/webhooks", tags=["webhooks"], responses=ERROR_RESPONSES)
+
+#: The name this application gives the provider in the inbox table,
+#: where a delivery is recorded so that it is acted on once.
+PROVIDER = "clerk"
 
 #: The event types this application acts on. Everything else is
 #: accepted and ignored, because the provider sends many events and a
@@ -109,12 +115,42 @@ async def clerk_webhook(
         return {"status": "ignored"}
 
     person_id = _person_id(document)
-    if person_id is None:
+    if person_id is None or svix_id is None:
         return {"status": "ignored"}
+
+    # A delivery is acted on once. The provider retries a delivery it
+    # does not get an answer for, and a delivery that is replayed is
+    # still a valid signature, so the record of what has been seen is
+    # what stops it being applied twice.
+    event = session.get(WebhookEvent, svix_id)
+    if event is not None and event.processed_at is not None:
+        return {"status": "duplicate"}
+    if event is None:
+        try:
+            session.add(
+                WebhookEvent(
+                    event_id=svix_id,
+                    provider=PROVIDER,
+                    event_type=event_type,
+                    payload=storable_json(document),
+                )
+            )
+            # Flushed, not committed: the record becomes durable
+            # together with the effect, so a failure before the effect
+            # rolls the delivery back instead of spending it, and the
+            # provider's retry can still apply it.
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            return {"status": "duplicate"}
 
     user = session.scalar(select(User).where(User.clerk_user_id == person_id))
     if user is None:
         # The account has not been created yet. Nothing to correct.
+        event = session.get(WebhookEvent, svix_id)
+        if event is not None:
+            event.processed_at = datetime.now(UTC)
+        session.commit()
         return {"status": "ignored"}
 
     if event_type in ("user.deleted", "user.banned"):
@@ -131,7 +167,13 @@ async def clerk_webhook(
     else:
         name = _person_name(document)
         if name:
-            user.full_name = name
+            # A name from the provider is a name a person chose, and
+            # the byte that cannot be stored in a text column carries
+            # no meaning in it.
+            user.full_name = name.replace("\x00", "")
 
+    event = session.get(WebhookEvent, svix_id)
+    if event is not None:
+        event.processed_at = datetime.now(UTC)
     session.commit()
     return {"status": "ok"}

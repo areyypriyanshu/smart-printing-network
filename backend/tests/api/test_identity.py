@@ -9,6 +9,7 @@ and not from the browser, that the account is made exactly once, and
 that the role is the one the person chose and never changes afterwards.
 """
 
+import pytest
 from app.gateways.identity.clerk_admin import ClerkUser
 from app.gateways.identity.fake import dev_subject_for
 from app.models import Shop, User
@@ -271,3 +272,74 @@ def test_an_account_that_has_been_switched_off_is_refused(
     response = client.get(ME, headers=identity_headers(client, user.clerk_user_id or ""))
 
     assert response.status_code == 401
+
+
+def test_a_lost_race_gives_the_account_the_other_request_made(
+    client: TestClient, db_session: Session, monkeypatch
+) -> None:
+    """Two requests for the same person at the same time.
+
+    Both find that the account is not there, and one of them loses the
+    race. The answer is the account the other one made, because that is
+    what the person asked for, and a conflict would send them away from
+    a page they have already filled in.
+    """
+    from app.services import identity_service
+
+    _tell_the_provider_about(client, SUBJECT)
+    headers = identity_headers(client, SUBJECT)
+    made = client.post(ONBOARDING, json={"role": "customer"}, headers=headers)
+    assert made.status_code == 200
+
+    # The second request arrives while the first is still in flight, so
+    # the account is not there when it looks, and the row it puts in is
+    # the one the first request made.
+    looks = {"count": 0}
+    real_find = identity_service.find_by_subject
+
+    def find_before_the_other_request_commits(session, subject):
+        looks["count"] += 1
+        if looks["count"] == 1:
+            return None
+        return real_find(session, subject)
+
+    monkeypatch.setattr(identity_service, "find_by_subject", find_before_the_other_request_commits)
+
+    response = client.post(ONBOARDING, json={"role": "customer"}, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == made.json()["id"]
+
+
+def test_a_shop_and_its_owner_are_made_together(db_session: Session) -> None:
+    """A shop owner with no shop cannot print anything.
+
+    The account and the shop are one thing, so they are made in one
+    transaction. A shop that cannot be made leaves no account behind,
+    because an account left without its shop is a person who can never
+    get one: the page that asks for a shop hands the account it already
+    has back.
+    """
+    from app.services import identity_service
+
+    # A phone number the database will not hold, so the shop cannot be
+    # made.
+    with pytest.raises(Exception) as raised:
+        identity_service.create_vendor_account(
+            db_session,
+            subject="user_shop",
+            email="shop-owner@example.com",
+            full_name="Shop Owner",
+            shop_name="Central Prints",
+            shop_address="Somewhere",
+            phone="12",
+            latitude=19.076,
+            longitude=72.8777,
+        )
+    assert raised.value is not None
+
+    db_session.expire_all()
+    accounts = db_session.scalars(select(User).where(User.email == "shop-owner@example.com")).all()
+    assert accounts == []
+    shops = db_session.scalars(select(Shop).where(Shop.name == "Central Prints")).all()
+    assert shops == []

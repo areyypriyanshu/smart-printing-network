@@ -209,6 +209,12 @@ class ClerkTokenVerifier:
             # not serve. It is refused for the same reason a foreign
             # signature is: it is not a token for this application.
             raise Unauthenticated("Invalid or expired token")
+        # A token that names no origin is one the provider minted for
+        # something other than a browser, and the provider's own API is
+        # the only way to get one: it takes the instance's secret key.
+        # The secret key can already do everything this application can
+        # do, and more, so refusing such a token would break the
+        # machine's use of the instance without closing a way in.
 
         session_id = claims.get("sid")
         return VerifiedIdentity(
