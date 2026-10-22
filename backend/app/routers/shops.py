@@ -8,6 +8,7 @@ from app.db import get_db
 from app.deps import get_geocoder, require_role
 from app.gateways.geocoding import Geocoder
 from app.models import User
+from app.rate_limit import user_rate_limit
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.shop import (
     ShopListResponse,
@@ -56,7 +57,11 @@ def list_nearby_shops(
     )
 
 
-@router.get("/search", response_model=ShopSearchResponse)
+@router.get(
+    "/search",
+    response_model=ShopSearchResponse,
+    dependencies=[Depends(user_rate_limit(30, 60, "shop-search"))],
+)
 def search_shops(
     query: Annotated[ShopSearchQuery, Query()],
     session: Session = Depends(get_db),

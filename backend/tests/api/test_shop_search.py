@@ -499,3 +499,30 @@ def test_a_deployment_without_a_geocoder_says_so(client: TestClient, db_session:
 
     assert response.status_code == 503, response.text
     assert response.json()["error"]["code"] == "GEOCODING_UNAVAILABLE"
+
+
+def test_the_search_is_rate_limited(client: TestClient, db_session: Session) -> None:
+    """A typed address is looked up on the map, and the provider charges
+    for the calls, so the search is limited.
+
+    Thirty a minute is more than a person needs.
+    """
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+
+    for _ in range(30):
+        response = client.get(
+            SEARCH,
+            params={"latitude": CENTRAL_LATITUDE, "longitude": CENTRAL_LONGITUDE},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+    response = client.get(
+        SEARCH,
+        params={"latitude": CENTRAL_LATITUDE, "longitude": CENTRAL_LONGITUDE},
+        headers=headers,
+    )
+
+    assert response.status_code == 429, response.text
+    assert response.json()["error"]["code"] == "RATE_LIMITED"
