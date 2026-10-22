@@ -1,14 +1,19 @@
 import pytest
-from app.domain.pricing import quote_paise
+from app.domain.limits import MAX_PRICE_PAISE
+from app.domain.pricing import PriceOutOfRange, quote_paise
 from hypothesis import given
 from hypothesis import strategies as st
 
-PAGES = st.integers(min_value=1, max_value=100_000)
-COPIES = st.integers(min_value=1, max_value=100)
-RATE = st.integers(min_value=1, max_value=1_000_000)
-MIN_ORDER = st.integers(min_value=0, max_value=100_000_000)
-EXTRA_PAGES = st.integers(min_value=1, max_value=1_000)
-EXTRA_COPIES = st.integers(min_value=1, max_value=100)
+# The rule is about the prices the platform can hold, so the examples
+# are the ones the platform can be asked for: the most pages an order
+# can be for, the most copies of it, and the most a page can cost.
+# Anything bigger is refused, and there is a test for that below.
+PAGES = st.integers(min_value=1, max_value=100)
+COPIES = st.integers(min_value=1, max_value=50)
+RATE = st.integers(min_value=1, max_value=50_000)
+MIN_ORDER = st.integers(min_value=0, max_value=10_000_000)
+EXTRA_PAGES = st.integers(min_value=1, max_value=100)
+EXTRA_COPIES = st.integers(min_value=1, max_value=50)
 
 
 @given(pages=PAGES, copies=COPIES, rate=RATE, min_order=MIN_ORDER)
@@ -74,3 +79,17 @@ def test_invalid_inputs_raise_value_error(
 ) -> None:
     with pytest.raises(ValueError):
         quote_paise(pages, copies, rate, min_order)
+
+
+def test_a_price_the_platform_cannot_hold_is_refused() -> None:
+    """A rate that was stored before the ceiling existed can still
+    produce a price that does not fit, and the price is refused where
+    it is worked out rather than failing later."""
+    with pytest.raises(PriceOutOfRange):
+        quote_paise(300, 100, 1_000_000)
+
+
+def test_the_largest_price_the_platform_asks_for_is_still_a_price() -> None:
+    """The rule is about the prices the platform can hold, and the
+    largest one of them is a price."""
+    assert quote_paise(300, 100, 50_000) <= MAX_PRICE_PAISE

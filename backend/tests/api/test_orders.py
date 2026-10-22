@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from app.models import Order, OrderEvent
+from app.models import Order, OrderEvent, ShopRate
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,7 @@ from tests.factories import (
 )
 
 ORDERS = "/api/v1/orders"
+QUOTES = "/api/v1/quotes"
 BASE_PAISE = 200
 PAGES = 5
 COPIES = 2
@@ -376,3 +377,65 @@ def test_a_cursor_inside_the_bigint_range_is_accepted(
     response = client.get(f"{ORDERS}?cursor=9223372036854775807", headers=headers)
 
     assert response.status_code == 200, response.text
+
+
+def test_an_order_that_would_cost_more_than_the_platform_can_hold_is_refused(
+    client: TestClient, db_session: Session
+) -> None:
+    """A rate that was stored before the ceiling existed can still
+    produce a price that does not fit in the column that holds it.
+
+    The refusal is a 422 that says what is wrong, and it comes before
+    any money is taken, rather than a failure from the database that
+    says nothing.
+    """
+    customer = create_user(db_session, email="customer@example.com")
+    vendor = create_user(db_session, email="vendor@example.com", role="vendor")
+    shop = create_shop(db_session, owner=vendor)
+    db_session.add(
+        ShopRate(shop_id=shop.id, paper_size="A4", color=False, duplex=False, rate_paise=1_000_000)
+    )
+    db_session.commit()
+    upload = create_upload_row(db_session, customer=customer, page_count=300)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.post(
+        ORDERS,
+        headers={**headers, "Idempotency-Key": "key-too-big"},
+        json=_payload(upload.id, shop.id, copies=100),
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "PRICE_TOO_LARGE"
+
+
+def test_a_quote_for_a_price_the_platform_cannot_hold_is_refused(
+    client: TestClient, db_session: Session
+) -> None:
+    """The quote is refused too, so the customer is never shown a price
+    that cannot be charged."""
+    customer = create_user(db_session, email="customer@example.com")
+    vendor = create_user(db_session, email="vendor@example.com", role="vendor")
+    shop = create_shop(db_session, owner=vendor)
+    db_session.add(
+        ShopRate(shop_id=shop.id, paper_size="A4", color=False, duplex=False, rate_paise=1_000_000)
+    )
+    db_session.commit()
+    upload = create_upload_row(db_session, customer=customer, page_count=300)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.post(
+        QUOTES,
+        headers=headers,
+        json={
+            "upload_id": str(upload.id),
+            "shop_id": str(shop.id),
+            "paper_size": "A4",
+            "color": False,
+            "duplex": False,
+            "copies": 100,
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "PRICE_TOO_LARGE"

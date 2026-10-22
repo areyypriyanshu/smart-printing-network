@@ -30,6 +30,3 @@ MAX_MIN_ORDER_PAISE = 10_000_000
 
 #: The largest price the column that holds an order's price can hold.
 MAX_PRICE_PAISE = 2_147_483_647
-
-#: The largest price the platform can be asked for, in paise.
-MAX_ORDER_PRICE_PAISE = MAX_PAGES * MAX_COPIES * MAX_RATE_PAISE

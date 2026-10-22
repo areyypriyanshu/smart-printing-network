@@ -22,6 +22,9 @@ const MESSAGES: Record<string, string> = {
   PDF_CORRUPT: "We could not read this PDF.",
   PDF_TOO_MANY_PAGES: "This PDF has more than 300 pages.",
   PRICE_CHANGED: "The price changed. Review the new price.",
+  PRICE_TOO_LARGE:
+    "This shop's rate is too high for a job of this size. Ask the shop " +
+    "to lower it, or choose another shop.",
   SHOP_UNAVAILABLE: "This shop is not taking orders right now.",
   RATE_NOT_SET: "This shop does not offer those options.",
   PICKUP_CODE_INVALID: "Code does not match.",

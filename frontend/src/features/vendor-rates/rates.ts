@@ -45,7 +45,7 @@ export function rowsFromRateItems(items: RateItem[]): RateRow[] {
 }
 
 export function rowsToRateItems(rows: RateRow[]): RateToSet[] {
-  const items: RateItem[] = [];
+  const items: RateToSet[] = [];
   for (const row of rows) {
     if (row.rupees.trim() === "") continue;
     const rate_paise = parseRupeesToPaise(row.rupees);

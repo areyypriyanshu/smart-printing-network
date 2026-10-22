@@ -13,7 +13,7 @@ from app.domain.order_state import (
     queues_refund,
 )
 from app.domain.pickup_code import generate_pickup_code
-from app.domain.pricing import quote_paise
+from app.domain.pricing import PriceOutOfRange, quote_paise
 from app.errors import (
     CashPaymentDisabled,
     Conflict,
@@ -23,6 +23,7 @@ from app.errors import (
     NotFound,
     PaymentGatewayError,
     PriceChanged,
+    PriceTooLarge,
     RateNotSet,
     ShopUnavailable,
     UploadAlreadyUsed,
@@ -104,9 +105,16 @@ def create_order(
     if rate is None:
         raise RateNotSet("This shop does not offer the selected options")
 
-    price_paise = quote_paise(
-        upload.page_count, request.copies, rate.rate_paise, shop.min_order_paise
-    )
+    try:
+        price_paise = quote_paise(
+            upload.page_count, request.copies, rate.rate_paise, shop.min_order_paise
+        )
+    except PriceOutOfRange as exc:
+        raise PriceTooLarge(
+            "This shop's rate is too high for a job of this size. "
+            "Ask the shop to lower it, or choose another shop.",
+            details={"reason": str(exc)},
+        ) from exc
     if request.expected_price_paise is not None and request.expected_price_paise != price_paise:
         raise PriceChanged(
             "The price changed since the quote",

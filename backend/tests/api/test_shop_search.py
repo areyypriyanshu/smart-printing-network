@@ -507,12 +507,11 @@ def test_a_shop_with_an_absurd_rate_does_not_break_the_search(
 ) -> None:
     """One shop's rate must not break the search for everybody.
 
-    The price that is shown is worked out in Python, where the
-    arithmetic does not overflow, and the order of the shops is worked
-    out in the database, where it has to be cast to a wide integer
-    first. Without the cast, a rate this large would overflow the
-    product, and the answer would be a 422 that blames the customer
-    for another shop's rate.
+    The order of the shops by price is worked out in the database, and
+    the arithmetic there multiplies three 32 bit integers, so each of
+    them is cast to a 64 bit one first. Without the cast, a rate this
+    large would overflow the product, and the answer would be a
+    failure that blames the customer for another shop's rate.
     """
     customer = create_user(db_session, email="customer@example.com")
     vendor = create_user(db_session, email="vendor@example.com", role="vendor")
@@ -545,8 +544,53 @@ def test_a_shop_with_an_absurd_rate_does_not_break_the_search(
         headers=headers,
     )
 
+    # The search answers. Without the cast the database would have
+    # overflowed while it was ordering the shops, and the answer would
+    # have been a failure that blamed the customer.
     assert response.status_code == 200, response.text
-    assert response.json()["items"][0]["price_paise"] == 2 * 2_000_000_000
+    # The shop itself is left out: four billion paise is more than the
+    # column that holds a price can hold, so the job cannot be priced
+    # and the shop cannot take it.
+    assert response.json()["items"] == []
+
+
+def test_a_shop_the_platform_cannot_price_is_left_out_of_the_answer(
+    client: TestClient, db_session: Session
+) -> None:
+    """One shop's rate must not break the answer for everybody.
+
+    A rate that was stored before the ceiling existed can be so large
+    that the job cannot be priced inside the column that holds the
+    price. That shop is left out of the comparison, and the other shops
+    are still there.
+    """
+    customer = create_user(db_session, email="customer@example.com")
+    vendor = create_user(db_session, email="vendor@example.com", role="vendor")
+    shop = create_shop(db_session, owner=vendor)
+    db_session.add(
+        ShopRate(shop_id=shop.id, paper_size="A4", color=False, duplex=False, rate_paise=1_000_000)
+    )
+    db_session.commit()
+    upload = create_upload_row(db_session, customer=customer, page_count=300)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        SEARCH,
+        params={
+            "latitude": 22.5726,
+            "longitude": 88.3639,
+            "radius_m": 50000,
+            "upload_id": str(upload.id),
+            "paper_size": "A4",
+            "color": False,
+            "duplex": False,
+            "copies": 100,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
 
 
 def test_the_search_works_with_the_answer_the_free_provider_gives(

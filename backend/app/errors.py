@@ -165,6 +165,18 @@ class PriceChanged(AppError):
     status_code = 409
 
 
+class PriceTooLarge(AppError):
+    """The job would cost more than the platform can charge.
+
+    It is the shop's rate that is too large for a job of this size,
+    and the answer says so, because the person reading it can ask the
+    shop to lower it. It is a 422: nothing is wrong with the request.
+    """
+
+    code = "PRICE_TOO_LARGE"
+    status_code = 422
+
+
 class InvalidTransition(AppError):
     code = "INVALID_TRANSITION"
     status_code = 409

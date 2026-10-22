@@ -35,3 +35,5 @@ export const formatPaiseForInput = (paise: number): string => {
  * customer who tried to order.
  */
 export const MAX_RATE_PAISE = 50_000;
+// The server has the same number, in backend/app/domain/limits.py, and
+// it is the one that matters: the server refuses a rate above it.

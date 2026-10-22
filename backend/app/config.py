@@ -4,7 +4,7 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.domain.limits import MAX_COPIES, MAX_PRICE_PAISE, MAX_RATE_PAISE
+from app.domain.limits import MAX_COPIES, MAX_PAGES, MAX_PRICE_PAISE, MAX_RATE_PAISE
 
 
 class Settings(BaseSettings):
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     testing_endpoints_enabled: bool = False
 
     max_upload_mb: int = 50
-    max_pages: int = 300
+    max_pages: int = MAX_PAGES
     payment_timeout_min: int = 15
     accept_timeout_min: int = 15
     file_retention_hours: int = 24

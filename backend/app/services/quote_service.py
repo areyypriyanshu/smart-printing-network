@@ -3,8 +3,14 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.pricing import quote_paise
-from app.errors import FileUnavailable, NotFound, RateNotSet, ShopUnavailable
+from app.domain.pricing import PriceOutOfRange, quote_paise
+from app.errors import (
+    FileUnavailable,
+    NotFound,
+    PriceTooLarge,
+    RateNotSet,
+    ShopUnavailable,
+)
 from app.models import Shop, ShopRate
 from app.schemas.quote import QuoteRequest, QuoteResponse
 from app.services.upload_service import get_upload
@@ -40,9 +46,16 @@ def quote(
     )
     if rate is None:
         raise RateNotSet("This shop does not offer the selected options")
-    price_paise = quote_paise(
-        upload.page_count, request.copies, rate.rate_paise, shop.min_order_paise
-    )
+    try:
+        price_paise = quote_paise(
+            upload.page_count, request.copies, rate.rate_paise, shop.min_order_paise
+        )
+    except PriceOutOfRange as exc:
+        raise PriceTooLarge(
+            "This shop's rate is too high for a job of this size. "
+            "Ask the shop to lower it, or choose another shop.",
+            details={"reason": str(exc)},
+        ) from exc
     return QuoteResponse(
         upload_id=upload.id,
         shop_id=shop.id,

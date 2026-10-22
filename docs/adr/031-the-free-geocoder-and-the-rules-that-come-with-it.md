@@ -120,12 +120,21 @@ migration that narrows a constraint would stop the previous version of
 the application from writing a rate it used to allow, which is the
 thing that breaks a rollback.
 
-**The money columns are still 32 bit, and that is a known hole.** A
-rate stored before the ceiling existed can still be too large for the
-order it would produce, and the order insert fails. Widening the money
-columns to 64 bit is the durable fix, and it is a migration on the
-money path, so it is not done in a sprint about geocoding. It is
-written down in the plan instead, with the reason it was left.
+**A price the platform cannot hold is refused where it is worked
+out.** The price of an order is held in a 32 bit column, and a rate
+stored before the ceiling existed can still produce a price that does
+not fit. The price function refuses it, with a reason, and the caller
+decides what to say: the order and the quote answer 422, and the
+search leaves that shop out, because one shop's rate must not break
+the answer for everybody else. This closes the hole without a
+migration.
+
+**The money columns are still 32 bit, and that is the rest of the
+story.** The guard above is the application refusing a price the
+column cannot hold; the column itself is still 32 bit. Widening it to
+64 bit is the durable fix, and it is a migration on the money path, so
+it is not done in a sprint about geocoding. It is written down in the
+plan instead, with the reason it was left.
 
 **The price the search shows is worked out in Python, and only the
 order is worked out in the database.** The order of the shops by

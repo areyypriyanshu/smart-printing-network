@@ -4,7 +4,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.domain.limits import MAX_MIN_ORDER_PAISE, MAX_RATE_PAISE
+from app.domain.limits import MAX_COPIES, MAX_MIN_ORDER_PAISE, MAX_RATE_PAISE
 from app.schemas.identity import UserResponse
 from app.schemas.phone import Phone
 from app.schemas.text import MultiLine, SingleLine
@@ -116,7 +116,7 @@ class ShopSearchQuery(BaseModel):
     paper_size: Literal["A4", "A3"] | None = None
     color: bool | None = None
     duplex: bool | None = None
-    copies: int | None = Field(default=None, ge=1, le=100)
+    copies: int | None = Field(default=None, ge=1, le=MAX_COPIES)
     limit: int = Field(default=20, ge=1, le=100)
 
     @model_validator(mode="after")

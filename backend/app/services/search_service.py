@@ -24,7 +24,7 @@ from sqlalchemy import BigInteger, cast, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.domain.pricing import quote_paise
+from app.domain.pricing import PriceOutOfRange, quote_paise
 from app.errors import FileUnavailable, ValidationError
 from app.gateways.geocoding import Geocoder
 from app.models import Shop, ShopRate
@@ -109,16 +109,17 @@ def search_shops(
     stmt = stmt.limit(query.limit)
 
     rows = list(session.execute(stmt).all())
-    items = [
-        _item(
+    items = []
+    for row in rows:
+        item = _item(
             list(row),
             has_distance=distance_expression is not None,
             has_rate=pages is not None,
             pages=pages,
             copies=query.copies or 1,
         )
-        for row in rows
-    ]
+        if item is not None:
+            items.append(item)
     return ShopSearchResponse(
         items=items,
         attribution=geocoder.attribution if geocoder is not None else None,
@@ -199,8 +200,14 @@ def _item(
     has_rate: bool,
     pages: int | None,
     copies: int,
-) -> ShopSearchItem:
-    """One shop, with the price the customer would pay."""
+) -> ShopSearchItem | None:
+    """One shop, with the price the customer would pay.
+
+    `None` means the shop is left out. A shop whose rate is so large
+    that the job cannot be priced inside the column that holds the
+    price cannot take the job, and one shop's rate must not break the
+    answer for everybody else.
+    """
     shop = row[0]
     latitude = float(row[1])
     longitude = float(row[2])
@@ -214,7 +221,10 @@ def _item(
         rate_paise = int(row[index])
     price_paise: int | None = None
     if pages is not None and rate_paise is not None:
-        price_paise = quote_paise(pages, copies, rate_paise, shop.min_order_paise)
+        try:
+            price_paise = quote_paise(pages, copies, rate_paise, shop.min_order_paise)
+        except PriceOutOfRange:
+            return None
     return ShopSearchItem(
         id=shop.id,
         name=shop.name,

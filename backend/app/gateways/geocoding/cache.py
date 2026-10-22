@@ -27,10 +27,10 @@ from dataclasses import dataclass
 from app.gateways.geocoding.base import Geocoder, GeocodeResult
 
 #: How long a caller waits for the answer to somebody else's call
-#: before it gives up and asks the provider itself. The provider's own
-#: timeout is shorter than this, so a call that is running out of time
-#: is already on its way out.
-_WAIT_SECONDS = 30.0
+#: before it gives up and asks the provider itself. The providers time
+#: out after five and ten seconds, so this is longer than any call
+#: that is still running, and the second call cannot happen.
+_WAIT_SECONDS = 15.0
 
 
 @dataclass(frozen=True)

@@ -31,6 +31,7 @@ import cv2
 import numpy as np
 import pymupdf
 
+from app.domain import limits
 from app.domain.pdf_rules import PageMeasurements
 
 #: The width every picture region is rendered at, in pixels. The score
@@ -47,9 +48,11 @@ MAX_IMAGES_PER_PAGE = 50
 #: use more memory than the worker should spend on one page.
 MAX_RENDER_PIXELS = 8_000_000
 
-#: The most pages one file may have. The upload limit is lower, but the
-#: analyzer is called with its own bound so that it is safe on its own.
-MAX_PAGES = 300
+#: The most pages one file may have. It is the same number the upload
+#: limit uses, so a file that was accepted can be analysed. The
+#: analyzer is still called with its own bound, so that it is safe on
+#: its own.
+MAX_PAGES = limits.MAX_PAGES
 
 
 class AnalysisTimeout(Exception):
