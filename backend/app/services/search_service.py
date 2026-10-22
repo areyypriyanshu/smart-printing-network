@@ -123,7 +123,30 @@ def search_shops(
     return ShopSearchResponse(
         items=items,
         attribution=geocoder.attribution if geocoder is not None else None,
+        nearest_m=(
+            _nearest_shop_distance(session, point) if not items and point is not None else None
+        ),
     )
+
+
+def _nearest_shop_distance(session: Session, point: tuple[float, float]) -> int | None:
+    """How far the closest shop is, even when it is outside the radius.
+
+    A customer who is told "there is nothing near you" and nothing else
+    is left guessing. Told that the closest one is twelve kilometres
+    away, they can widen the radius or look at another area.
+    """
+    point_element = WKTElement(f"POINT({point[1]} {point[0]})", srid=4326)
+    distance = func.ST_Distance(cast(Shop.location, Geography), cast(point_element, Geography))
+    nearest = session.execute(
+        select(distance)
+        .where(Shop.is_verified.is_(True), Shop.accepting_orders.is_(True))
+        .order_by(distance.asc())
+        .limit(1)
+    ).scalar()
+    if nearest is None:
+        return None
+    return round(float(nearest))
 
 
 def _point_for(query: ShopSearchQuery, geocoder: Geocoder | None) -> tuple[float, float] | None:

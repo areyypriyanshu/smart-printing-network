@@ -1381,6 +1381,8 @@ export interface components {
             attribution?: string | null;
             /** Items */
             items: components["schemas"]["ShopSearchItem"][];
+            /** Nearest M */
+            nearest_m?: number | null;
         };
         /** SimulatePaymentRequest */
         SimulatePaymentRequest: {

@@ -624,6 +624,49 @@ def test_the_search_works_with_the_answer_the_free_provider_gives(
     ]
 
 
+def test_the_closest_shop_is_reported_when_the_radius_is_empty(
+    client: TestClient, db_session: Session
+) -> None:
+    """A customer told "there is nothing near you" and nothing else is
+    left guessing. Told that the closest one is twelve kilometres away,
+    they can widen the radius or look at another area.
+    """
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        SEARCH,
+        params={
+            "latitude": 22.6564,
+            "longitude": 88.4467,
+            "radius_m": 5000,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["items"] == []
+    assert body["nearest_m"] is not None
+    assert 11_000 < body["nearest_m"] < 15_000
+
+
+def test_the_closest_shop_is_not_reported_when_there_are_shops(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        SEARCH,
+        params={"latitude": CENTRAL_LATITUDE, "longitude": CENTRAL_LONGITUDE},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["nearest_m"] is None
+
+
 def test_the_search_carries_the_attribution_the_provider_asks_for(
     client: TestClient, db_session: Session
 ) -> None:

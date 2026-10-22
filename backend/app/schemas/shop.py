@@ -171,6 +171,10 @@ class ShopSearchResponse(BaseModel):
     # What has to be shown to a person when the data here is shown to
     # them. OpenStreetMap asks for it.
     attribution: str | None = None
+    # How far the closest shop is, when the answer is empty and there is
+    # one further away. It is what turns "there is nothing near you"
+    # into something a person can act on.
+    nearest_m: int | None = None
 
 
 class VendorShopResponse(BaseModel):

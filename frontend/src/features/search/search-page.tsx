@@ -46,6 +46,7 @@ const RADII: { value: number; label: string }[] = [
   { value: 5000, label: "5 km" },
   { value: 10000, label: "10 km" },
   { value: 25000, label: "25 km" },
+  { value: 50000, label: "50 km" },
 ];
 
 const MAX_UPLOAD_MB = 50;
@@ -128,6 +129,26 @@ export function SearchPage() {
       : {}),
   };
   const shops = useShopSearch(query);
+
+  // When there is nothing inside the radius, the customer is told how
+  // far the closest shop is and is given a way to widen the search. A
+  // page that only says "nothing near you" leaves them guessing.
+  const nearest = shops.data?.nearest_m ?? null;
+  // The radius is one of the choices on offer, so the button offers the
+  // next one that reaches the closest shop.
+  const widerRadius =
+    nearest === null
+      ? (RADII[RADII.length - 1]?.value ?? 50000)
+      : (RADII.find((option) => option.value > nearest)?.value ??
+        RADII[RADII.length - 1]?.value ??
+        50000);
+  const showEveryShop = () => {
+    // Without a place, every shop is returned and the radius does not
+    // apply.
+    setPosition(null);
+    setSearchedAddress("");
+    setSort("auto");
+  };
 
   const findMe = () => {
     setLocationError(null);
@@ -401,9 +422,28 @@ export function SearchPage() {
             <p className="text-sm text-ink">
               No shops within {radius / 1000} km.
             </p>
-            <p className="mt-1 text-sm text-steel">
-              Try a wider radius, or search another area.
-            </p>
+            {nearest !== null ? (
+              <>
+                <p className="mt-1 text-sm text-steel">
+                  The closest one is {formatDistance(nearest)} away.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setRadius(widerRadius)}
+                  >
+                    Show shops up to {widerRadius / 1000} km
+                  </Button>
+                  <Button variant="secondary" onClick={showEveryShop}>
+                    Show every shop
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-steel">
+                Try a wider radius, or search another area.
+              </p>
+            )}
           </div>
         )}
 

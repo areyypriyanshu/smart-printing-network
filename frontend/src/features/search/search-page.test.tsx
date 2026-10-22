@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -213,6 +213,33 @@ describe("the shop search", () => {
       name: /cheapest first/i,
     }) as HTMLOptionElement;
     expect(cheapest.disabled).toBe(true);
+  });
+
+  it("says how far the closest shop is when the radius is empty", async () => {
+    // A customer who is told "there is nothing near you" and nothing
+    // else is left guessing.
+    server.use(
+      http.get("/api/v1/shops/search", () =>
+        HttpResponse.json({ items: [], nearest_m: 12600 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SearchPage />, { route: "/shops" });
+
+    await screen.findByText(/no shops within 5 km/i);
+    expect(
+      screen.getByText(/closest one is 12.6 km away/i),
+    ).toBeInTheDocument();
+
+    // And there is a way out of it.
+    // The button widens the search to the next radius that reaches the
+    // closest shop.
+    await user.click(
+      screen.getByRole("button", { name: /show shops up to 25 km/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText(/how far/i)).toHaveValue("25000"),
+    );
   });
 
   it("says who the map data came from", async () => {
