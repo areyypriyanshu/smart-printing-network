@@ -50,6 +50,11 @@ backups/
 # instance environment, tunnel credentials, account certificates and
 # local bot credentials out of Git even if they are created below a
 # subdirectory.
+#
+# The Cloudflare Tunnel configuration for a home deployment is one of
+# them: the credentials are a secret and the tunnel id belongs to one
+# box, so neither is in the repository.
+# infra/home/make-tunnel-config.sh writes them.
 .tunnel/
 **/credentials/
 *.pem

@@ -58,6 +58,13 @@ jobs:
         with:
           context: frontend
           file: frontend/Dockerfile.prod
+          # The publishable key of the identity provider. It is not a
+          # secret: the browser carries it, so anybody can read it out
+          # of the page. It is a repository variable, so the build does
+          # not have to be told a secret to produce a bundle that the
+          # browser can use.
+          build-args: |
+            VITE_CLERK_PUBLISHABLE_KEY=${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
