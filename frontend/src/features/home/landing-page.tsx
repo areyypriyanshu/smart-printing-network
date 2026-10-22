@@ -257,7 +257,7 @@ export function LandingPage() {
                 </p>
               </div>
               <Link
-                to="/register-vendor"
+                to="/register"
                 className={buttonClassName(
                   "primary",
                   "self-start lg:self-center",
