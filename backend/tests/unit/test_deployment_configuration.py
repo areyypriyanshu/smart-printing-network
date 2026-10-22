@@ -11,6 +11,7 @@ repository, so they run where the repository is checked out and are
 skipped where it is not.
 """
 
+import os
 import re
 from pathlib import Path
 
@@ -376,3 +377,29 @@ def test_the_production_stack_cannot_run_the_local_bypass() -> None:
 
     assert 'SPN_DEV_AUTH: "false"' in compose
     assert "SPN_DEV_AUTH: ${SPN_DEV_AUTH" not in compose
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the filesystem does not carry the executable bit")
+def test_every_script_with_a_shebang_can_be_run() -> None:
+    """A script that is called by its path has to be executable.
+
+    The boot script on the home server calls the script that tells the
+    application its address by its path, and a script that is not
+    executable cannot be called that way. The bit is in the repository,
+    so a checkout has it, and a file that loses it loses it silently:
+    the script says "permission denied" and the address is never
+    printed, and nothing else says so.
+    """
+    assert REPO_ROOT is not None
+    # The directories that hold the scripts. The walk is not over the
+    # whole repository, because a checkout holds things that are not
+    # ours to walk.
+    scripts = [
+        path
+        for directory in ("infra", "backend/scripts")
+        for path in (REPO_ROOT / directory).rglob("*")
+        if path.is_file() and path.read_bytes()[:2] == b"#!"
+    ]
+    assert scripts, "the repository has no scripts to check"
+    for script in scripts:
+        assert os.access(script, os.X_OK), f"{script.name} cannot be run"
