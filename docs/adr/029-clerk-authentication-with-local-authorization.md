@@ -396,6 +396,45 @@ yet" are two different answers and the application believed the first
 one too early. A person who had just signed in was sent back to the
 sign in page. The session now waits for the provider.
 
+## The deployment on the home server, 2026-10-22
+
+The cutover was put on the home server, behind the quick tunnel, and
+walked by hand. Four things were found there that the local
+environment could not have shown, and all four are now in the
+repository.
+
+**The provider's fraud protection is a widget in the page, and the
+content security policy has to allow it to run.** The widget is
+Cloudflare's, it runs in the page, and it does two things the policy
+has to allow: it evaluates the code it is given, and it fetches an
+empty address to see whether the page is allowed to fetch at all.
+Without them the widget cannot start, the check it exists for never
+finishes, and nobody can create an account. The empty address reaches
+no host.
+
+**The sign in has a step after the password.** The provider asks for a
+code when it sees a device it has not seen, and the code goes to the
+address. An account whose address is not a real inbox cannot receive
+it, so the provider's address for those accounts is a test one, whose
+code is always the same, and the local account keeps the address it
+had.
+
+**An account that existed before the provider did has no identity in
+it.** The provider does not know those people and the application has
+no password to check, so they cannot sign in at all. A script gives
+each of them an identity and records the provider's identifier on the
+local row. The passwords are made there and printed once.
+
+**A person who signs in lands on the front page, which is a page for
+people who are not signed in.** A person who has signed in and has no
+account can do nothing until they have said what they are here for,
+so they are asked the one question first.
+
+The home server's own deployment settings were on the box and not in
+the repository: the ports it binds, the networks whose forwarded
+headers it believes, and the image and platform of its database. They
+are in the repository now, and the box pulls them like everything else.
+
 ## Revisit if
 
 - The plan changes, or the application needs multi factor

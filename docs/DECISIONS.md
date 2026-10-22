@@ -239,6 +239,15 @@ cannot take over a local account here.
 [ADR 027](adr/027-sign-in-with-google-without-a-new-dependency.md),
 [ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
 
+**The content security policy allows the provider's fraud
+protection to run.** It is a widget from Cloudflare, it runs in the
+page, and it does two things the policy has to allow: it evaluates the
+code it is given, and it fetches an empty address to see whether the
+page is allowed to fetch at all. Without them the widget cannot start,
+the check it exists for never finishes, and nobody can create an
+account. The empty address reaches no host.
+[ADR 029](adr/029-clerk-authentication-with-local-authorization.md)
+
 **The verification email is Clerk's, and the product email is
 Brevo's.** A verification link, a magic link and a password reset all
 carry a token only the identity provider can validate, so they have to
