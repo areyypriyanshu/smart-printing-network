@@ -258,6 +258,18 @@ def test_the_deployment_builds_the_frontend() -> None:
     assert "file: frontend/Dockerfile.prod" in workflow
 
 
+def test_the_frontend_is_built_with_the_publishable_key() -> None:
+    """The bundle needs the key, or the sign in page does nothing.
+
+    The key is not a secret: the browser carries it, so anybody can
+    read it out of the page. It is a repository variable, and the build
+    is told it.
+    """
+    workflow = _read(".github/workflows/deploy.yml")
+
+    assert "VITE_CLERK_PUBLISHABLE_KEY=${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}" in workflow
+
+
 def test_the_example_environment_holds_placeholders_only() -> None:
     """The values that ship in the template are not working secrets.
 
