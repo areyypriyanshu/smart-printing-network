@@ -7,8 +7,15 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_storage
 from app.gateways.storage import Storage
+from app.schemas.errors import _response
 
-router = APIRouter(tags=["health"])
+# The readiness check answers 503 when the database or the object
+# store is not reachable, and it is the only failure it has: it asks
+# nothing of the caller and reads nothing of theirs.
+router = APIRouter(
+    tags=["health"],
+    responses={503: _response("The database or the object store is not reachable.")},
+)
 
 
 @router.get("/healthz")

@@ -93,28 +93,48 @@ if [ "$SYNC" -eq 1 ]; then
     # The application is told the new address. A named tunnel has a
     # fixed hostname, so its .env already says the right thing and
     # nothing is written.
+    CHANGED=0
     if grep -q "^APP_BASE_URL=" "$ENV_FILE"; then
         current="$(grep '^APP_BASE_URL=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
         if [ "$current" != "$URL" ]; then
             sed -i "s|^APP_BASE_URL=.*|APP_BASE_URL=${URL}|" "$ENV_FILE"
             echo "spn-url: the application was told the new address" >&2
-            "${COMPOSE[@]}" up -d api worker >/dev/null
-            # The API and the worker are restarting, and the edge
-            # answers with a 502 while they are down. Wait for the
-            # site to come back, so that the address this script
-            # prints is one that works.
-            deadline=$(( $(date +%s) + 60 ))
-            while true; do
-                code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "${URL}/readyz" 2>/dev/null || echo 000)"
-                if [ "$code" = "200" ]; then
-                    break
-                fi
-                if [ "$(date +%s)" -ge "$deadline" ]; then
-                    echo "spn-url: the site did not come back (last answer ${code})" >&2
-                    exit 1
-                fi
-                sleep 3
-            done
+            CHANGED=1
         fi
+    fi
+    # The identity provider checks the origin the session token was
+    # asked for, so the address the browser uses has to be one the
+    # application allows. The address changes when the tunnel starts,
+    # so the list of allowed origins changes with it.
+    if grep -q "^CLERK_ALLOWED_ORIGINS=" "$ENV_FILE"; then
+        origins="$(grep '^CLERK_ALLOWED_ORIGINS=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+        case ",${origins}," in
+            *",${URL},"*) ;;
+            *)
+                sed -i "s|^CLERK_ALLOWED_ORIGINS=.*|CLERK_ALLOWED_ORIGINS=${URL}|" "$ENV_FILE"
+                echo "spn-url: the allowed origins were told the new address" >&2
+                CHANGED=1
+                ;;
+        esac
+    fi
+
+    if [ "$CHANGED" -eq 1 ]; then
+        "${COMPOSE[@]}" up -d api worker >/dev/null
+        # The API and the worker are restarting, and the edge answers
+        # with a 502 while they are down. Wait for the site to come
+        # back, so that the address this script prints is one that
+        # works.
+        deadline=$(( $(date +%s) + 60 ))
+        while true; do
+            code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "${URL}/readyz" 2>/dev/null || echo 000)"
+            if [ "$code" = "200" ]; then
+                break
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "spn-url: the site did not come back (last answer ${code})" >&2
+                exit 1
+            fi
+            sleep 3
+        done
     fi
 fi
