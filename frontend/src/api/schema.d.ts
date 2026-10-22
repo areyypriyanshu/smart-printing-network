@@ -1202,8 +1202,42 @@ export interface components {
              */
             upload_id: string;
         };
-        /** RateItem */
+        /**
+         * RateItem
+         * @description One rate of a shop, as it is read.
+         *
+         *     There is no ceiling here, and that is deliberate. A rate is read
+         *     back for the shop's own table and for the customer comparing
+         *     prices, and a rate that was stored before the ceiling existed must
+         *     still be readable: refusing to read it would turn one shop's
+         *     strange rate into a page that does not load for anybody.
+         */
         RateItem: {
+            /** Color */
+            color: boolean;
+            /** Duplex */
+            duplex: boolean;
+            /**
+             * Paper Size
+             * @enum {string}
+             */
+            paper_size: "A4" | "A3";
+            /** Rate Paise */
+            rate_paise: number;
+        };
+        /**
+         * RateToSet
+         * @description One rate of a shop, as its owner sets it.
+         *
+         *     The price of one page, in paise, with a ceiling. The ceiling is
+         *     not arbitrary: the price of an order is worked out as pages x
+         *     copies x rate, the largest order the platform takes is 300 pages of
+         *     100 copies, and the column that holds the price is a 32 bit
+         *     integer. A rate above the ceiling would let a shop price an order
+         *     the database cannot hold, and the failure would land on the
+         *     customer who tried to order.
+         */
+        RateToSet: {
             /** Color */
             color: boolean;
             /** Duplex */
@@ -1219,7 +1253,7 @@ export interface components {
         /** RatesReplaceRequest */
         RatesReplaceRequest: {
             /** Rates */
-            rates: components["schemas"]["RateItem"][];
+            rates: components["schemas"]["RateToSet"][];
         };
         /**
          * ReasonRequest

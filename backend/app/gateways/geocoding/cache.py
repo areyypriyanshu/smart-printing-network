@@ -13,6 +13,10 @@ between them, not two. The policy is explicit that "clients sending
 repeatedly the same query may be classified as faulty and blocked", so
 the second caller waits for the first answer rather than asking the
 provider again.
+
+The waiting is done with an event rather than with a lock, because a
+lock that is thrown away while somebody is waiting on it lets the next
+caller in beside them, and then there are two calls after all.
 """
 
 import threading
@@ -21,6 +25,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.gateways.geocoding.base import Geocoder, GeocodeResult
+
+#: How long a caller waits for the answer to somebody else's call
+#: before it gives up and asks the provider itself. The provider's own
+#: timeout is shorter than this, so a call that is running out of time
+#: is already on its way out.
+_WAIT_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -50,9 +60,9 @@ class CachedGeocoder:
         self._clock = clock
         self._lock = threading.Lock()
         self._entries: dict[str, _Entry] = {}
-        # One lock per address, so that the second caller for an
-        # address waits for the first answer instead of asking again.
-        self._calls: dict[str, threading.Lock] = {}
+        # The calls that are on their way. One per address, and only as
+        # many as there are calls happening at the same time.
+        self._inflight: dict[str, threading.Event] = {}
 
     @property
     def attribution(self) -> str | None:
@@ -66,22 +76,42 @@ class CachedGeocoder:
     def geocode(self, address: str) -> GeocodeResult | None:
         key = " ".join(address.split()).lower()
 
-        with self._lock:
-            known = self._known(key)
-            if known is not None:
-                return known.result
-            call_lock = self._calls.setdefault(key, threading.Lock())
-
-        with call_lock:
-            # Somebody else may have asked while this one waited.
+        while True:
             with self._lock:
-                known = self._known(key)
-                if known is not None:
-                    return known.result
-            result = self._inner.geocode(address)
+                entry = self._known(key)
+                if entry is not None:
+                    return entry.result
+                event = self._inflight.get(key)
+                mine = event is None
+                if event is None:
+                    event = threading.Event()
+                    self._inflight[key] = event
+
+            if not mine:
+                # Somebody else is asking for this address. Wait for
+                # their answer rather than asking the provider again.
+                if event.wait(timeout=_WAIT_SECONDS):
+                    continue
+                # They have gone quiet, which the provider's own
+                # timeout should not allow. The answer is worth having
+                # anyway.
+                return self._inner.geocode(address)
+
+            try:
+                result = self._inner.geocode(address)
+            except BaseException:
+                with self._lock:
+                    self._inflight.pop(key, None)
+                    event.set()
+                raise
             with self._lock:
                 self._entries[key] = _Entry(result=result, stored_at=self._clock())
+                self._inflight.pop(key, None)
                 self._drop_the_oldest()
+                # The event is set while the lock is held, so a caller
+                # that wakes up finds the answer in the table and does
+                # not ask the provider a second time.
+                event.set()
             return result
 
     def _known(self, key: str) -> _Entry | None:
@@ -103,4 +133,3 @@ class CachedGeocoder:
         while len(self._entries) > self._max_entries:
             oldest = min(self._entries.items(), key=lambda item: item[1].stored_at)
             del self._entries[oldest[0]]
-            self._calls.pop(oldest[0], None)

@@ -12,6 +12,7 @@ from app.errors import NotFound, ValidationError
 from app.models import Shop, ShopRate
 from app.schemas.shop import (
     RateItem,
+    RateToSet,
     ShopListResponse,
     ShopResponse,
     VendorShopResponse,
@@ -216,7 +217,7 @@ def vendor_shop_response(session: Session, shop: Shop) -> VendorShopResponse:
     )
 
 
-def replace_rates(session: Session, shop_id: uuid.UUID, items: list[RateItem]) -> list[ShopRate]:
+def replace_rates(session: Session, shop_id: uuid.UUID, items: list[RateToSet]) -> list[ShopRate]:
     session.execute(delete(ShopRate).where(ShopRate.shop_id == shop_id))
     session.add_all(
         [

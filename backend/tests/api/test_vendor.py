@@ -1,5 +1,7 @@
 import pytest
+from app.models import Shop, ShopRate
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import create_shop, create_user, login_headers
 
@@ -183,6 +185,49 @@ def test_put_rates_rejects_a_page_that_costs_more_than_the_ceiling(
                 }
             ]
         },
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_a_rate_stored_before_the_ceiling_can_still_be_read(
+    client: TestClient, db_session: Session
+) -> None:
+    """A rate is read back for the shop's table and for the customer
+    comparing prices. Refusing to read one would turn one shop's
+    strange rate into a page that does not load for anybody.
+    """
+    create_vendor_with_shop(db_session)
+    shop = db_session.scalar(select(Shop).where(Shop.name == "Vendor Prints"))
+    assert shop is not None
+    db_session.add(
+        ShopRate(
+            shop_id=shop.id, paper_size="A4", color=False, duplex=False, rate_paise=2_000_000_000
+        )
+    )
+    db_session.commit()
+    headers = login_headers(client, "vendor@example.com")
+
+    response = client.get(VENDOR_RATES, headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert any(item["rate_paise"] == 2_000_000_000 for item in response.json())
+
+
+def test_a_minimum_order_above_the_ceiling_is_refused(
+    client: TestClient, db_session: Session
+) -> None:
+    """It is held in the same kind of column as the price of a page,
+    so it has the same kind of ceiling. Refusing it at the door is a
+    422; letting it through is a failure later."""
+    create_vendor_with_shop(db_session)
+    headers = login_headers(client, "vendor@example.com")
+
+    response = client.patch(
+        VENDOR_SHOP,
+        json={"min_order_paise": 3_000_000_000},
         headers=headers,
     )
 

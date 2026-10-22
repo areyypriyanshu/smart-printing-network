@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { RateItem } from "../../api/client";
+import type { RateItem, RateToSet } from "../../api/client";
 import {
   MAX_RATE_PAISE,
   formatPaiseForInput,
@@ -44,7 +44,7 @@ export function rowsFromRateItems(items: RateItem[]): RateRow[] {
   });
 }
 
-export function rowsToRateItems(rows: RateRow[]): RateItem[] {
+export function rowsToRateItems(rows: RateRow[]): RateToSet[] {
   const items: RateItem[] = [];
   for (const row of rows) {
     if (row.rupees.trim() === "") continue;

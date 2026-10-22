@@ -221,3 +221,11 @@ def test_the_map_provider_has_to_be_on_the_web() -> None:
     somewhere else would be a way to make it read a local file."""
     with pytest.raises(ValidationError, match="NOMINATIM_BASE_URL"):
         _settings(nominatim_base_url="file:///etc/passwd")
+
+
+def test_the_page_limit_cannot_be_raised_past_the_price_the_column_holds() -> None:
+    """The price of an order is pages x copies x rate and it is held in
+    a 32 bit integer column. A page limit this high would let a shop
+    price an order the database cannot hold."""
+    with pytest.raises(ValidationError, match="MAX_PAGES"):
+        _settings(max_pages=500)

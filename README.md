@@ -503,7 +503,9 @@ committed. The decisions are.
   100 copies, and the column that holds the price is a 32 bit integer.
   The ceiling is what keeps the largest possible order inside it, and
   without it a shop could price an order the database cannot hold, and
-  the failure would land on the customer who tried to order.
+  the failure would land on the customer who tried to order. A rate
+  stored before the ceiling existed is still read back, so one old
+  rate cannot make the list of shops fail to load.
 - A converted Word, Excel or PowerPoint file keeps the text, the headings, the pictures and the table contents. It does not keep the fonts, the exact table widths, the headers, the footers or the columns. A student who needs the exact layout uploads a PDF. See [ADR 016](docs/adr/016-office-file-upload.md).
 - The password belongs to the identity provider, so a password reset is
   the provider's to offer. It is switched on in the provider's settings,

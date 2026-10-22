@@ -5,6 +5,7 @@ export type OnboardingRequest = components["schemas"]["OnboardingRequest"];
 export type UserResponse = components["schemas"]["UserResponse"];
 export type Role = User["role"];
 export type RateItem = components["schemas"]["RateItem"];
+export type RateToSet = components["schemas"]["RateToSet"];
 export type RatesReplaceRequest = components["schemas"]["RatesReplaceRequest"];
 export type ShopListResponse = components["schemas"]["ShopListResponse"];
 export type ShopResponse = components["schemas"]["ShopResponse"];

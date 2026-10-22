@@ -86,15 +86,22 @@ def search_shops(
         # decides it is the same arithmetic the order flow uses, written
         # out for the database so that the limit keeps the cheapest.
         #
-        # The cast to bigint matters. The rate column is a 32 bit
-        # integer, and so is the product, and a rate that is large
-        # enough would overflow it. An overflow here would break the
-        # search for every customer because of one shop's rate, and the
-        # answer would blame the customer. The price that is shown is
-        # worked out in Python, where the arithmetic does not overflow,
-        # and this is only the order.
+        # The operands are cast, and not the result. The rate column is
+        # a 32 bit integer, and so is the product of three of them, and
+        # a rate that is large enough would overflow the product
+        # before the result was ever cast. Postgres works out
+        # `integer * integer` as an integer, so `cast(a * b as bigint)`
+        # overflows exactly like `a * b` does.
+        #
+        # An overflow here would break the search for every customer
+        # because of one shop's rate, and the answer would blame the
+        # customer. The price that is shown is worked out in Python,
+        # where the arithmetic does not overflow, and this is only the
+        # order.
         price_expression = func.greatest(
-            cast(pages * (query.copies or 1) * ShopRate.rate_paise, BigInteger),
+            cast(pages, BigInteger)
+            * cast(query.copies or 1, BigInteger)
+            * cast(ShopRate.rate_paise, BigInteger),
             cast(Shop.min_order_paise, BigInteger),
         )
 

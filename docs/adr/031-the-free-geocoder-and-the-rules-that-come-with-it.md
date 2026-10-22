@@ -105,20 +105,43 @@ platform takes is 300 pages of 100 copies, and the column that holds
 the price is a 32 bit integer. A rate of more than fifty thousand
 paise would let a shop price an order the database cannot hold, and
 the failure would land on the customer who tried to order, not on the
-shop that set the rate. The ceiling is at the boundary, on both sides
-of it, and the database check that already existed is left alone: a
+shop that set the rate. The limits live in `domain/limits.py`, because
+they are rules about what the product accepts, and a deployment whose
+page limit is raised past them is refused at startup rather than
+discovering it on a customer's order.
+
+The ceiling is on the way *in*, and not on the way out. A rate that was
+stored before the ceiling existed is still read back, for the shop's
+own table and for the customer comparing prices: refusing to read one
+would turn one shop's strange rate into a page that does not load for
+anybody. So the request model and the response model are two models.
+The database check that already existed is left alone as well: a
 migration that narrows a constraint would stop the previous version of
 the application from writing a rate it used to allow, which is the
 thing that breaks a rollback.
 
+**The money columns are still 32 bit, and that is a known hole.** A
+rate stored before the ceiling existed can still be too large for the
+order it would produce, and the order insert fails. Widening the money
+columns to 64 bit is the durable fix, and it is a migration on the
+money path, so it is not done in a sprint about geocoding. It is
+written down in the plan instead, with the reason it was left.
+
 **The price the search shows is worked out in Python, and only the
 order is worked out in the database.** The order of the shops by
-price needs the database to do the arithmetic, and that arithmetic is
-cast to a wide integer first: the rate column is a 32 bit integer, and
-so is the product, and a large enough rate would overflow it. The
-overflow was found by review too. It broke the search for every
-customer because of one shop's rate, and the answer blamed the
-customer.
+price needs the database to do the arithmetic, and that arithmetic
+multiplies three 32 bit integers, so each of them is cast to a 64 bit
+integer *before* the multiplication. Casting the result does not help:
+Postgres works out `integer * integer` as an integer, so the overflow
+happens before the cast is applied. The first attempt at this fix cast
+the result and was a no-op, and the test that was supposed to catch it
+passed anyway, because one page of an absurd rate still fitted in 32
+bits. Both were found by review, and the test now uses two pages, so
+the product really is too large, and the test really does fail
+without the fix.
+
+The overflow broke the search for every customer because of one shop's
+rate, and the answer blamed the customer.
 
 **The shop's own coordinates still come first, and now the browser can
 supply them.** A shop owner is standing in their shop when they

@@ -4,34 +4,48 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.domain.limits import MAX_MIN_ORDER_PAISE, MAX_RATE_PAISE
 from app.schemas.identity import UserResponse
 from app.schemas.phone import Phone
 from app.schemas.text import MultiLine, SingleLine
 
-#: The most a page can cost, in paise. Fifty thousand paise is five
-#: hundred rupees, which is more than a print shop asks for a page, and
-#: it keeps the largest possible order inside the integer column that
-#: holds its price: 300 pages x 100 copies x 50000 = 1.5 billion paise.
-MAX_RATE_PAISE = 50_000
-
 
 class RateItem(BaseModel):
+    """One rate of a shop, as it is read.
+
+    There is no ceiling here, and that is deliberate. A rate is read
+    back for the shop's own table and for the customer comparing
+    prices, and a rate that was stored before the ceiling existed must
+    still be readable: refusing to read it would turn one shop's
+    strange rate into a page that does not load for anybody.
+    """
+
     paper_size: Literal["A4", "A3"]
     color: bool
     duplex: bool
-    # The price of one page, in paise.
-    #
-    # There is a ceiling, and it is not arbitrary. The price of an
-    # order is worked out as pages x copies x rate, the largest order
-    # the platform takes is 300 pages of 100 copies, and the column
-    # that holds the price is a 32 bit integer. A rate above this would
-    # let a shop price an order the database cannot hold, and the
-    # failure would land on the customer who tried to order.
+    rate_paise: int = Field(gt=0)
+
+
+class RateToSet(BaseModel):
+    """One rate of a shop, as its owner sets it.
+
+    The price of one page, in paise, with a ceiling. The ceiling is
+    not arbitrary: the price of an order is worked out as pages x
+    copies x rate, the largest order the platform takes is 300 pages of
+    100 copies, and the column that holds the price is a 32 bit
+    integer. A rate above the ceiling would let a shop price an order
+    the database cannot hold, and the failure would land on the
+    customer who tried to order.
+    """
+
+    paper_size: Literal["A4", "A3"]
+    color: bool
+    duplex: bool
     rate_paise: int = Field(gt=0, le=MAX_RATE_PAISE)
 
 
 class RatesReplaceRequest(BaseModel):
-    rates: list[RateItem] = Field(max_length=8)
+    rates: list[RateToSet] = Field(max_length=8)
 
     @model_validator(mode="after")
     def _reject_duplicate_combinations(self) -> Self:
@@ -182,5 +196,9 @@ class VendorShopUpdate(BaseModel):
     name: SingleLine | None = Field(default=None, min_length=1, max_length=200)
     address: MultiLine | None = Field(default=None, min_length=1, max_length=300)
     phone: Phone | None = None
-    min_order_paise: int | None = Field(default=None, ge=0)
+    # The least a customer has to spend, in paise. It is held in the
+    # same kind of column as the price of a page, so it has the same
+    # kind of ceiling: a minimum above it could not be stored, and the
+    # refusal would come back as a failure rather than as an answer.
+    min_order_paise: int | None = Field(default=None, ge=0, le=MAX_MIN_ORDER_PAISE)
     accepting_orders: bool | None = None

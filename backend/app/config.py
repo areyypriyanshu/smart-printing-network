@@ -4,6 +4,8 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.domain.limits import MAX_COPIES, MAX_PRICE_PAISE, MAX_RATE_PAISE
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -205,6 +207,19 @@ class Settings(BaseSettings):
             raise ValueError(
                 "GOOGLE_GEOCODING_API_KEY is required when GEOCODING_PROVIDER=google. "
                 "Use GEOCODING_PROVIDER=nominatim for the free one."
+            )
+        if self.max_pages * MAX_COPIES * MAX_RATE_PAISE > MAX_PRICE_PAISE:
+            # The price of an order is pages x copies x rate and it is
+            # held in a 32 bit integer column. A page limit this high
+            # would let a shop price an order the database cannot hold,
+            # and the failure would land on the customer who tried to
+            # order. The application refuses to start rather than
+            # discovering it later.
+            raise ValueError(
+                f"MAX_PAGES={self.max_pages} is too high: the largest order "
+                f"would be {self.max_pages * MAX_COPIES * MAX_RATE_PAISE} paise, "
+                f"and the price column holds {MAX_PRICE_PAISE}. "
+                f"At most {MAX_PRICE_PAISE // (MAX_COPIES * MAX_RATE_PAISE)} pages."
             )
         if self.testing_endpoints_enabled and self.env == "production":
             raise ValueError("the testing endpoints cannot be enabled when ENV=production")

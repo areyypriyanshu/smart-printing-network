@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.domain.limits import MAX_COPIES
+
 
 class OrderCreateRequest(BaseModel):
     upload_id: uuid.UUID
@@ -11,7 +13,7 @@ class OrderCreateRequest(BaseModel):
     paper_size: Literal["A4", "A3"]
     color: bool
     duplex: bool
-    copies: int = Field(ge=1, le=100)
+    copies: int = Field(ge=1, le=MAX_COPIES)
     expected_price_paise: int | None = Field(default=None, ge=1)
     # How the customer is paying. "online" is through a payment provider,
     # "at_store" is in cash at the counter. The price is the same either

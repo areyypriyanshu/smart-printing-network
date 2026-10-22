@@ -523,7 +523,10 @@ def test_a_shop_with_an_absurd_rate_does_not_break_the_search(
         )
     )
     db_session.commit()
-    upload = create_upload_row(db_session, customer=customer, page_count=1)
+    # Two pages, so the product is four billion paise, which is more
+    # than a 32 bit integer holds. One page would not do: two billion
+    # fits, and the test would pass with or without the fix.
+    upload = create_upload_row(db_session, customer=customer, page_count=2)
     headers = login_headers(client, "customer@example.com")
 
     response = client.get(
@@ -543,7 +546,7 @@ def test_a_shop_with_an_absurd_rate_does_not_break_the_search(
     )
 
     assert response.status_code == 200, response.text
-    assert response.json()["items"][0]["price_paise"] == 2_000_000_000
+    assert response.json()["items"][0]["price_paise"] == 2 * 2_000_000_000
 
 
 def test_the_search_works_with_the_answer_the_free_provider_gives(
