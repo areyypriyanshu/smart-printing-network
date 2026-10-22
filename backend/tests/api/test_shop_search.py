@@ -647,8 +647,11 @@ def test_the_closest_shop_is_reported_when_the_radius_is_empty(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["items"] == []
-    assert body["nearest_m"] is not None
-    assert 11_000 < body["nearest_m"] < 15_000
+    nearest = body["nearest"]
+    assert nearest is not None
+    assert nearest["name"] == "Middle Shop"
+    assert nearest["address"] == "1 Test Street"
+    assert 11_000 < nearest["distance_m"] < 15_000
 
 
 def test_the_closest_shop_is_not_reported_when_there_are_shops(
@@ -664,7 +667,7 @@ def test_the_closest_shop_is_not_reported_when_there_are_shops(
     )
 
     assert response.status_code == 200, response.text
-    assert response.json()["nearest_m"] is None
+    assert response.json()["nearest"] is None
 
 
 def test_the_search_carries_the_attribution_the_provider_asks_for(

@@ -28,7 +28,12 @@ from app.domain.pricing import PriceOutOfRange, quote_paise
 from app.errors import FileUnavailable, ValidationError
 from app.gateways.geocoding import Geocoder
 from app.models import Shop, ShopRate
-from app.schemas.shop import ShopSearchItem, ShopSearchQuery, ShopSearchResponse
+from app.schemas.shop import (
+    NearestShop,
+    ShopSearchItem,
+    ShopSearchQuery,
+    ShopSearchResponse,
+)
 from app.services.geocoding_service import geocode
 from app.services.upload_service import get_upload
 
@@ -123,30 +128,29 @@ def search_shops(
     return ShopSearchResponse(
         items=items,
         attribution=geocoder.attribution if geocoder is not None else None,
-        nearest_m=(
-            _nearest_shop_distance(session, point) if not items and point is not None else None
-        ),
+        nearest=(_nearest_shop(session, point) if not items and point is not None else None),
     )
 
 
-def _nearest_shop_distance(session: Session, point: tuple[float, float]) -> int | None:
-    """How far the closest shop is, even when it is outside the radius.
+def _nearest_shop(session: Session, point: tuple[float, float]) -> NearestShop | None:
+    """The closest shop, even when it is outside the radius.
 
     A customer who is told "there is nothing near you" and nothing else
-    is left guessing. Told that the closest one is twelve kilometres
-    away, they can widen the radius or look at another area.
+    is left guessing. Told where the closest one is and how far it is,
+    they can widen the radius, look at another area, or understand that
+    there is no shop in their city yet.
     """
     point_element = WKTElement(f"POINT({point[1]} {point[0]})", srid=4326)
     distance = func.ST_Distance(cast(Shop.location, Geography), cast(point_element, Geography))
-    nearest = session.execute(
-        select(distance)
+    row = session.execute(
+        select(Shop.name, Shop.address, distance.label("distance_m"))
         .where(Shop.is_verified.is_(True), Shop.accepting_orders.is_(True))
         .order_by(distance.asc())
         .limit(1)
-    ).scalar()
-    if nearest is None:
+    ).first()
+    if row is None:
         return None
-    return round(float(nearest))
+    return NearestShop(name=row[0], address=row[1], distance_m=round(float(row[2])))
 
 
 def _point_for(query: ShopSearchQuery, geocoder: Geocoder | None) -> tuple[float, float] | None:

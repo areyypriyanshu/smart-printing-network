@@ -220,16 +220,23 @@ describe("the shop search", () => {
     // else is left guessing.
     server.use(
       http.get("/api/v1/shops/search", () =>
-        HttpResponse.json({ items: [], nearest_m: 12600 }),
+        HttpResponse.json({
+          items: [],
+          nearest: {
+            name: "Central Prints",
+            address: "12 Esplanade Row, Kolkata",
+            distance_m: 12600,
+          },
+        }),
       ),
     );
     const user = userEvent.setup();
     renderWithProviders(<SearchPage />, { route: "/shops" });
 
     await screen.findByText(/no shops within 5 km/i);
-    expect(
-      screen.getByText(/closest one is 12.6 km away/i),
-    ).toBeInTheDocument();
+    const line = screen.getByText(/closest one is Central Prints/i);
+    expect(line).toHaveTextContent(/at 12 Esplanade Row/i);
+    expect(line).toHaveTextContent(/12.6 km away/i);
 
     // And there is a way out of it.
     // The button widens the search to the next radius that reaches the

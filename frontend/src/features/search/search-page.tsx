@@ -40,6 +40,10 @@ import {
  * customer is charged.
  */
 
+//: The furthest the search looks. It is the largest radius on offer and
+//: the largest the server will take.
+const BIGGEST_RADIUS = 50000;
+
 const RADII: { value: number; label: string }[] = [
   { value: 1000, label: "1 km" },
   { value: 2000, label: "2 km" },
@@ -133,15 +137,14 @@ export function SearchPage() {
   // When there is nothing inside the radius, the customer is told how
   // far the closest shop is and is given a way to widen the search. A
   // page that only says "nothing near you" leaves them guessing.
-  const nearest = shops.data?.nearest_m ?? null;
+  const nearest = shops.data?.nearest ?? null;
   // The radius is one of the choices on offer, so the button offers the
   // next one that reaches the closest shop.
   const widerRadius =
     nearest === null
-      ? (RADII[RADII.length - 1]?.value ?? 50000)
-      : (RADII.find((option) => option.value > nearest)?.value ??
-        RADII[RADII.length - 1]?.value ??
-        50000);
+      ? BIGGEST_RADIUS
+      : (RADII.find((option) => option.value > nearest.distance_m)?.value ??
+        BIGGEST_RADIUS);
   const showEveryShop = () => {
     // Without a place, every shop is returned and the radius does not
     // apply.
@@ -425,15 +428,18 @@ export function SearchPage() {
             {nearest !== null ? (
               <>
                 <p className="mt-1 text-sm text-steel">
-                  The closest one is {formatDistance(nearest)} away.
+                  The closest one is {nearest.name}, at {nearest.address} —{" "}
+                  {formatDistance(nearest.distance_m)} away.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setRadius(widerRadius)}
-                  >
-                    Show shops up to {widerRadius / 1000} km
-                  </Button>
+                  {nearest.distance_m <= BIGGEST_RADIUS && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setRadius(widerRadius)}
+                    >
+                      Show shops up to {widerRadius / 1000} km
+                    </Button>
+                  )}
                   <Button variant="secondary" onClick={showEveryShop}>
                     Show every shop
                   </Button>

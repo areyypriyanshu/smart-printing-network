@@ -935,6 +935,23 @@ export interface components {
             url: string;
         };
         /**
+         * NearestShop
+         * @description The closest shop, when it is not inside the radius.
+         *
+         *     A distance on its own is not much to a person: "there is nothing
+         *     near you, the closest one is sixteen hundred kilometres away" says
+         *     nothing about where it is. The name and the address say what there
+         *     is, and that is what a customer can act on.
+         */
+        NearestShop: {
+            /** Address */
+            address: string;
+            /** Distance M */
+            distance_m: number;
+            /** Name */
+            name: string;
+        };
+        /**
          * OnboardingRequest
          * @description What the person says they are here for.
          *
@@ -1381,8 +1398,7 @@ export interface components {
             attribution?: string | null;
             /** Items */
             items: components["schemas"]["ShopSearchItem"][];
-            /** Nearest M */
-            nearest_m?: number | null;
+            nearest?: components["schemas"]["NearestShop"] | null;
         };
         /** SimulatePaymentRequest */
         SimulatePaymentRequest: {

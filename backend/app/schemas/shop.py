@@ -164,6 +164,20 @@ class ShopSearchItem(BaseModel):
     rate_paise: int | None = None
 
 
+class NearestShop(BaseModel):
+    """The closest shop, when it is not inside the radius.
+
+    A distance on its own is not much to a person: "there is nothing
+    near you, the closest one is sixteen hundred kilometres away" says
+    nothing about where it is. The name and the address say what there
+    is, and that is what a customer can act on.
+    """
+
+    name: str
+    address: str
+    distance_m: int
+
+
 class ShopSearchResponse(BaseModel):
     """The shops the search found."""
 
@@ -171,10 +185,9 @@ class ShopSearchResponse(BaseModel):
     # What has to be shown to a person when the data here is shown to
     # them. OpenStreetMap asks for it.
     attribution: str | None = None
-    # How far the closest shop is, when the answer is empty and there is
-    # one further away. It is what turns "there is nothing near you"
-    # into something a person can act on.
-    nearest_m: int | None = None
+    # The closest shop, when the answer is empty and there is one
+    # further away.
+    nearest: NearestShop | None = None
 
 
 class VendorShopResponse(BaseModel):
