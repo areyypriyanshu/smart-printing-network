@@ -254,7 +254,7 @@ jobs:
             echo "::group::the fuzzer's report"
             tail -n 80 fuzz.log || true
             echo "::endgroup::"
-            echo "::error title=The fuzzer's report::$(tail -n 40 fuzz.log | tr '\n' ' ' | cut -c1-1500)"
+            echo "::error title=The fuzzer's report::$(sed -n '/^Failures:/,/^Warnings:/p' fuzz.log | tr '\n' ' ' | cut -c1-1500)"
             echo "::error title=the fuzzer's exit::the run ended with $(tail -n 3 fuzz.log | tr '\n' ' ')"
           }
 
