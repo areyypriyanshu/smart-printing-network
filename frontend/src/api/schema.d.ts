@@ -2966,6 +2966,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The map provider could not be reached, or this deployment has no key for one. Try again in a moment, or ask the browser for your location. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     list_nearby_shops_api_v1_shops_nearby_get: {
@@ -3056,6 +3065,15 @@ export interface operations {
             };
             /** @description Too many requests. The response carries a Retry-After header. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The map provider could not be reached, or this deployment has no key for one. Try again in a moment, or ask the browser for your location. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3167,6 +3185,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The map provider could not be reached, or this deployment has no key for one. Try again in a moment, or ask the browser for your location. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     get_shop_api_v1_shops__shop_id__get: {
@@ -3254,6 +3281,15 @@ export interface operations {
             };
             /** @description Too many requests. The response carries a Retry-After header. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The map provider could not be reached, or this deployment has no key for one. Try again in a moment, or ask the browser for your location. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
