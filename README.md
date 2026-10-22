@@ -146,12 +146,21 @@ and the account they make is the shop's account and not a customer's.
 The shop waits for the team to look at it before it takes orders, so a
 shop that is registered is not yet a shop that can print.
 
-The coordinates of the shop are optional. A shop owner who knows them
-types them, and one who does not leaves them empty and lets the address
-be looked up on the map. The lookup happens on the server, so the map
-provider's key never reaches the browser, and a deployment with no key
-asks the owner for the coordinates instead. See
-[ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md).
+The coordinates of the shop are optional. The easiest way is the
+**"Use my current location"** button: a shop owner is standing in their
+shop when they register, the browser knows where they are, and it is
+exact and free. Failing that, the owner types the coordinates, or
+leaves them empty and lets the address be looked up on the map.
+
+The lookup happens on the server, so the map provider's key never
+reaches the browser. It is free by default: OpenStreetMap's geocoder
+needs no key and no account, and the rules it asks for — one call a
+second for the whole application, a user agent that says who is asking,
+the answers cached, and the attribution shown on the page — are in the
+code and in the tests. A deployment that would rather use the
+commercial provider, or no provider at all, changes one setting. See
+[ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md) and
+[ADR 031](docs/adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md).
 
 A person who came to register a shop and is here to print after all can
 say so on that page, and the reason is dropped with it.
@@ -473,10 +482,13 @@ committed. The decisions are.
    and the checkout call the same pricing function, so the number the
    customer compares is the number the customer is charged, and a test
    creates a real order to prove it.
-9. **The address is looked up on the server.** The browser never holds
-   the map provider's key, and a shop owner who types their own
-   coordinates is believed before any lookup is made. See
-   [ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md).
+9. **The address is looked up on the server, for free.** The browser
+   never holds the map provider's key, and a shop owner who types their
+   own coordinates is believed before any lookup is made. The default
+   provider is OpenStreetMap's, which needs no key and no account, and
+   the rules its policy asks for are tests rather than habits. See
+   [ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md) and
+   [ADR 031](docs/adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md).
 
 ## Known limitations
 
@@ -502,12 +514,14 @@ committed. The decisions are.
   documents, but real uploads would be better evidence, and adding a
   labelled real file is the next step. See
   [ADR 028](docs/adr/028-the-quality-check-runs-in-the-worker.md).
-- Turning an address into a point needs a key from the map provider
-  (`GOOGLE_GEOCODING_API_KEY`). Without one the platform still works: a
-  shop owner types the coordinates of their shop, and a customer who
-  cannot share a location sees the whole list. The provider is never
-  called in the test suite, so a real lookup has not been made yet. See
-  [ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md).
+- Turning an address into a point uses the free OpenStreetMap geocoder
+  by default. It matches loosely: an address that does not exist comes
+  back as the nearest place it knows, which is why the shop owner's own
+  coordinates are the first choice. The service is run on donated
+  servers, so a deployment with real traffic should point
+  `NOMINATIM_BASE_URL` at its own instance or use the commercial
+  provider. See
+  [ADR 031](docs/adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md).
 
 ## Author
 

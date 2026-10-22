@@ -303,10 +303,19 @@ believed, because they know where their own shop is better than a map
 does, and a map will put a shop in the middle of a lake because the
 address on the letter is short. Only when there are no coordinates is
 the address looked up, and the lookup happens on this server, so the map
-provider's key never reaches the browser. A deployment without a key
+provider's key never reaches the browser. A deployment without a provider
 still works: the owner types the coordinates, and a customer who cannot
 share a location sees the whole list.
 [ADR 030](adr/030-the-address-is-looked-up-on-the-server.md)
+
+**The free provider is the default, and the rules it asks for are code.**
+OpenStreetMap's geocoder needs no key, no account and no bill, and it
+is run on donated servers. Its policy asks for four things, and each one
+is a test rather than a habit: one call a second for the whole
+application, a user agent that says who is asking, the answers cached,
+and the attribution shown wherever the data is shown. The commercial
+provider is one setting away, and so is having no provider at all.
+[ADR 031](adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md)
 
 ---
 
@@ -337,6 +346,7 @@ rule is broken.
 | A quality report belongs to one customer | Another customer's report is 404, not 403, so the answer never confirms that it exists. |
 | The price on the shop search is the price of the order | A real order is created through the real service and its price is compared with the price the search showed. |
 | The place on the map is the place | A shop a thousandth of a degree north of the customer has to be about a hundred and eleven metres away, which fails if the latitude and the longitude are swapped. |
+| The free map provider is used within its rules | One call a second for the whole application, a user agent that names the application, the answers cached, and the attribution shown on the page. Each one has a test, and a test that would still pass if the rule were broken does not count. |
 
 ---
 
