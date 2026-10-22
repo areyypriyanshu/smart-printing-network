@@ -156,6 +156,39 @@ describe("the shop search", () => {
     expect(asked[asked.length - 1]).toContain("address=Salt+Lake");
   });
 
+  it("asks for a typed address once, and not once per letter", async () => {
+    // The map provider's policy forbids an autocomplete built on its
+    // API, and it is right to forbid it: one lookup per keystroke spends
+    // the whole application's budget of one call a second, and the
+    // answer to "S" is of no use to anybody.
+    const asked: string[] = [];
+    server.use(
+      http.get("/api/v1/shops/search", ({ request }) => {
+        asked.push(request.url);
+        return HttpResponse.json({ items: [alpha] });
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SearchPage />, { route: "/shops" });
+
+    await user.type(
+      await screen.findByLabelText(/type an area or address/i),
+      "Salt Lake",
+    );
+
+    // Nothing was asked for the address yet: the person has not said
+    // so. (The page asks for the whole list when it opens, which is a
+    // different thing.)
+    expect(asked.filter((url) => url.includes("address="))).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: /search this area/i }));
+
+    await screen.findByText("Alpha Prints");
+    const withAddress = asked.filter((url) => url.includes("address="));
+    expect(withAddress).toHaveLength(1);
+    expect(withAddress[0]).toContain("address=Salt+Lake");
+  });
+
   it("shows what each shop would charge for the file", async () => {
     useSearchHandlers();
     const user = userEvent.setup({ applyAccept: false });

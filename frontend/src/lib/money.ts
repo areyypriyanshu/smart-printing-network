@@ -23,3 +23,15 @@ export const formatPaiseForInput = (paise: number): string => {
     ? String(rupees)
     : rupees.toFixed(2).replace(/0$/, "");
 };
+
+/**
+ * The most a page can cost, in paise.
+ *
+ * The server has the same rule, and the reason is the same: the price
+ * of an order is pages x copies x rate, the largest order the platform
+ * takes is 300 pages of 100 copies, and the column that holds the price
+ * is a 32 bit integer. A rate above this would let a shop price an
+ * order the database cannot hold, and the failure would land on the
+ * customer who tried to order.
+ */
+export const MAX_RATE_PAISE = 50_000;

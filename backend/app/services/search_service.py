@@ -20,7 +20,7 @@ from typing import Any
 
 from geoalchemy2 import Geography, Geometry
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import cast, func, select
+from sqlalchemy import BigInteger, cast, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -85,8 +85,17 @@ def search_shops(
         # The order of the shops is decided here, and the price that
         # decides it is the same arithmetic the order flow uses, written
         # out for the database so that the limit keeps the cheapest.
+        #
+        # The cast to bigint matters. The rate column is a 32 bit
+        # integer, and so is the product, and a rate that is large
+        # enough would overflow it. An overflow here would break the
+        # search for every customer because of one shop's rate, and the
+        # answer would blame the customer. The price that is shown is
+        # worked out in Python, where the arithmetic does not overflow,
+        # and this is only the order.
         price_expression = func.greatest(
-            pages * (query.copies or 1) * ShopRate.rate_paise, Shop.min_order_paise
+            cast(pages * (query.copies or 1) * ShopRate.rate_paise, BigInteger),
+            cast(Shop.min_order_paise, BigInteger),
         )
 
     stmt = stmt.order_by(*_order_for(query, distance_expression, price_expression))
@@ -126,9 +135,8 @@ def _point_for(query: ShopSearchQuery, geocoder: Geocoder | None) -> tuple[float
 
 def _pages_for(session: Session, customer_id: uuid.UUID, query: ShopSearchQuery) -> int | None:
     """How many pages the file has, when a price was asked for."""
-    if not query.wants_prices:
+    if not query.wants_prices or query.upload_id is None:
         return None
-    assert query.upload_id is not None
     upload = get_upload(session, upload_id=query.upload_id, customer_id=customer_id)
     if upload.file_deleted_at is not None:
         # The object is gone from storage, so there is nothing to

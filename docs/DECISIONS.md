@@ -347,6 +347,7 @@ rule is broken.
 | The price on the shop search is the price of the order | A real order is created through the real service and its price is compared with the price the search showed. |
 | The place on the map is the place | A shop a thousandth of a degree north of the customer has to be about a hundred and eleven metres away, which fails if the latitude and the longitude are swapped. |
 | The free map provider is used within its rules | One call a second for the whole application, a user agent that names the application, the answers cached, and the attribution shown on the page. Each one has a test, and a test that would still pass if the rule were broken does not count. |
+| One shop's rate cannot break the search for everybody | A rate large enough to overflow the database's arithmetic is refused at the boundary, and the arithmetic that decides the order of the shops is cast to a wide integer. The test asks for the price of a shop with an absurd rate and the search still answers. |
 
 ---
 

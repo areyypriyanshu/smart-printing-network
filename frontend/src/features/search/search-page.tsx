@@ -64,7 +64,15 @@ export function SearchPage() {
     latitude: number;
     longitude: number;
   } | null>(null);
+  // The text in the box, and the address that is being searched.
+  //
+  // They are two things on purpose. The map provider's policy forbids
+  // an autocomplete built on its API, and it is right to forbid it: a
+  // lookup on every keystroke spends the application's whole budget of
+  // one call a second, and the answer to "S" is of no use to anybody.
+  // So the address goes out when the person says so.
   const [address, setAddress] = useState("");
+  const [searchedAddress, setSearchedAddress] = useState("");
   const [radius, setRadius] = useState(5000);
   const [sort, setSort] = useState<SortMode>("auto");
   const [upload, setUpload] = useState<UploadResponse | null>(null);
@@ -92,8 +100,7 @@ export function SearchPage() {
     copies: copiesAreUsable ? copies : 1,
   };
 
-  const trimmedAddress = address.trim();
-  const hasPlace = position !== null || trimmedAddress !== "";
+  const hasPlace = position !== null || searchedAddress !== "";
   const wantsPrices = upload !== null && copiesAreUsable;
 
   const query: ShopSearchQuery = {
@@ -102,8 +109,8 @@ export function SearchPage() {
     ...(position !== null
       ? { latitude: position.latitude, longitude: position.longitude }
       : {}),
-    ...(position === null && trimmedAddress !== ""
-      ? { address: trimmedAddress }
+    ...(position === null && searchedAddress !== ""
+      ? { address: searchedAddress }
       : {}),
     ...(sort === "price" && wantsPrices
       ? { sort: "price" as const }
@@ -124,6 +131,7 @@ export function SearchPage() {
 
   const findMe = () => {
     setLocationError(null);
+    setSearchedAddress("");
     if (!("geolocation" in navigator)) {
       setLocationError(
         "This browser cannot share a location, so here is every shop we have. " +
@@ -154,6 +162,7 @@ export function SearchPage() {
     event.preventDefault();
     setLocationError(null);
     setPosition(null);
+    setSearchedAddress(address.trim());
   };
 
   const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -215,6 +224,7 @@ export function SearchPage() {
               variant="secondary"
               onClick={() => {
                 setPosition(null);
+                setSearchedAddress("");
                 setSort("auto");
               }}
             >
@@ -239,8 +249,6 @@ export function SearchPage() {
               placeholder="Salt Lake, Kolkata"
               onChange={(event) => {
                 setAddress(event.target.value);
-                setPosition(null);
-                setSort("auto");
               }}
               className="min-h-11 rounded-md border border-hairline-strong bg-canvas px-3 text-sm text-ink"
             />
@@ -362,6 +370,12 @@ export function SearchPage() {
         {!hasPlace && (
           <p className="text-sm text-steel">
             Share your location or type an area to search by distance.
+          </p>
+        )}
+
+        {searchedAddress !== "" && (
+          <p className="text-sm text-steel">
+            Showing shops near {searchedAddress}.
           </p>
         )}
 

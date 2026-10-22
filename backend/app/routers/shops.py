@@ -9,7 +9,7 @@ from app.deps import get_attribution, get_geocoder, require_role
 from app.gateways.geocoding import Geocoder
 from app.models import User
 from app.rate_limit import user_rate_limit
-from app.schemas.errors import ERROR_RESPONSES
+from app.schemas.errors import ERROR_RESPONSES, GEOCODING_UNAVAILABLE_RESPONSE
 from app.schemas.shop import (
     ShopListResponse,
     ShopResponse,
@@ -18,7 +18,14 @@ from app.schemas.shop import (
 )
 from app.services import search_service, shop_service
 
-router = APIRouter(prefix="/shops", tags=["shops"], responses=ERROR_RESPONSES)
+router = APIRouter(
+    prefix="/shops",
+    tags=["shops"],
+    # The shops router is the one that talks to the map provider, so it
+    # is the one that can answer with a 503. Most of the API does not
+    # talk to it and should not claim that it can fail this way.
+    responses={**ERROR_RESPONSES, 503: GEOCODING_UNAVAILABLE_RESPONSE},
+)
 
 _customer_only = require_role("customer")
 

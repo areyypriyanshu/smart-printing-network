@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -116,6 +116,19 @@ class Settings(BaseSettings):
     # need one ask for the coordinates instead.
     geocoding_provider: str = "nominatim"
 
+    @field_validator("geocoding_provider")
+    @classmethod
+    def _the_provider_is_one_we_know(cls, value: str) -> str:
+        """The name is compared the same way the builder compares it.
+
+        The builder strips the name and folds its case, so a value of
+        " Nominatim " has to be the same answer here as it is there.
+        """
+        provider = value.strip().lower()
+        if provider not in {"nominatim", "google", "none"}:
+            raise ValueError(f"GEOCODING_PROVIDER must be nominatim, google or none, not {value!r}")
+        return provider
+
     # The key the server uses to turn an address into a point, when the
     # provider is Google. It is a different key from the one the browser
     # uses for the map, because the two are restricted in different
@@ -129,8 +142,11 @@ class Settings(BaseSettings):
     # rather than the one a library sets by itself, and for a way to
     # reach the operator. The address is in the repository, which is
     # where the operator can be found.
-    geocoding_user_agent: str = (
-        "SmartPrintingNetwork/1.0 (+https://github.com/areyypriyanshu/smart-printing-network)"
+    geocoding_user_agent: str = Field(
+        default=(
+            "SmartPrintingNetwork/1.0 (+https://github.com/areyypriyanshu/smart-printing-network)"
+        ),
+        min_length=1,
     )
 
     # Where the OpenStreetMap geocoder lives. The public instance is
@@ -140,11 +156,24 @@ class Settings(BaseSettings):
     # update.
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
 
+    @field_validator("nominatim_base_url")
+    @classmethod
+    def _the_instance_is_an_address_on_the_web(cls, value: str) -> str:
+        """Only http and https.
+
+        The address is fetched by the server, so a value that pointed
+        somewhere else — a file on the machine, say — would be a way to
+        make the server read something it should not.
+        """
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("NOMINATIM_BASE_URL must be an http or https address")
+        return value
+
     # The shortest time between two calls to the map provider, in
     # seconds. The policy asks for no more than one a second from the
     # whole application, so this is a limit on the process and not on a
     # customer.
-    geocoding_min_interval: float = 1.0
+    geocoding_min_interval: float = Field(default=1.0, ge=1.0)
 
     # Email. The console sender writes the message to the log, which is
     # what a local development machine uses and what a deployment must
@@ -172,11 +201,6 @@ class Settings(BaseSettings):
     def _validate_environment(self) -> Self:
         if self.env not in {"local", "test", "production"}:
             raise ValueError(f"ENV must be local, test or production, not {self.env!r}")
-        if self.geocoding_provider not in {"nominatim", "google", "none"}:
-            raise ValueError(
-                f"GEOCODING_PROVIDER must be nominatim, google or none, "
-                f"not {self.geocoding_provider!r}"
-            )
         if self.geocoding_provider == "google" and not self.google_geocoding_api_key:
             raise ValueError(
                 "GOOGLE_GEOCODING_API_KEY is required when GEOCODING_PROVIDER=google. "

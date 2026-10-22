@@ -498,6 +498,12 @@ committed. The decisions are.
   took it, so a settlement can be built later without a data migration.
   See [ADR 013](docs/adr/013-cash-on-collection.md).
 - One shop per vendor account, one order per upload, whole-document printing only (no page ranges, no binding options).
+- A page cannot cost more than ₹500. The price of an order is pages x
+  copies x rate, the largest order the platform takes is 300 pages of
+  100 copies, and the column that holds the price is a 32 bit integer.
+  The ceiling is what keeps the largest possible order inside it, and
+  without it a shop could price an order the database cannot hold, and
+  the failure would land on the customer who tried to order.
 - A converted Word, Excel or PowerPoint file keeps the text, the headings, the pictures and the table contents. It does not keep the fonts, the exact table widths, the headers, the footers or the columns. A student who needs the exact layout uploads a PDF. See [ADR 016](docs/adr/016-office-file-upload.md).
 - The password belongs to the identity provider, so a password reset is
   the provider's to offer. It is switched on in the provider's settings,

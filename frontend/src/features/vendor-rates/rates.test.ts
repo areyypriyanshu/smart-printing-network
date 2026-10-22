@@ -103,3 +103,17 @@ describe("ratesSchema", () => {
     ).toBe(true);
   });
 });
+
+describe("ratesSchema", () => {
+  it("refuses a page that costs more than the ceiling", () => {
+    const rows = emptyRateRows().map(() => ({ rupees: "900" }));
+    const result = ratesSchema.safeParse({ rows });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a page at the ceiling", () => {
+    const rows = emptyRateRows().map(() => ({ rupees: "500" }));
+    const result = ratesSchema.safeParse({ rows });
+    expect(result.success).toBe(true);
+  });
+});

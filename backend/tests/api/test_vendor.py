@@ -140,7 +140,7 @@ def test_put_rates_empty_clears_all(client: TestClient, db_session: Session) -> 
     assert client.get(VENDOR_RATES, headers=headers).json() == []
 
 
-@pytest.mark.parametrize("rate_paise", [0, -5, 2.5])
+@pytest.mark.parametrize("rate_paise", [0, -5, 2.5, 50_001])
 def test_put_rates_rejects_invalid_amounts(
     client: TestClient, db_session: Session, rate_paise: float
 ) -> None:
@@ -158,6 +158,36 @@ def test_put_rates_rejects_invalid_amounts(
     )
 
     assert response.status_code == 422
+
+
+def test_put_rates_rejects_a_page_that_costs_more_than_the_ceiling(
+    client: TestClient, db_session: Session
+) -> None:
+    """The price of an order is pages x copies x rate, and the column
+    that holds it is a 32 bit integer. A rate above the ceiling would
+    let a shop price an order the database cannot hold, and the
+    failure would land on the customer who tried to order.
+    """
+    create_vendor_with_shop(db_session)
+    headers = login_headers(client, "vendor@example.com")
+
+    response = client.put(
+        VENDOR_RATES,
+        json={
+            "rates": [
+                {
+                    "paper_size": "A4",
+                    "color": False,
+                    "duplex": False,
+                    "rate_paise": 2_000_000_000,
+                }
+            ]
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_put_rates_rejects_duplicate_combinations(client: TestClient, db_session: Session) -> None:

@@ -8,12 +8,26 @@ from app.schemas.identity import UserResponse
 from app.schemas.phone import Phone
 from app.schemas.text import MultiLine, SingleLine
 
+#: The most a page can cost, in paise. Fifty thousand paise is five
+#: hundred rupees, which is more than a print shop asks for a page, and
+#: it keeps the largest possible order inside the integer column that
+#: holds its price: 300 pages x 100 copies x 50000 = 1.5 billion paise.
+MAX_RATE_PAISE = 50_000
+
 
 class RateItem(BaseModel):
     paper_size: Literal["A4", "A3"]
     color: bool
     duplex: bool
-    rate_paise: int = Field(gt=0)
+    # The price of one page, in paise.
+    #
+    # There is a ceiling, and it is not arbitrary. The price of an
+    # order is worked out as pages x copies x rate, the largest order
+    # the platform takes is 300 pages of 100 copies, and the column
+    # that holds the price is a 32 bit integer. A rate above this would
+    # let a shop price an order the database cannot hold, and the
+    # failure would land on the customer who tried to order.
+    rate_paise: int = Field(gt=0, le=MAX_RATE_PAISE)
 
 
 class RatesReplaceRequest(BaseModel):

@@ -8,6 +8,8 @@ lookup every time, and the rules the free provider asks for are kept.
 """
 
 import json
+import threading
+import time
 import urllib.error
 
 import pytest
@@ -381,12 +383,40 @@ def test_an_old_answer_is_asked_again() -> None:
 
 
 def test_the_cache_does_not_grow_without_end() -> None:
-    cache = CachedGeocoder(_Counting(), max_entries=3)
+    """The oldest answer is dropped, and the table stays small."""
+    provider = _Counting()
+    cache = CachedGeocoder(provider, max_entries=3)
 
     for index in range(10):
         cache.geocode(f"place {index}")
 
-    assert len(cache._entries) == 3
+    assert len(provider.asked) == 10
+
+    # The oldest answer was dropped, so it is asked for again.
+    cache.geocode("place 0")
+    assert len(provider.asked) == 11
+
+    # The newest one is still there, so it is not asked for again.
+    cache.geocode("place 9")
+    assert len(provider.asked) == 11
+
+
+def test_two_people_asking_for_the_same_address_make_one_call() -> None:
+    """The second one waits for the first answer instead of asking the
+    provider again, which the policy is explicit about."""
+    provider = _Counting()
+    cache = CachedGeocoder(provider)
+
+    def ask() -> None:
+        cache.geocode("Salt Lake")
+
+    threads = [threading.Thread(target=ask) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert provider.asked == ["Salt Lake"]
 
 
 # --------------------------------------------------------------------------
@@ -400,6 +430,54 @@ def test_the_free_provider_is_the_default() -> None:
 
     assert geocoder is not None
     assert "OpenStreetMap" in (geocoder.attribution or "")
+
+
+def test_the_free_provider_is_wired_with_the_rules_the_policy_asks_for() -> None:
+    """The rules are in the application, not only in the client.
+
+    A test that only exercised the throttle in isolation would still
+    pass if the throttle were left out of the geocoder the application
+    actually builds, and then every call would go out at once. So the
+    built geocoder is looked at.
+    """
+    geocoder = build_geocoder(_settings(geocoding_min_interval=1.0))
+
+    assert isinstance(geocoder, CachedGeocoder)
+    inner = geocoder.inner
+    assert isinstance(inner, NominatimGeocoder)
+    # The one call a second.
+    assert inner.throttle is not None
+    assert inner.throttle.min_interval_seconds == 1.0
+
+
+def test_calls_to_the_free_provider_are_spaced_out() -> None:
+    """Four people asking at once make four calls, and the calls are a
+    second apart rather than all at once."""
+    moments: list[float] = []
+    lock = threading.Lock()
+
+    def fetch(url: str, headers: dict[str, str], timeout: float) -> bytes:
+        with lock:
+            moments.append(time.monotonic())
+        return _nominatim_answer("22.5812", "88.3633")
+
+    geocoder = NominatimGeocoder(
+        user_agent="SmartPrintingNetwork/1.0 (+https://example.invalid)",
+        throttle=Throttle(min_interval_seconds=0.05),
+        fetch=fetch,
+    )
+
+    threads = [
+        threading.Thread(target=geocoder.geocode, args=(f"Salt Lake {n}",)) for n in range(4)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(moments) == 4
+    gaps = [later - earlier for earlier, later in zip(moments, moments[1:], strict=False)]
+    assert all(gap >= 0.045 for gap in gaps), gaps
 
 
 def test_a_deployment_can_have_no_geocoder_at_all() -> None:

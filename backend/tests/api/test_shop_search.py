@@ -6,6 +6,7 @@ where the shop actually is, and the price, which has to be the price
 the customer is charged when they order.
 """
 
+import json
 import uuid
 
 from app.gateways.geocoding import GeocodeResult, MemoryGeocoder, NominatimGeocoder
@@ -499,6 +500,81 @@ def test_a_deployment_without_a_geocoder_says_so(client: TestClient, db_session:
 
     assert response.status_code == 503, response.text
     assert response.json()["error"]["code"] == "GEOCODING_UNAVAILABLE"
+
+
+def test_a_shop_with_an_absurd_rate_does_not_break_the_search(
+    client: TestClient, db_session: Session
+) -> None:
+    """One shop's rate must not break the search for everybody.
+
+    The price that is shown is worked out in Python, where the
+    arithmetic does not overflow, and the order of the shops is worked
+    out in the database, where it has to be cast to a wide integer
+    first. Without the cast, a rate this large would overflow the
+    product, and the answer would be a 422 that blames the customer
+    for another shop's rate.
+    """
+    customer = create_user(db_session, email="customer@example.com")
+    vendor = create_user(db_session, email="vendor@example.com", role="vendor")
+    shop = create_shop(db_session, owner=vendor)
+    db_session.add(
+        ShopRate(
+            shop_id=shop.id, paper_size="A4", color=False, duplex=False, rate_paise=2_000_000_000
+        )
+    )
+    db_session.commit()
+    upload = create_upload_row(db_session, customer=customer, page_count=1)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        SEARCH,
+        params={
+            "latitude": 22.5726,
+            "longitude": 88.3639,
+            "radius_m": 50000,
+            "upload_id": str(upload.id),
+            "paper_size": "A4",
+            "color": False,
+            "duplex": False,
+            "copies": 1,
+            "sort": "price",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["price_paise"] == 2_000_000_000
+
+
+def test_the_search_works_with_the_answer_the_free_provider_gives(
+    client: TestClient, db_session: Session
+) -> None:
+    """The free provider answers with the point as text, and the search
+    has to work with what it actually sends."""
+    _seed(db_session)
+    client.app.state.geocoder = NominatimGeocoder(
+        user_agent="SmartPrintingNetwork/1.0 (+https://example.invalid)",
+        fetch=lambda url, headers, timeout: json.dumps(
+            [
+                {
+                    "place_id": "1",
+                    "lat": "22.5726",
+                    "lon": "88.3639",
+                    "display_name": "Central Kolkata, Kolkata, India",
+                    "type": "suburb",
+                }
+            ]
+        ).encode(),
+    )
+    headers = login_headers(client, "customer@example.com")
+
+    body = _search(client, headers, address="Central Kolkata", radius_m=50000)
+
+    assert [item["name"] for item in body["items"]] == [
+        "Close Shop",
+        "Another Close Shop",
+        "Middle Shop",
+    ]
 
 
 def test_the_search_carries_the_attribution_the_provider_asks_for(

@@ -98,6 +98,11 @@ def _read_result(payload: dict[str, Any]) -> GeocodeResult | None:
     longitude = location.get("lng")
     if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
         raise GeocodeError("the geocoding provider answered without a point")
+    if not (-90.0 <= float(latitude) <= 90.0) or not (-180.0 <= float(longitude) <= 180.0):
+        # A point that is not on the earth would put a shop in the sea
+        # or in the middle of nowhere, and the column that holds it does
+        # not check.
+        raise GeocodeError("the geocoding provider answered with a point that is not on the earth")
     formatted = first.get("formatted_address")
     return GeocodeResult(
         latitude=float(latitude),

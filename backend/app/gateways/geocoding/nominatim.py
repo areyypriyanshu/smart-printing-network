@@ -68,6 +68,13 @@ class NominatimGeocoder:
         self._fetch = fetch if fetch is not None else _fetch_over_http
         self._timeout = timeout
 
+    @property
+    def throttle(self) -> Throttle | None:
+        """The rule that keeps this application inside its share of the
+        service. It is None only when the client is used on its own,
+        which is what the tests do."""
+        return self._throttle
+
     def geocode(self, address: str) -> GeocodeResult | None:
         query = urllib.parse.urlencode(
             {"q": address, "format": "jsonv2", "limit": 1, "addressdetails": 0}

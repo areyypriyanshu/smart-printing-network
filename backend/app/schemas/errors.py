@@ -32,6 +32,13 @@ def _response(description: str) -> dict[str, Any]:
 PROVIDER_UNAVAILABLE_RESPONSE = _response(
     "The identity provider could not be reached. Try again in a moment."
 )
+#: The answer when the map provider could not be read. It is a 503
+#: because it is a fault in a dependency and not in the request, and
+#: it is worth trying again later.
+GEOCODING_UNAVAILABLE_RESPONSE = _response(
+    "The map provider could not be reached, or this deployment has no key "
+    "for one. Try again in a moment, or ask the browser for your location."
+)
 
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: _response("The request was rejected, for example a wrong pickup code."),

@@ -75,10 +75,50 @@ provider. It asks this server, which asks the provider with the
 server's own user agent. That is what the policy asks for, and it is
 also why the provider can be changed with a setting and a restart.
 
-**There is no autocomplete.** The search box is a box and a button.
-That is not a limitation we chose for the policy's sake: the policy
-forbids it, and a type-ahead that calls a third party on every
-keystroke is a thing we would not want to ship anyway.
+**There is no autocomplete.** The search box is a box and a button,
+and the address goes out when the person says so. This was found by
+review, not by design: the first version sent the address as it was
+typed, which made one lookup per keystroke, and that is exactly the
+autocomplete the policy forbids. It is also what the first version of
+this document claimed did not exist, which is the reason to write down
+what the code does rather than what it was meant to do.
+
+The review also found three things that had to be fixed before the
+policy could be said to be kept, and they are here now:
+
+- **The lookup happens outside the database transaction.** The address
+  is looked up before the connection is taken from the pool, because a
+  call to somebody else's server can take ten seconds and the pool is
+  small.
+- **Two people asking for the same address make one call between
+  them.** The policy says that "clients sending repeatedly the same
+  query may be classified as faulty and blocked", so the second
+  caller waits for the first answer.
+- **The rules are wired into the geocoder the application builds, and
+  that is tested.** A test that only exercised the throttle on its own
+  would still pass if the throttle were left out of the built
+  geocoder, and then every call would go out at once.
+
+**The rate of a page has a ceiling, and it is not arbitrary.** The
+price of an order is pages x copies x rate, the largest order the
+platform takes is 300 pages of 100 copies, and the column that holds
+the price is a 32 bit integer. A rate of more than fifty thousand
+paise would let a shop price an order the database cannot hold, and
+the failure would land on the customer who tried to order, not on the
+shop that set the rate. The ceiling is at the boundary, on both sides
+of it, and the database check that already existed is left alone: a
+migration that narrows a constraint would stop the previous version of
+the application from writing a rate it used to allow, which is the
+thing that breaks a rollback.
+
+**The price the search shows is worked out in Python, and only the
+order is worked out in the database.** The order of the shops by
+price needs the database to do the arithmetic, and that arithmetic is
+cast to a wide integer first: the rate column is a 32 bit integer, and
+so is the product, and a large enough rate would overflow it. The
+overflow was found by review too. It broke the search for every
+customer because of one shop's rate, and the answer blamed the
+customer.
 
 **The shop's own coordinates still come first, and now the browser can
 supply them.** A shop owner is standing in their shop when they
@@ -124,6 +164,16 @@ the first choice and not the last.
   most a second, and the answer for an address that has been asked
   before is instant.
 - The rules are code, not a habit. A change that breaks one of them
-  breaks a test.
+  breaks a test: the throttle and the cache are looked at in the
+  geocoder the application builds, and the calls are measured.
 - The data is OpenStreetMap's and the attribution says so, on the
-  pages where a person sees it.
+  pages where a person sees it. The data is under the ODbL, so a
+  deployment that copied a great deal of it out would have to share
+  alike; a point per shop is a small extraction, and the attribution
+  is what the licence asks for.
+- The limit is on the process, so it is the limit for the whole
+  application as long as there is one API instance. The deployment is
+  one instance (ADR 008), and a second one would need the limit to move
+  somewhere shared, the same way the rate limiter would. A deployment
+  that grows should point `NOMINATIM_BASE_URL` at its own instance,
+  which is what the policy recommends anyway.

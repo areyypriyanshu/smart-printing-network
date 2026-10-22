@@ -133,6 +133,13 @@ def create_vendor_account(
     if find_by_email(session, email) is not None:
         raise Conflict("An account already uses that email address")
 
+    # The lookup is a call to somebody else's server, and it can take
+    # a second to ten. It must not happen while a connection is held
+    # from the pool and a transaction is open, because the pool is
+    # small and every other endpoint needs it. The two reads above
+    # have said what they had to say, so the transaction is ended here
+    # and the writes below begin a new one.
+    session.rollback()
     shop_latitude, shop_longitude = resolve_shop_point(
         geocoder, address=shop_address, latitude=latitude, longitude=longitude
     )

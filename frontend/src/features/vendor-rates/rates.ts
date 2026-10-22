@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { RateItem } from "../../api/client";
 import {
+  MAX_RATE_PAISE,
   formatPaiseForInput,
   isValidRupeesInput,
   parseRupeesToPaise,
@@ -76,7 +77,12 @@ export const ratesSchema = z.object({
           .refine(
             (value) => value.trim() === "" || isValidRupeesInput(value),
             "Enter a positive amount like 2.50",
-          ),
+          )
+          .refine((value) => {
+            if (value.trim() === "") return true;
+            const paise = parseRupeesToPaise(value);
+            return paise !== null && paise <= MAX_RATE_PAISE;
+          }, "A page cannot cost more than 500 rupees"),
       }),
     )
     .length(8),

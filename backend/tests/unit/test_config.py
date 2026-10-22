@@ -179,3 +179,45 @@ def test_the_key_set_host_does_not_carry_a_trailing_slash() -> None:
     )
 
     assert settings.clerk_jwks_url == "https://app.accounts.dev/.well-known/jwks.json"
+
+
+def test_the_geocoding_provider_has_to_be_one_we_know() -> None:
+    with pytest.raises(ValidationError, match="GEOCODING_PROVIDER"):
+        _settings(geocoding_provider="carrier-pigeon")
+
+
+def test_the_geocoding_provider_is_read_the_same_way_everywhere() -> None:
+    """The name is stripped and folded, so a deployment that writes
+    " Nominatim " is not refused at startup and then accepted by the
+    builder."""
+    assert _settings(geocoding_provider=" Nominatim ").geocoding_provider == "nominatim"
+
+
+def test_the_commercial_geocoder_needs_its_key() -> None:
+    with pytest.raises(ValidationError, match="GOOGLE_GEOCODING_API_KEY"):
+        _settings(geocoding_provider="google")
+
+
+def test_a_deployment_can_have_no_geocoder_at_all() -> None:
+    assert _settings(geocoding_provider="none").geocoding_provider == "none"
+
+
+def test_the_map_provider_is_not_asked_more_than_once_a_second() -> None:
+    """The policy asks for no more than one call a second, so a
+    smaller interval is refused rather than obeyed."""
+    with pytest.raises(ValidationError):
+        _settings(geocoding_min_interval=0.5)
+
+
+def test_the_user_agent_cannot_be_empty() -> None:
+    """The policy asks for a user agent that identifies the
+    application, and an empty one does not."""
+    with pytest.raises(ValidationError):
+        _settings(geocoding_user_agent="")
+
+
+def test_the_map_provider_has_to_be_on_the_web() -> None:
+    """The address is fetched by the server, so a value that pointed
+    somewhere else would be a way to make it read a local file."""
+    with pytest.raises(ValidationError, match="NOMINATIM_BASE_URL"):
+        _settings(nominatim_base_url="file:///etc/passwd")
