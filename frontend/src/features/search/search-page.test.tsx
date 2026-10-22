@@ -67,6 +67,18 @@ describe("the shop search", () => {
     expect(screen.getByText(/2\.4 km away/)).toBeInTheDocument();
   });
 
+  it("keeps the list when the map is not switched on", async () => {
+    // The map is an addition to the list, never a replacement for it.
+    // A deployment with no key still shows every shop and its price.
+    useSearchHandlers();
+    renderWithProviders(<SearchPage />, { route: "/shops" });
+
+    expect(await screen.findByText("Alpha Prints")).toBeInTheDocument();
+    expect(
+      screen.getByText(/the map is not switched on in this deployment/i),
+    ).toBeInTheDocument();
+  });
+
   it("says so when there are no shops", async () => {
     useSearchHandlers([]);
     renderWithProviders(<SearchPage />, { route: "/shops" });

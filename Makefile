@@ -1,4 +1,4 @@
-.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query
+.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query perf-seed perf-explain
 
 up:
 	@test -f .env || cp .env.example .env
@@ -16,6 +16,19 @@ migrate:
 
 seed:
 	docker compose run --rm api python -m app.cli seed
+
+# Load-test data for the queue endpoint: 200 reserved cash orders for
+# the first seeded shop. The orders go through the real service, so they
+# obey the same price, pickup code and event rules. They are labelled
+# `perf-load-` and a second run replaces them.
+perf-seed:
+	docker compose run --rm -v "$$PWD/perf:/perf" api python /perf/seed_queue.py --orders 200
+
+# The plans for the search and the queue, with enough rows for the
+# planner to choose an index. Everything is inside a transaction and
+# rolled back.
+perf-explain:
+	docker compose exec -T db psql -U spn -d spn -f - < perf/explain-review.sql
 
 lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .

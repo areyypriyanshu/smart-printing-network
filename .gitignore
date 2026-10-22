@@ -80,3 +80,7 @@ graphify-out/
 docs/*
 !docs/adr/
 !docs/DECISIONS.md
+
+# Raw k6 summaries go here when --summary-export is used. They contain
+# the local test sessions the script made, so they are never committed.
+perf/results/

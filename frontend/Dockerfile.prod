@@ -16,6 +16,12 @@ WORKDIR /app
 ARG VITE_CLERK_PUBLISHABLE_KEY=""
 ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 
+# The map key is public as well, and it is a build argument for the
+# same reason: the bundle is built once and served as static files.
+ARG VITE_GOOGLE_MAPS_API_KEY=""
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

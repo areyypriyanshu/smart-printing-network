@@ -6,14 +6,15 @@ print options, see the price from the shop's own rate card, pay, and
 collect your order with a short pickup code. Shops work a queue of paid
 orders from a counter screen.
 
-> **Status:** Phase 1 is built end to end. A customer can upload, get a
-> price, pay, and collect. A shop can accept, print, mark ready and hand
-> over against the pickup code. The worker expires unpaid orders, rejects
-> orders no shop picked up, retries refunds and deletes old files. An
-> order can be paid online or in cash at the counter, and an admin panel
-> approves the shops that are allowed to take orders. A customer can find
-> the shops near them, share a pickup code on WhatsApp, and print the
-> same job again while the file is still stored.
+> **Status:** Phases 1 and 2 are built end to end. A customer can upload,
+> get a price, pay, and collect. A shop can accept, print, mark ready and
+> hand over against the pickup code. The worker expires unpaid orders,
+> rejects orders no shop picked up, retries refunds and deletes old files.
+> An order can be paid online or in cash at the counter, and an admin panel
+> approves the shops that are allowed to take orders. A customer can check
+> a PDF before printing, find the shops near them, compare their prices,
+> see them on a map, share a pickup code on WhatsApp, and print the same
+> job again while the file is still stored.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
@@ -31,7 +32,7 @@ orders from a counter screen.
 | 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, payment and signed webhooks, pickup code, vendor queue, refunds, timeouts, file retention. Pickup only. | **Built** |
 | 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
 | 1.6 | Print the file the customer actually has: Word, Excel and PowerPoint files are converted to PDF and printed. An error that names the fix. Print it again, share the pickup code, a phone number for the shop, and the shops near you. | **Built** |
-| 2 | PDF quality checker (effective DPI and blur), price comparison, map view. The quality checker, the shop search and the price comparison are built. The map is not. | In progress |
+| 2 | PDF quality checker (effective DPI and blur), shop search, price comparison, map view, load baseline. | **Built** |
 | 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
 
 ## What it deliberately does not do
@@ -67,6 +68,8 @@ first party.
 - **Data:** PostgreSQL with PostGIS, S3-compatible object storage (MinIO locally)
 - **PDF and images:** PyMuPDF, OpenCV (headless). The quality checker measures effective DPI and blur with classical methods, calibrated on a labelled fixture set
 - **Payments:** Razorpay (test mode) behind a gateway interface, with a fake gateway for tests. A second method, cash at the counter, sits behind the same interface
+- **Map:** Google Maps JavaScript API, loaded only when the customer scrolls to it, behind a key restricted by referrer and API
+- **Load:** k6 against quotes, shop search and the vendor queue, with the baseline in [`perf/BASELINE.md`](perf/BASELINE.md)
 - **Infra:** Docker Compose, Caddy, GitHub Actions, single instance with S3
 
 ## Quickstart
@@ -224,6 +227,15 @@ than shown with a price nobody can pay.
 Choosing "Order from this shop" carries the file, the options and the
 shop into the order wizard, where the customer can change any of them
 before paying.
+
+The same shops appear on a map above the shop list, one pin per shop
+with its price. The map is drawn only when it is scrolled into view, and it is
+never the only way to see the shops: if the deployment has no key, the
+script is blocked, or the platform is being read by a screen reader, the
+list is still there with the same shops, distances and prices. The
+browser's key is public and is restricted by the websites and the one
+API that may use it; the server's geocoding key never reaches the page.
+See [ADR 032](docs/adr/032-the-map-is-drawn-last.md).
 
 ### Managing the admin accounts themselves
 
@@ -401,6 +413,8 @@ printing a summary that looks fine.
 | `make openapi` | Exports `backend/openapi.json` and regenerates `frontend/src/api/schema.d.ts`. |
 | `make db-shell` | An interactive psql session against the local database. |
 | `make db-ui` | Starts the pgAdmin database browser on <http://localhost:5050>. |
+| `make perf-seed` | 200 reserved cash orders for the load test, made through the real services. |
+| `make perf-explain` | The search and queue plans, with synthetic rows, rolled back. |
 | `make reset` | Wipes local volumes and rebuilds from scratch. |
 
 ## Testing
@@ -420,6 +434,12 @@ printing a summary that looks fine.
   a 500 instead of a 409.
 - **Coverage floors**, enforced in CI: 90% on `domain`, 90% on `services`,
   80% overall. Currently 100%, 93% and 92%.
+- **Load:** k6 drives quotes, shop search and the vendor queue from four
+  customer accounts and one vendor, for 30 seconds, against the local
+  stack. The thresholds fail the run if a p95 crosses its target or a
+  request fails. The numbers, the hardware and the index review are in
+  [`perf/BASELINE.md`](perf/BASELINE.md); the script and its options are
+  in [`perf/k6/`](perf/k6/).
 - **CI:** six jobs, backend, frontend, contract, end to end, OpenAPI drift
   and a secret scan.
 
@@ -441,6 +461,11 @@ The deploy job is skipped until a target is configured. To set one up:
 3. An environment variable `SPN_DOMAIN` on the `production` environment.
 4. `ACME_EMAIL` in the instance's `.env`, so Caddy can register the ACME
    account.
+5. A repository variable `VITE_GOOGLE_MAPS_API_KEY` if the map is wanted.
+   It is public and baked into the bundle at build time; the key itself
+   is made safe by the referrer and API restrictions in the provider's
+   console, not by being hidden. Leave it unset and the search page says
+   the map is not switched on.
 
 The migrations are backward compatible with the previous version, so a
 rollback is a redeploy of the previous tag.
@@ -455,6 +480,8 @@ committed. The decisions are.
 | [`AGENTS.md`](AGENTS.md) | Rules and workflow for AI agents and contributors |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Start here.** Why the project is built the way it is |
 | [`docs/adr/`](docs/adr/) | One architecture decision record per decision |
+| [`perf/BASELINE.md`](perf/BASELINE.md) | The phase 2 load baseline and the index review |
+| [`perf/k6/`](perf/k6/) | The load script and how to run it |
 
 ## Engineering decisions worth reading
 
@@ -489,6 +516,12 @@ committed. The decisions are.
    the rules its policy asks for are tests rather than habits. See
    [ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md) and
    [ADR 031](docs/adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md).
+10. **The map is drawn last, and the list is the map that always works.**
+    The provider's script is fetched when the customer scrolls to it,
+    not when the page opens. The browser key is public and is made safe
+    by the provider's restrictions; a deployment with no key, a blocked
+    script or a screen reader still gets the list, with the same shops
+    and prices. See [ADR 032](docs/adr/032-the-map-is-drawn-last.md).
 
 ## Known limitations
 
@@ -517,6 +550,12 @@ committed. The decisions are.
   and per address, so a campus behind one address is not locked out.
 - The vendor board polls every five seconds. WebSockets arrive in the
   phase where a live board needs them.
+- The map is optional by design. It needs a Google Cloud project, the
+  Maps JavaScript API, a billing account and a key restricted by the
+  websites that may use it. Without a key the search still works and the
+  page says the map is not switched on. The map is covered by component
+  tests for the loader and the states, not by a browser test that draws
+  real tiles, because that would need a real key in CI.
 - The quality thresholds are calibrated on a generated fixture set, not on
   real customer files. The set is reproducible and free of personal
   documents, but real uploads would be better evidence, and adding a

@@ -133,6 +133,10 @@ services:
       # default, so the application signs people in through the real
       # identity provider, and the end to end job turns it on.
       VITE_SPN_DEV_AUTH: ${VITE_SPN_DEV_AUTH:-false}
+      # The map key is public: it is in the bundle either way. It is
+      # named here so the back end's secrets are not handed to the
+      # front end container.
+      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
     command: npm run dev -- --host 0.0.0.0
     ports:
       - "127.0.0.1:5173:5173"

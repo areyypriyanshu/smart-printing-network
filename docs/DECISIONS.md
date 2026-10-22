@@ -317,6 +317,15 @@ and the attribution shown wherever the data is shown. The commercial
 provider is one setting away, and so is having no provider at all.
 [ADR 031](adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md)
 
+**The map is drawn last, and the list is the map that always works.**
+The customer's map is the provider's script, loaded when the customer
+scrolls to it, not when the page opens. The key is public and is made
+safe by the restriction in the provider's console, not by secrecy. A
+deployment with no key, a blocked script or a screen reader still has
+the list, with the same shops, the same distances and the same prices,
+and the map never becomes the only way to reach a shop. See
+[ADR 032](adr/032-the-map-is-drawn-last.md).
+
 ---
 
 ## How the rules are tested
@@ -384,10 +393,11 @@ Being honest about the edges is part of explaining the design.
   need Redis. The deployment is one instance.
 - The queue polls every five seconds. WebSockets arrive in the phase where
   a live board actually needs them.
-- The PDF quality checker is built, and the map view is not. The checker
-  measures the file on a labelled set and only advises; the map is the
-  next piece of Phase 2. The list of shops near the customer, with their
-  prices, is built, without the map.
+- The PDF quality checker and the map view are built. The checker
+  measures the file on a labelled set and only advises. The map is an
+  addition to the list: it is loaded when the customer scrolls to it,
+  and the list of shops near the customer, with their prices, is still
+  the way to compare and order when the map is missing.
 - A converted Word, Excel or PowerPoint file keeps the text, the
   headings, the pictures and the table contents. It does not keep the
   fonts, the exact table widths, the headers, the footers or the

@@ -26,6 +26,10 @@ services:
         # The publishable key is public and is baked into the bundle, so
         # it is a build argument rather than a run time one.
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
+        # The map key is public too: it is read out of the page by
+        # anybody who looks. What keeps it safe is the restriction in
+        # the provider's console, not secrecy.
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
     image: ${SPN_WEB_IMAGE:-ghcr.io/areyypriyanshu/smart-printing-network/web:latest}
     restart: unless-stopped
     ports:

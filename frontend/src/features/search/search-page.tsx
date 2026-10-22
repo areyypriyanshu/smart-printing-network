@@ -13,6 +13,7 @@ import {
 } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
+import { ShopMap } from "../map";
 import {
   OPTION_DEFAULTS,
   OptionsFields,
@@ -451,6 +452,17 @@ export function SearchPage() {
               </p>
             )}
           </div>
+        )}
+
+        {shops.isSuccess && shops.data.items.length > 0 && (
+          <ShopMap
+            shops={shops.data.items}
+            center={
+              position === null
+                ? null
+                : { lat: position.latitude, lng: position.longitude }
+            }
+          />
         )}
 
         {shops.isSuccess && shops.data.attribution != null && (

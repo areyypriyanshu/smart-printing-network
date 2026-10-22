@@ -127,6 +127,30 @@ def test_the_content_security_policy_allows_the_fraud_protection_to_run() -> Non
     assert "connect-src 'self' data:" in directives
 
 
+def test_the_content_security_policy_allows_the_map() -> None:
+    """The map is the provider's script, fetched from the provider.
+
+    A policy that does not allow it stops the map loading, and the
+    browser reports it only in the console. The tiles and the requests
+    the map makes from the page are separate hosts, so they are named
+    too rather than left to a wildcard that would allow everything.
+    """
+    caddyfile = _read("infra/Caddyfile")
+
+    policy = re.search(r'Content-Security-Policy "([^"]+)"', caddyfile)
+    assert policy is not None
+    directives = policy.group(1)
+    script_src = directives.split("script-src ", 1)[1].split(";", 1)[0]
+    connect_src = directives.split("connect-src ", 1)[1].split(";", 1)[0]
+    img_src = directives.split("img-src ", 1)[1].split(";", 1)[0]
+
+    assert "https://maps.googleapis.com" in script_src
+    assert "https://maps.gstatic.com" in script_src
+    assert "https://maps.googleapis.com" in connect_src
+    assert "https://*.googleapis.com" in connect_src
+    assert "https://*.gstatic.com" in img_src
+
+
 def test_the_web_image_is_built_with_the_publishable_key() -> None:
     """The bundle is static, so the key has to be in it at build time.
 
@@ -137,6 +161,22 @@ def test_the_web_image_is_built_with_the_publishable_key() -> None:
 
     assert "ARG VITE_CLERK_PUBLISHABLE_KEY" in dockerfile
     assert "VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}" in compose
+
+
+def test_the_web_image_is_built_with_the_map_key() -> None:
+    """The map key is public, and it is needed before the page opens.
+
+    It is a build argument because the bundle is built once and served
+    as static files. The development stack passes it as an environment
+    variable instead, because Vite reads it while the dev server runs.
+    """
+    dockerfile = _read("frontend/Dockerfile.prod")
+    compose = _read("docker-compose.yml")
+    prod_compose = _read("docker-compose.prod.yml")
+
+    assert "ARG VITE_GOOGLE_MAPS_API_KEY" in dockerfile
+    assert "VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}" in compose
+    assert "VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}" in prod_compose
 
 
 def test_the_local_bypass_cannot_be_on_in_production() -> None:
@@ -403,3 +443,15 @@ def test_every_script_with_a_shebang_can_be_run() -> None:
     assert scripts, "the repository has no scripts to check"
     for script in scripts:
         assert os.access(script, os.X_OK), f"{script.name} cannot be run"
+
+
+def test_the_release_build_is_told_the_map_key() -> None:
+    """The release image is built outside Compose, so the key is passed there too.
+
+    A key in .env on the instance would reach the container but not the
+    bundle that was built in CI. The workflow is the only place that
+    builds the production image, so it is where the key has to be.
+    """
+    workflow = _read(".github/workflows/deploy.yml")
+
+    assert "VITE_GOOGLE_MAPS_API_KEY=${{ vars.VITE_GOOGLE_MAPS_API_KEY }}" in workflow

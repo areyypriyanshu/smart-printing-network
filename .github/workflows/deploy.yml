@@ -65,6 +65,7 @@ jobs:
           # browser can use.
           build-args: |
             VITE_CLERK_PUBLISHABLE_KEY=${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+            VITE_GOOGLE_MAPS_API_KEY=${{ vars.VITE_GOOGLE_MAPS_API_KEY }}
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |

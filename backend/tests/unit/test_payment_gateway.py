@@ -23,6 +23,12 @@ def _settings(**overrides: object) -> Settings:
         "payment_provider": "fake",
         "fake_webhook_secret": "a-key-the-operator-chose",
         "env": "local",
+        # The identity provider is not what this test is about, but the
+        # configuration refuses to start without it, so it is filled in.
+        "clerk_fapi_url": "https://placeholder.clerk.accounts.dev",
+        "clerk_allowed_origins": "http://localhost:5173",
+        "clerk_secret_key": "sk_test_placeholder_not_a_real_secret",
+        "clerk_webhook_signing_secret": "whsec_placeholder_not_a_real_secret",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]

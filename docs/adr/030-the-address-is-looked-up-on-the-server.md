@@ -38,7 +38,7 @@ server calls from.
 `json` are enough for one request that returns JSON. No HTTP client is
 added to the dependency list for it.
 
-**There are two keys, not one.** `GOOGLE_MAPS_API_KEY` is for the
+**There are two keys, not one.** `VITE_GOOGLE_MAPS_API_KEY` is for the
 browser and is restricted by the websites that may use it.
 `GOOGLE_GEOCODING_API_KEY` is for the server and is restricted by the
 address the server calls from. A key that is given to a browser cannot
