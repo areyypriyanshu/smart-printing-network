@@ -1,14 +1,21 @@
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import require_role
+from app.deps import get_geocoder, require_role
+from app.gateways.geocoding import Geocoder
 from app.models import User
 from app.schemas.errors import ERROR_RESPONSES
-from app.schemas.shop import ShopListResponse, ShopResponse
-from app.services import shop_service
+from app.schemas.shop import (
+    ShopListResponse,
+    ShopResponse,
+    ShopSearchQuery,
+    ShopSearchResponse,
+)
+from app.services import search_service, shop_service
 
 router = APIRouter(prefix="/shops", tags=["shops"], responses=ERROR_RESPONSES)
 
@@ -46,6 +53,30 @@ def list_nearby_shops(
         longitude=longitude,
         radius_m=radius_m,
         limit=limit,
+    )
+
+
+@router.get("/search", response_model=ShopSearchResponse)
+def search_shops(
+    query: Annotated[ShopSearchQuery, Query()],
+    session: Session = Depends(get_db),
+    _user: User = Depends(_customer_only),
+    geocoder: Geocoder | None = Depends(get_geocoder),
+) -> ShopSearchResponse:
+    """The shops around the customer, with what they would charge.
+
+    The customer may say where they are by sharing the browser's
+    location, or by typing an address, or not at all. With no place at
+    all, every shop is returned and the order is the server's to
+    choose.
+
+    When a file and the print options are given, each shop carries the
+    price for that job. The price comes from the same function the
+    order flow uses, so it is the price that would be charged. A shop
+    that does not offer those options is left out.
+    """
+    return search_service.search_shops(
+        session, customer_id=_user.id, query=query, geocoder=geocoder
     )
 
 
