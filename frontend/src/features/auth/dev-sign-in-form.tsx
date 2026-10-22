@@ -43,6 +43,7 @@ export function DevSignInForm() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     resolver: zodResolver(schema),
@@ -54,6 +55,44 @@ export function DevSignInForm() {
       longitude: "",
     },
   });
+
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [looking, setLooking] = useState(false);
+
+  /**
+   * Where the shop is, from the browser.
+   *
+   * The same button the real registration form has, so that the local
+   * way in walks the same path a person walks: the owner is standing
+   * in their shop, the browser knows where they are, and it is exact
+   * and free.
+   */
+  const useMyLocation = () => {
+    setLocationError(null);
+    if (!("geolocation" in navigator)) {
+      setLocationError(
+        "This browser cannot share a location, so type the coordinates " +
+          "of the shop instead.",
+      );
+      return;
+    }
+    setLooking(true);
+    navigator.geolocation.getCurrentPosition(
+      (result) => {
+        setLooking(false);
+        setValue("latitude", result.coords.latitude.toFixed(6));
+        setValue("longitude", result.coords.longitude.toFixed(6));
+      },
+      () => {
+        setLooking(false);
+        setLocationError(
+          "We could not find your location. Type the coordinates of the " +
+            "shop instead.",
+        );
+      },
+      { timeout: 10_000, maximumAge: 300_000 },
+    );
+  };
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
@@ -101,6 +140,22 @@ export function DevSignInForm() {
             error={errors.shop_address?.message}
             {...register("shop_address")}
           />
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={useMyLocation}
+              pending={looking}
+              pendingLabel="Looking…"
+            >
+              Use my current location
+            </Button>
+            {locationError !== null && (
+              <p role="status" className="text-sm text-steel">
+                {locationError}
+              </p>
+            )}
+          </div>
           <TextField
             label="Latitude"
             error={errors.latitude?.message}
