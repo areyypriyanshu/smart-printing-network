@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -141,9 +142,24 @@ def main() -> int:
         built_at_commit=data.get("built_at_commit"),
     )
     (OUT / "GRAPH_REPORT.md").write_text(report, encoding="utf-8")
-    to_html(graph, communities, str(OUT / "graph.html"), community_labels=labels or None)
 
-    print(f"Labelled {len(labels)} communities; report and graph.html regenerated.")
+    # The HTML view is a picture of the graph, and it is only drawn when
+    # the graph is small enough for the picture to be worth drawing. The
+    # tool that built the graph makes the same decision and says so when
+    # it skips it, and the limit can be raised with
+    # GRAPHIFY_VIZ_NODE_LIMIT. The graph and the report are the parts
+    # that are read; the picture is a convenience.
+    limit = int(os.environ.get("GRAPHIFY_VIZ_NODE_LIMIT", "5000"))
+    if len(nodes) > limit:
+        print(
+            f"the graph has {len(nodes)} nodes, which is more than the limit of "
+            f"{limit} for the HTML view, so the view is not drawn. The graph and "
+            "the report are written. Raise GRAPHIFY_VIZ_NODE_LIMIT to draw it."
+        )
+    else:
+        to_html(graph, communities, str(OUT / "graph.html"), community_labels=labels or None)
+
+    print(f"Labelled {len(labels)} communities; the report is regenerated.")
     return 0
 
 
