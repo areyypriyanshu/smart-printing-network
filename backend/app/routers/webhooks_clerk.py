@@ -23,8 +23,12 @@ from app.db import get_db
 from app.errors import Unauthenticated
 from app.gateways.webhooks.svix import verify_signature
 from app.models import User
+from app.schemas.errors import ERROR_RESPONSES
 
-router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+# The route is public, so it has no session to be refused, but it
+# can still be refused for a body that is too large or a request
+# that is not valid, and it says so.
+router = APIRouter(prefix="/webhooks", tags=["webhooks"], responses=ERROR_RESPONSES)
 
 #: The event types this application acts on. Everything else is
 #: accepted and ignored, because the provider sends many events and a
