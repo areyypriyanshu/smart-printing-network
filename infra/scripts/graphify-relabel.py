@@ -41,6 +41,79 @@ def load_json(path: Path, default):
         return default
 
 
+def prune_stale(data: dict, root: Path) -> tuple[int, int]:
+    """Take out the parts of the graph that are about files that are not there.
+
+    The rebuild keeps every node it did not make afresh, so a file that
+    has been deleted leaves its nodes behind, and a file that has been
+    changed keeps the notes the provider wrote about the older version
+    of it. The first is a map of a building that is no longer there, and
+    the second is a map that disagrees with the code.
+
+    So two kinds of node are taken out: every node whose file is gone,
+    and the provider's own notes about a file that has changed since the
+    provider read it. What is left says what is true.
+
+    The provider's notes are the nodes with no place in the file, and a
+    file it has read is one whose hash is in its cache.
+
+    Returns how many nodes and edges were taken out.
+    """
+    from graphify.cache import cache_dir, file_hash
+
+    cached = {p.stem for p in cache_dir(root, "semantic").glob("*.json")}
+    nodes = data.get("nodes", [])
+    kept: list[dict] = []
+    dropped: set[str] = set()
+    for node in nodes:
+        source = node.get("source_file")
+        if not source:
+            kept.append(node)
+            continue
+        path = Path(root) / source
+        if not path.is_file():
+            dropped.add(node["id"])
+            continue
+        if node.get("source_location"):
+            # The tool's own node. It was made afresh from the file, so
+            # it is about the file as it is now.
+            kept.append(node)
+            continue
+        try:
+            digest = file_hash(path, root)
+        except OSError:
+            dropped.add(node["id"])
+            continue
+        if digest not in cached:
+            # The provider read an older version of this file.
+            dropped.add(node["id"])
+            continue
+        kept.append(node)
+
+    links = data.get("links", data.get("edges", []))
+    kept_links = [
+        link
+        for link in links
+        if link.get("source") not in dropped and link.get("target") not in dropped
+    ]
+
+    hyperedges = data.get("hyperedges", [])
+    kept_hyperedges = [
+        edge for edge in hyperedges if not (set(edge.get("nodes", [])) & dropped)
+    ]
+    nested = data.get("graph", {}).get("hyperedges", [])
+    if nested:
+        data["graph"]["hyperedges"] = [
+            edge for edge in nested if not (set(edge.get("nodes", [])) & dropped)
+        ]
+
+    data["nodes"] = kept
+    data["links"] = kept_links
+    data["hyperedges"] = kept_hyperedges
+    data.pop("edges", None)
+    return len(dropped), len(links) - len(kept_links)
+
+
 def main() -> int:
     if not GRAPH.exists():
         print("graphify-out/graph.json is missing. Run `make graph` first.", file=sys.stderr)
@@ -50,10 +123,16 @@ def main() -> int:
 
     data = load_json(GRAPH, {})
     nodes = data.get("nodes", [])
-    links = data.get("links", data.get("edges", []))
     if not nodes:
         print("graphify-out/graph.json holds no nodes.", file=sys.stderr)
         return 1
+
+    gone, edges_gone = prune_stale(data, Path(".").resolve())
+    if gone:
+        GRAPH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(f"Took out {gone} node(s) about files that are not there any more.")
+    nodes = data.get("nodes", [])
+    links = data.get("links", data.get("edges", []))
 
     graph = nx.Graph()
     for node in nodes:

@@ -112,16 +112,51 @@ the network your laptop is on.
 
 Demo accounts, created by `make seed` (local and CI only, never production):
 
-| Role | Email | Password |
-|---|---|---|
-| Customer | customer@example.com | spn-demo-password |
-| Vendor (shop 1) | vendor1@example.com | spn-demo-password |
-| Vendor (shop 2) | vendor2@example.com | spn-demo-password |
-| Vendor (shop 3) | vendor3@example.com | spn-demo-password |
+| Role | Email |
+|---|---|
+| Customer | customer@example.com |
+| Vendor (shop 1) | vendor1@example.com |
+| Vendor (shop 2) | vendor2@example.com |
+| Vendor (shop 3) | vendor3@example.com |
+
+They have no password, because there is no password here any more: the
+sign in is the identity provider's. On a local machine the provider is
+stood in for by the local way in, which asks for the address and
+nothing else. See [ADR 029](docs/adr/029-clerk-authentication-with-local-authorization.md).
+
+### Signing up, and the two kinds of account
+
+The sign in and the address belong to the identity provider, so making
+an account is the provider's form and this application never holds a
+password. What the application decides is what the account is *for*,
+and it asks that once, at the one page a new account meets.
+
+There are two kinds of account and a person has one of them for good. A
+customer's history belongs to the customer, and a shop's history belongs
+to the shop, so a customer who later decides to run a shop needs a
+separate account. See [ADR 025](docs/adr/025-the-limits-on-creating-an-account.md).
+
+**A customer** follows "Create an account" or "Sign in", and is asked
+what they are here for: to print something, or to run a shop.
+
+**A shop owner** follows the link that says **"Register your shop"**,
+and is asked for the shop: its name, its address and where it is. They
+are not asked what they are here for, because they have already said it,
+and the account they make is the shop's account and not a customer's.
+The shop waits for the team to look at it before it takes orders, so a
+shop that is registered is not yet a shop that can print.
+
+A person who came to register a shop and is here to print after all can
+say so on that page, and the reason is dropped with it.
+
+The provider's identifier for a person is what the operator needs to
+make them an administrator; the provider's dashboard shows it.
 
 Seeded shops are verified and accepting orders. A vendor that
 self-registers through the app starts unverified, and somebody has to
 approve it. There are two ways to do that.
+
+
 
 **From the command line**, which is what a server with no admin account
 set up yet uses:
@@ -143,15 +178,14 @@ which shops are allowed to take orders, so the account is created by
 somebody who already holds the server.
 
 ```bash
-docker compose run --rm api python -m app.cli create-admin you@example.com
+docker compose run --rm api python -m app.cli create-admin user_2abcDEF
 ```
 
-The password is asked for at the prompt, or read from standard input with
-`--password-stdin`. It is deliberately not an argument: an argument ends
-up in the shell history, in the process list and in the container
-metadata, where anybody with access to the host can read it. The password
-has to be at least eight characters, the same rule the sign-up form
-holds.
+The argument is the identity provider's identifier for the person, which
+the provider's dashboard shows. The command reads the address and the
+name from the provider, so the administrator is the person the provider
+says they are and not the person the shell says they are, and there is
+no password to invent: the sign in is the provider's.
 
 Then sign in at `/admin/shops`. The panel approves and suspends shops, and
 keeps a log of every decision. It cannot read a customer's order or move
@@ -214,35 +248,18 @@ recorded a decision cannot be deleted at all.
 
 ### Confirming an email address
 
-An account has to prove its email address before it can order a print. A
-link is sent to the address, and opening it proves the address. The
-account works while it is unproved, but it cannot upload a file or order
-a print, because the printout and the pickup code are tied to the
-address.
+The identity provider proves the address, because the provider holds it
+and the provider sends the sign in. A person who makes an account is
+sent a code, and the account works once the code is answered. This
+application reads the provider's answer and never holds a password, so
+there is nothing here for it to prove and nothing for it to leak.
 
-On a local machine there is no mail server, so the message is written to
-the log of the API container. The link is in it:
+On a development instance the provider never sends a message to an
+address that ends in `+clerk_test`, and the code for it is always
+`424242`. That is what the local stack and the end to end suite use.
 
-```bash
-docker compose logs api | grep verify-email
-```
-
-A deployment sends the message over SMTP. Set `EMAIL_PROVIDER=smtp` and
-the `SMTP_*` values in `.env`; the console sender is refused when
-`ENV=production`, because the link in a message is a secret and the log
-is where secrets go to leak.
-
-The operator can confirm an address without sending anything, which is
-what the demo accounts and a customer who cannot receive mail need:
-
-```bash
-docker compose run --rm api python -m app.cli verify-email <email>
-```
-
-A customer who typed their address wrong can put the right one there
-themselves, from **/account/email** in the app. It asks for the
-password, because changing the address is how an account is taken over.
-See [ADR 026](docs/adr/026-the-email-address-has-to-be-proved.md).
+A customer who typed their address wrong puts the right one there
+themselves, in the identity provider's own settings.
 
 ### Looking at the data
 
@@ -437,10 +454,11 @@ committed. The decisions are.
   See [ADR 013](docs/adr/013-cash-on-collection.md).
 - One shop per vendor account, one order per upload, whole-document printing only (no page ranges, no binding options).
 - A converted Word, Excel or PowerPoint file keeps the text, the headings, the pictures and the table contents. It does not keep the fonts, the exact table widths, the headers, the footers or the columns. A student who needs the exact layout uploads a PDF. See [ADR 016](docs/adr/016-office-file-upload.md).
-- No password reset. An email address is proved by a link before the
-  account can order a print, and a customer who forgot their password
-  has no way back in. See
-  [ADR 026](docs/adr/026-the-email-address-has-to-be-proved.md).
+- The password belongs to the identity provider, so a password reset is
+  the provider's to offer. It is switched on in the provider's settings,
+  and it sends the message, so the platform cannot reset one itself.
+  See
+  [ADR 029](docs/adr/029-clerk-authentication-with-local-authorization.md).
 - Single-instance deployment. The rate limiter lives in the process, so a
   second API instance would need Redis. A login is limited per account
   and per address, so a campus behind one address is not locked out.

@@ -201,6 +201,32 @@ The onboarding reads the address and the name from the provider rather
 than from the body, because the provider proved them and the browser
 did not. The body carries the intent and nothing else.
 
+### The shop owner is not asked what they are here for
+
+A person who follows the link that says "register your shop" has
+already answered the question, and asking it again treats them as if
+they might be a customer. They are not: their account is the shop's
+account, and the shop's history belongs to the shop.
+
+So the link carries the reason in its address, the sign up page keeps
+it, and the onboarding asks only for the shop when the reason is there:
+the name, the address and where the shop is. The title says "set up
+your shop" and the button says what it does.
+
+The reason is kept in the browser's own storage, because the provider's
+sign up happens in between: the person leaves for the provider and comes
+back, and the reason has to survive the trip. It is a hint about the
+page to show, and not a claim about the role. The role is still the
+person's to declare, the link declares it for them, the server still
+writes it, and the server still never reads it from the token.
+
+The default is the shop, and the way out of it is there too. A person
+who came to register a shop and is here to print after all can say so on
+that page, and the reason is dropped with it, so that it cannot follow
+them to the next account. The local way in asks for the shop as well,
+for the same reason: the end to end suite walks the path a person
+walks.
+
 ### The provider's API is behind a bot protection
 
 Clerk's backend API refuses a request with no user agent of its own,
