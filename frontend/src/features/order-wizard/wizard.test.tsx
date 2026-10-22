@@ -74,7 +74,11 @@ function useWizardHandlers() {
   server.use(
     http.get("/api/v1/uploads/:id", () => HttpResponse.json(uploadFixture)),
     http.get("/api/v1/shops", () =>
-      HttpResponse.json({ items: [alpha, beta, gamma], next_cursor: null }),
+      HttpResponse.json({
+        items: [alpha, beta, gamma],
+        next_cursor: null,
+        attribution: "© OpenStreetMap contributors",
+      }),
     ),
     http.post("/api/v1/quotes", async ({ request }) => {
       const body = (await request.json()) as { shop_id: string };
@@ -203,6 +207,12 @@ describe("OrderWizardPage", () => {
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
     expect(names).toEqual(["Alpha Prints", "Beta Print Hub", "Gamma Copies"]);
+
+    // The map provider asks for its attribution to be shown with its
+    // data, and it is not optional.
+    expect(
+      await screen.findByText(/OpenStreetMap contributors/),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getAllByRole("button", { name: "Choose this shop" })[0],

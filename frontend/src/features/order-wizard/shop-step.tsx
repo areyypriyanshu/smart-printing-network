@@ -69,6 +69,11 @@ export function ShopStep({
     position === null
       ? (shops.data?.items ?? [])
       : (nearby.data?.items ?? shops.data?.items ?? []);
+  // What the map provider asks to be shown with its data.
+  const attribution =
+    position === null
+      ? shops.data?.attribution
+      : (nearby.data?.attribution ?? shops.data?.attribution);
   const quotes = useShopQuotes(upload.id, listed, options);
 
   const findMe = () => {
@@ -269,6 +274,10 @@ export function ShopStep({
             ))}
           </ul>
         </>
+      )}
+
+      {attribution != null && (
+        <p className="text-xs text-steel">{attribution}</p>
       )}
 
       {selected !== undefined && selected.state.status === "ok" && (

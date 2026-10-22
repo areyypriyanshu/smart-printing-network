@@ -1267,6 +1267,8 @@ export interface components {
          *     going to refuse.
          */
         ShopListResponse: {
+            /** Attribution */
+            attribution?: string | null;
             /**
              * Cash At Store Enabled
              * @default false
@@ -1281,6 +1283,8 @@ export interface components {
         ShopResponse: {
             /** Address */
             address: string;
+            /** Attribution */
+            attribution?: string | null;
             /** Distance M */
             distance_m?: number | null;
             /**
@@ -1339,6 +1343,8 @@ export interface components {
          * @description The shops the search found.
          */
         ShopSearchResponse: {
+            /** Attribution */
+            attribution?: string | null;
             /** Items */
             items: components["schemas"]["ShopSearchItem"][];
         };

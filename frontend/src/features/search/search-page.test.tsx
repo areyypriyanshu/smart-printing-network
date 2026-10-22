@@ -182,6 +182,24 @@ describe("the shop search", () => {
     expect(cheapest.disabled).toBe(true);
   });
 
+  it("says who the map data came from", async () => {
+    // The free provider asks for its attribution to be shown wherever
+    // its data is shown, and it is not optional.
+    server.use(
+      http.get("/api/v1/shops/search", () =>
+        HttpResponse.json({
+          items: [alpha],
+          attribution: "© OpenStreetMap contributors",
+        }),
+      ),
+    );
+    renderWithProviders(<SearchPage />, { route: "/shops" });
+
+    expect(
+      await screen.findByText(/OpenStreetMap contributors/),
+    ).toBeInTheDocument();
+  });
+
   it("says what the failure was when the search fails", async () => {
     server.use(
       http.get("/api/v1/shops/search", () =>

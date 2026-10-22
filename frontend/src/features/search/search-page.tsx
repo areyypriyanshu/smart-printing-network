@@ -393,6 +393,10 @@ export function SearchPage() {
           </div>
         )}
 
+        {shops.isSuccess && shops.data.attribution != null && (
+          <p className="text-xs text-steel">{shops.data.attribution}</p>
+        )}
+
         {shops.isSuccess && shops.data.items.length > 0 && (
           <ul className="flex flex-col gap-3">
             {shops.data.items.map((shop) => (

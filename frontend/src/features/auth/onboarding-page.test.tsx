@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Route, Routes } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { server } from "../../test/msw/server";
 import { renderWithProviders } from "../../test/render";
@@ -92,6 +92,61 @@ describe("the onboarding page", () => {
     await user.click(await screen.findByRole("button", { name: /continue/i }));
 
     expect(await screen.findByText(/enter the shop name/i)).toBeInTheDocument();
+  });
+
+  it("takes the shop's place from the browser", async () => {
+    // A shop owner is standing in their shop when they register, and
+    // the browser knows where they are. That is exact, and it is free.
+    const getCurrentPosition = vi.fn(
+      (success: (position: GeolocationPosition) => void) => {
+        success({
+          coords: { latitude: 22.5726, longitude: 88.3639 },
+        } as GeolocationPosition);
+      },
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      geolocation: { getCurrentPosition },
+    });
+    const user = userEvent.setup();
+    rememberIntent(SHOP);
+    renderOnboarding();
+
+    await user.click(
+      await screen.findByRole("button", { name: /use my current location/i }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/latitude/i)).toHaveValue("22.572600"),
+    );
+    expect(screen.getByLabelText(/longitude/i)).toHaveValue("88.363900");
+    vi.unstubAllGlobals();
+  });
+
+  it("says so when the browser will not share a location", async () => {
+    const getCurrentPosition = vi.fn(
+      (
+        _success: (position: GeolocationPosition) => void,
+        failure?: ((error: GeolocationPositionError) => void) | null,
+      ) =>
+        failure?.({ code: 1, message: "denied" } as GeolocationPositionError),
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      geolocation: { getCurrentPosition },
+    });
+    const user = userEvent.setup();
+    rememberIntent(SHOP);
+    renderOnboarding();
+
+    await user.click(
+      await screen.findByRole("button", { name: /use my current location/i }),
+    );
+
+    expect(
+      await screen.findByText(/could not find your location/i),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it("tells the server the intent and nothing else", async () => {

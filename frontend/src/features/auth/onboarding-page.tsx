@@ -27,6 +27,8 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [intent, setIntent] = useState(readIntent);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [looking, setLooking] = useState(false);
   const isShop = intent === SHOP;
   const {
     register,
@@ -48,6 +50,42 @@ export function OnboardingPage() {
 
   const chosen = useWatch({ control, name: "role" });
   const role = isShop ? "vendor" : chosen;
+
+  /**
+   * Where the shop is, from the browser.
+   *
+   * A shop owner is standing in their shop when they register, and the
+   * browser knows where they are. That is better than looking the
+   * address up on a map, which is free but not always right about a
+   * small shop in a lane. The fields stay for a browser that refuses,
+   * and for a shop that is not where its owner is.
+   */
+  const useMyLocation = () => {
+    setLocationError(null);
+    if (!("geolocation" in navigator)) {
+      setLocationError(
+        "This browser cannot share a location, so type the coordinates " +
+          "of the shop instead.",
+      );
+      return;
+    }
+    setLooking(true);
+    navigator.geolocation.getCurrentPosition(
+      (result) => {
+        setLooking(false);
+        setValue("latitude", result.coords.latitude.toFixed(6));
+        setValue("longitude", result.coords.longitude.toFixed(6));
+      },
+      () => {
+        setLooking(false);
+        setLocationError(
+          "We could not find your location. Type the coordinates of the " +
+            "shop instead.",
+        );
+      },
+      { timeout: 10_000, maximumAge: 300_000 },
+    );
+  };
 
   /**
    * The person is here to print something after all.
@@ -167,6 +205,22 @@ export function OnboardingPage() {
               error={errors.phone?.message}
               {...register("phone")}
             />
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={useMyLocation}
+                pending={looking}
+                pendingLabel="Looking…"
+              >
+                Use my current location
+              </Button>
+              {locationError !== null && (
+                <p role="status" className="text-sm text-steel">
+                  {locationError}
+                </p>
+              )}
+            </div>
             <TextField
               label="Latitude (optional)"
               error={errors.latitude?.message}
@@ -178,8 +232,10 @@ export function OnboardingPage() {
               {...register("longitude")}
             />
             <p className="text-xs text-steel">
-              Leave the coordinates empty and we will look the address up on the
-              map. If your deployment cannot do that, the coordinates are
+              The button above is the easiest way, and it is exact. Leave the
+              coordinates empty and we will look the address up on the map
+              instead, which is free but not always right about a small shop. If
+              your deployment cannot look an address up, the coordinates are
               needed.
             </p>
           </div>
