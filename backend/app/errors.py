@@ -230,6 +230,43 @@ class CashPaymentDisabled(AppError):
     status_code = 409
 
 
+class AddressNotFound(AppError):
+    """The address could not be found on the map.
+
+    It is a 422 and not a 404: the request was fine, the address in it
+    is not a place anybody has heard of, and the caller can fix it by
+    typing a different one.
+    """
+
+    code = "ADDRESS_NOT_FOUND"
+    status_code = 422
+
+
+class GeocodingUnavailable(AppError):
+    """This deployment cannot look an address up.
+
+    The feature needs a key from the map provider, and a deployment
+    without one cannot do it. The answer says so rather than pretending
+    that the address does not exist, because the two are different
+    problems with different fixes.
+    """
+
+    code = "GEOCODING_UNAVAILABLE"
+    status_code = 503
+
+
+class CoordinatesRequired(AppError):
+    """The shop's place on the map could not be worked out.
+
+    The shop owner can type the coordinates, and when there is no way to
+    look the address up, that is the only way to place the shop. The
+    message says so, because the fix belongs to the person reading it.
+    """
+
+    code = "COORDINATES_REQUIRED"
+    status_code = 422
+
+
 def error_body(
     code: str,
     message: str,

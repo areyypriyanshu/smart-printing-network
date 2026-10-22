@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.errors import AccountNotProvisioned, Forbidden, NotFound, Unauthenticated
 from app.gateways.email import EmailSender
+from app.gateways.geocoding import Geocoder
 from app.gateways.identity import TokenVerifier, VerifiedIdentity
 from app.gateways.identity.clerk_admin import ClerkAdminClient
 from app.gateways.payments import PaymentGatewayRouter
@@ -114,6 +115,17 @@ def get_email_sender(request: Request) -> EmailSender:
     """
     sender: EmailSender = request.app.state.email_sender
     return sender
+
+
+def get_geocoder(request: Request) -> Geocoder | None:
+    """The geocoder this deployment uses, if it has one.
+
+    There is no key, there is no geocoder, and the caller has to cope
+    with that: a shop owner types the coordinates of their shop, and a
+    customer who cannot share a location sees the whole list.
+    """
+    geocoder: Geocoder | None = request.app.state.geocoder
+    return geocoder
 
 
 def get_optional_user(

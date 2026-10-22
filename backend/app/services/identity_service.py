@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.errors import Conflict, EmailTaken, NotFound, ProviderUnavailable
+from app.gateways.geocoding import Geocoder
 from app.gateways.identity.clerk_admin import (
     ClerkAdminClient,
     ClerkAdminError,
@@ -24,6 +25,7 @@ from app.gateways.identity.clerk_admin import (
     ClerkUserNotFound,
 )
 from app.models import Shop, User
+from app.services.geocoding_service import resolve_shop_point
 
 #: The role a person has when they come here to print something.
 CUSTOMER = "customer"
@@ -103,14 +105,20 @@ def create_vendor_account(
     shop_name: str,
     shop_address: str,
     phone: str | None,
-    latitude: float,
-    longitude: float,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    geocoder: Geocoder | None = None,
 ) -> tuple[User, Shop]:
     """The account and the shop for a person who runs a print shop.
 
     The shop is not published until the team approves it, which is the
     same rule as it has always been: an account can run a shop before
     anybody has looked at it.
+
+    Where the shop is comes either from the coordinates the owner typed
+    or from the address, looked up on the map. The coordinates win when
+    both are there, because a shop owner knows where their own shop is
+    better than a map does.
     """
     existing = find_by_subject(session, subject)
     if existing is not None:
@@ -124,6 +132,10 @@ def create_vendor_account(
         return existing, shop
     if find_by_email(session, email) is not None:
         raise Conflict("An account already uses that email address")
+
+    shop_latitude, shop_longitude = resolve_shop_point(
+        geocoder, address=shop_address, latitude=latitude, longitude=longitude
+    )
 
     user = User(
         email=email,
@@ -150,7 +162,7 @@ def create_vendor_account(
             name=shop_name,
             address=shop_address,
             phone=phone,
-            location=WKTElement(f"POINT({longitude} {latitude})", srid=4326),
+            location=WKTElement(f"POINT({shop_longitude} {shop_latitude})", srid=4326),
         )
         session.add(shop)
         session.commit()

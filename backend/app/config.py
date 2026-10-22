@@ -101,6 +101,14 @@ class Settings(BaseSettings):
 
     google_maps_api_key: str = ""
 
+    # The key the server uses to turn an address into a point. It is a
+    # different key from the one the browser uses for the map, because
+    # the two are restricted in different ways: the map key belongs to
+    # a list of websites, and this one belongs to the server's own
+    # address. A key that is given to a browser is a key that anybody
+    # can lift, and this one is a secret.
+    google_geocoding_api_key: str = ""
+
     # Email. The console sender writes the message to the log, which is
     # what a local development machine uses and what a deployment must
     # not use: a verification message carries a link that proves an

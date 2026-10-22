@@ -11,6 +11,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.config import get_settings
 from app.errors import AppError, error_body, exception_handler, http_exception_handler
 from app.gateways.email import build_email_sender
+from app.gateways.geocoding import build_geocoder
 from app.gateways.identity import (
     ClerkAdminClient,
     ClerkTokenVerifier,
@@ -94,6 +95,10 @@ def create_app() -> FastAPI:
     app.state.rate_limiter = RateLimiter()
     app.state.payment_gateway = build_payment_gateway(settings)
     app.state.email_sender = build_email_sender(settings)
+    # The geocoder turns an address into a point. There is no key, there
+    # is no geocoder, and the application copes: the features that
+    # need one ask for the coordinates instead.
+    app.state.geocoder = build_geocoder(settings)
     # The verifier reads a token and says who it names. The local
     # bypass is a different implementation of the same interface, so
     # the application cannot tell which one it is talking to.

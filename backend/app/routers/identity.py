@@ -14,8 +14,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_identity, get_current_user, get_identity_reader
+from app.deps import get_current_identity, get_current_user, get_geocoder, get_identity_reader
 from app.errors import Conflict
+from app.gateways.geocoding import Geocoder
 from app.gateways.identity.base import VerifiedIdentity
 from app.gateways.identity.clerk_admin import ClerkAdminClient
 from app.models import User
@@ -52,6 +53,7 @@ def onboard(
     session: Session = Depends(get_db),
     reader: ClerkAdminClient = Depends(get_identity_reader),
     identity: VerifiedIdentity = Depends(get_current_identity),
+    geocoder: Geocoder | None = Depends(get_geocoder),
 ) -> User:
     """Create the account for a person who has just said what they want.
 
@@ -66,13 +68,8 @@ def onboard(
         return existing
 
     if body.role == identity_service.VENDOR:
-        if (
-            body.shop_name is None
-            or body.shop_address is None
-            or body.latitude is None
-            or body.longitude is None
-        ):
-            raise Conflict("A shop needs a name, an address and a place")
+        if body.shop_name is None or body.shop_address is None:
+            raise Conflict("A shop needs a name and an address")
         user, _shop = identity_service.create_vendor_account(
             session,
             subject=subject,
@@ -83,6 +80,7 @@ def onboard(
             phone=body.phone,
             latitude=body.latitude,
             longitude=body.longitude,
+            geocoder=geocoder,
         )
         return user
 
