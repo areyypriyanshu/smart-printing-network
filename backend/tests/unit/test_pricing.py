@@ -8,12 +8,12 @@ from hypothesis import strategies as st
 # are the ones the platform can be asked for: the most pages an order
 # can be for, the most copies of it, and the most a page can cost.
 # Anything bigger is refused, and there is a test for that below.
-PAGES = st.integers(min_value=1, max_value=100)
-COPIES = st.integers(min_value=1, max_value=50)
+PAGES = st.integers(min_value=1, max_value=300)
+COPIES = st.integers(min_value=1, max_value=100)
 RATE = st.integers(min_value=1, max_value=50_000)
 MIN_ORDER = st.integers(min_value=0, max_value=10_000_000)
 EXTRA_PAGES = st.integers(min_value=1, max_value=100)
-EXTRA_COPIES = st.integers(min_value=1, max_value=50)
+EXTRA_COPIES = st.integers(min_value=1, max_value=40)
 
 
 @given(pages=PAGES, copies=COPIES, rate=RATE, min_order=MIN_ORDER)

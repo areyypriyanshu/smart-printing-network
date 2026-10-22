@@ -12,6 +12,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.domain.pdf_rules import QualityThresholds, assess_document
 from app.errors import NotFound
 from app.gateways.storage import Storage
@@ -111,7 +112,15 @@ def run_one(session: Session, *, report_id: uuid.UUID, storage: Storage, now: da
     try:
         with tempfile.NamedTemporaryFile(suffix=".pdf") as temp:
             storage.download_to_path(upload.file_key, Path(temp.name))
-            measured = analyze_pdf(Path(temp.name), timeout_seconds=ANALYSIS_TIMEOUT_SECONDS)
+            measured = analyze_pdf(
+                Path(temp.name),
+                timeout_seconds=ANALYSIS_TIMEOUT_SECONDS,
+                # The bound is the upload limit, so that a file which
+                # was accepted can be analysed. An operator who raises
+                # the page limit does not get files whose report fails
+                # for having too many pages.
+                max_pages=get_settings().max_pages,
+            )
         pages = assess_document(measured.pages, QualityThresholds())
         report.pages = [
             {
