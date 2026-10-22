@@ -14,8 +14,9 @@ import {
   SignUpPage,
 } from "./features/auth";
 import { HomePage } from "./features/home/home-page";
-import { OrderPage, OrdersPage } from "./features/orders";
 import { OrderWizardPage } from "./features/order-wizard";
+import { OrdersPage, OrderPage } from "./features/orders";
+import { SearchPage } from "./features/search";
 import { VendorQueuePage } from "./features/vendor-queue";
 
 const VendorRatesPage = lazy(() =>
@@ -84,6 +85,16 @@ export function AppRoutes() {
             <RequireAuth>
               <RequireRole role="customer">
                 <OrderPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/shops"
+          element={
+            <RequireAuth>
+              <RequireRole role="customer">
+                <SearchPage />
               </RequireRole>
             </RequireAuth>
           }

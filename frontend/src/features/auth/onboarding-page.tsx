@@ -64,6 +64,10 @@ export function OnboardingPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
+    // The coordinates are optional. A shop owner who knows them types
+    // them, and one who does not lets the address be looked up.
+    const hasCoordinates =
+      values.latitude.trim() !== "" && values.longitude.trim() !== "";
     try {
       await onboardRequest({
         role: values.role,
@@ -75,8 +79,12 @@ export function OnboardingPage() {
                 values.phone === undefined || values.phone === ""
                   ? null
                   : values.phone,
-              latitude: Number(values.latitude),
-              longitude: Number(values.longitude),
+              ...(hasCoordinates
+                ? {
+                    latitude: Number(values.latitude),
+                    longitude: Number(values.longitude),
+                  }
+                : {}),
             }
           : {}),
       });
@@ -160,15 +168,20 @@ export function OnboardingPage() {
               {...register("phone")}
             />
             <TextField
-              label="Latitude"
+              label="Latitude (optional)"
               error={errors.latitude?.message}
               {...register("latitude")}
             />
             <TextField
-              label="Longitude"
+              label="Longitude (optional)"
               error={errors.longitude?.message}
               {...register("longitude")}
             />
+            <p className="text-xs text-steel">
+              Leave the coordinates empty and we will look the address up on the
+              map. If your deployment cannot do that, the coordinates are
+              needed.
+            </p>
           </div>
         )}
 

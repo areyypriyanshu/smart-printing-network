@@ -36,6 +36,14 @@ const MESSAGES: Record<string, string> = {
   PAYMENT_GATEWAY_ERROR:
     "The payment provider could not start the payment. Try again shortly.",
   WEBHOOK_SIGNATURE_INVALID: "The payment notification could not be verified.",
+  ADDRESS_NOT_FOUND:
+    "We could not find that address. Try a nearby area or a well known place.",
+  GEOCODING_UNAVAILABLE:
+    "This deployment cannot look up an address. Ask the browser for your " +
+    "location instead.",
+  COORDINATES_REQUIRED:
+    "Give the shop's latitude and longitude, because this deployment cannot " +
+    "look an address up on the map.",
 };
 
 /** The message for a code, when there is no error to read it from. */

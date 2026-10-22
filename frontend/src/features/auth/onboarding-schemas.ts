@@ -6,6 +6,10 @@ import { z } from "zod";
  * The address and the name are not asked for. The identity provider
  * holds them, and it proved them, and the account carries the ones the
  * provider has rather than the ones a form offered.
+ *
+ * The coordinates of a shop are optional. A shop owner who knows them
+ * types them, and one who does not leaves them empty and lets the
+ * address be looked up on the map.
  */
 export const onboardingSchema = z
   .object({
@@ -43,6 +47,19 @@ export const onboardingSchema = z
         message: "Enter the shop address",
       });
     }
+    // The two go together: a latitude without a longitude is not a
+    // place, and the server would refuse it.
+    const latitudeGiven = values.latitude.length > 0;
+    const longitudeGiven = values.longitude.length > 0;
+    if (latitudeGiven !== longitudeGiven) {
+      context.addIssue({
+        code: "custom",
+        path: [latitudeGiven ? "longitude" : "latitude"],
+        message: "Give a latitude and a longitude, or neither",
+      });
+      return;
+    }
+    if (!latitudeGiven) return;
     const latitude = Number(values.latitude);
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
       context.addIssue({

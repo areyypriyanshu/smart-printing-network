@@ -53,9 +53,12 @@ export function HomePage() {
         Upload a PDF, choose your print options, and compare prices from
         verified shops near you.
       </p>
-      <div>
+      <div className="flex flex-wrap gap-3">
         <Link to="/new" className={buttonClassName("primary")}>
           Start a new order
+        </Link>
+        <Link to="/shops" className={buttonClassName("secondary")}>
+          Find a shop near you
         </Link>
       </div>
     </section>

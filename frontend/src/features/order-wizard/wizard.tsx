@@ -34,11 +34,16 @@ const STEPS = ["Upload", "Options", "Shop and price", "Review and pay"];
  * What "print this again" hands over: the copy of the file, the options
  * it was printed with, and the shop it was printed at. The customer can
  * change any of it.
+ *
+ * The shop search hands over the same thing, and it may have no file:
+ * a customer can look at the shops before choosing what to print. So
+ * every part of it is optional, and the wizard asks for what is
+ * missing.
  */
 type ReorderState = {
-  uploadId: string;
-  options: OptionsFormValues;
-  shopId: string;
+  uploadId?: string;
+  options?: OptionsFormValues;
+  shopId?: string;
 };
 
 export function OrderWizardPage() {

@@ -305,6 +305,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shops/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Shops
+         * @description The shops around the customer, with what they would charge.
+         *
+         *     The customer may say where they are by sharing the browser's
+         *     location, or by typing an address, or not at all. With no place at
+         *     all, every shop is returned and the order is the server's to
+         *     choose.
+         *
+         *     When a file and the print options are given, each shop carries the
+         *     price for that job. The price comes from the same function the
+         *     order flow uses, so it is the price that would be charged. A shop
+         *     that does not offer those options is left out.
+         */
+        get: operations["search_shops_api_v1_shops_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shops/{shop_id}": {
         parameters: {
             query?: never;
@@ -1270,6 +1300,47 @@ export interface components {
             phone?: string | null;
             /** Rates */
             rates: components["schemas"]["RateItem"][];
+        };
+        /**
+         * ShopSearchItem
+         * @description One shop in the result of a search.
+         *
+         *     The price is the price the customer would be charged for this file
+         *     with these options. It comes from the same function the order flow
+         *     uses, so what is shown here is what is charged.
+         */
+        ShopSearchItem: {
+            /** Address */
+            address: string;
+            /** Distance M */
+            distance_m?: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Min Order Paise */
+            min_order_paise: number;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone?: string | null;
+            /** Price Paise */
+            price_paise?: number | null;
+            /** Rate Paise */
+            rate_paise?: number | null;
+        };
+        /**
+         * ShopSearchResponse
+         * @description The shops the search found.
+         */
+        ShopSearchResponse: {
+            /** Items */
+            items: components["schemas"]["ShopSearchItem"][];
         };
         /** SimulatePaymentRequest */
         SimulatePaymentRequest: {
@@ -2912,6 +2983,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShopListResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body is larger than the limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_shops_api_v1_shops_search_get: {
+        parameters: {
+            query?: {
+                latitude?: number | null;
+                longitude?: number | null;
+                address?: string | null;
+                radius_m?: number;
+                sort?: ("distance" | "price") | null;
+                upload_id?: string | null;
+                paper_size?: ("A4" | "A3") | null;
+                color?: boolean | null;
+                duplex?: boolean | null;
+                copies?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopSearchResponse"];
                 };
             };
             /** @description The request was rejected, for example a wrong pickup code. */

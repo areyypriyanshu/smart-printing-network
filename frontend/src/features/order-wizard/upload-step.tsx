@@ -1,9 +1,9 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
 import { ApiError, type UploadResponse } from "../../api/client";
+import { uploadPdf } from "../../api/upload";
 import { Alert, Button, sectionTitleClassName } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
-import { uploadPdf } from "./api";
 
 const MAX_UPLOAD_MB = 50;
 
