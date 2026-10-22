@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { server } from "../../test/msw/server";
 import { renderWithProviders } from "../../test/render";
 import { OnboardingPage } from "./onboarding-page";
+import { readIntent, rememberIntent, SHOP } from "./intent";
 
 function renderOnboarding() {
   return renderWithProviders(
@@ -27,6 +28,42 @@ describe("the onboarding page", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/print something/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/run a print shop/i)).toBeInTheDocument();
+  });
+
+  it("asks only for the shop when the person came to register one", async () => {
+    // The link that says "register your shop" carries the reason, and
+    // the person has already said what they are here for.
+    rememberIntent(SHOP);
+    renderOnboarding();
+
+    expect(await screen.findByText(/set up your shop/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/shop name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/shop address/i)).toBeInTheDocument();
+    // The question is not asked: they are not here to print, and they
+    // have said so.
+    expect(screen.queryByLabelText(/print something/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/run a print shop/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets a shop owner say they are here to print after all", async () => {
+    const user = userEvent.setup();
+    rememberIntent(SHOP);
+    renderOnboarding();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /i am here to print something instead/i,
+      }),
+    );
+
+    // The reason is dropped, so it cannot follow them to the next
+    // account.
+    expect(readIntent()).toBeNull();
+    expect(
+      await screen.findByLabelText(/print something/i),
+    ).toBeInTheDocument();
   });
 
   it("does not ask for a shop from somebody who is here to print", async () => {

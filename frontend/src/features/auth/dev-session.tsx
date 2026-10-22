@@ -23,9 +23,21 @@ import { SessionProvider } from "./session";
 
 const TOKEN_KEY = "spn.dev.token";
 
+export type DevSignIn = {
+  /** The address of the account. */
+  email: string;
+  /** What the account is for. */
+  role: "customer" | "vendor";
+  /** The shop, when the account is a shop owner. */
+  shop_name?: string;
+  shop_address?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
 type DevAuthContextValue = {
   /** Sign in as the account with this address, creating it if it is not there. */
-  signIn: (email: string) => Promise<void>;
+  signIn: (details: DevSignIn) => Promise<void>;
 };
 
 const DevAuthContext = createContext<DevAuthContextValue | null>(null);
@@ -50,10 +62,10 @@ export function DevSession({ children }: { children: ReactNode }) {
     setToken(null);
   }, []);
 
-  const signIn = useCallback(async (email: string) => {
+  const signIn = useCallback(async (details: DevSignIn) => {
     const response = await apiRequest<{ access_token: string }>(
       "/auth/dev-session",
-      { method: "POST", body: { email } },
+      { method: "POST", body: details },
     );
     window.localStorage.setItem(TOKEN_KEY, response.access_token);
     setToken(response.access_token);

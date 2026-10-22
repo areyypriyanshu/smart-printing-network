@@ -207,7 +207,7 @@ export function Layout() {
               New order
             </Link>
             <Link
-              to="/register"
+              to="/register?as=shop"
               onClick={closeMenu}
               className="inline-flex min-h-11 items-center text-sm text-ink transition-colors duration-150 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
