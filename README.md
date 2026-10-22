@@ -31,7 +31,7 @@ orders from a counter screen.
 | 1 | Accounts and roles, PDF upload and validation, print options, server-side pricing, payment and signed webhooks, pickup code, vendor queue, refunds, timeouts, file retention. Pickup only. | **Built** |
 | 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
 | 1.6 | Print the file the customer actually has: Word, Excel and PowerPoint files are converted to PDF and printed. An error that names the fix. Print it again, share the pickup code, a phone number for the shop, and the shops near you. | **Built** |
-| 2 | PDF quality checker (effective DPI and blur), price comparison, map view. The quality checker and the list of shops by distance are built. | In progress |
+| 2 | PDF quality checker (effective DPI and blur), price comparison, map view. The quality checker, the shop search and the price comparison are built. The map is not. | In progress |
 | 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
 
 ## What it deliberately does not do
@@ -146,6 +146,13 @@ and the account they make is the shop's account and not a customer's.
 The shop waits for the team to look at it before it takes orders, so a
 shop that is registered is not yet a shop that can print.
 
+The coordinates of the shop are optional. A shop owner who knows them
+types them, and one who does not leaves them empty and lets the address
+be looked up on the map. The lookup happens on the server, so the map
+provider's key never reaches the browser, and a deployment with no key
+asks the owner for the coordinates instead. See
+[ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md).
+
 A person who came to register a shop and is here to print after all can
 say so on that page, and the reason is dropped with it.
 
@@ -190,6 +197,24 @@ no password to invent: the sign in is the provider's.
 Then sign in at `/admin/shops`. The panel approves and suspends shops, and
 keeps a log of every decision. It cannot read a customer's order or move
 money; see [ADR 014](docs/adr/014-admin-panel.md).
+
+### Finding a shop, and comparing prices
+
+A customer goes to `/shops`. They can share their location with the
+browser, type an area, or do neither: a customer who says no to the
+location prompt still gets the whole list of shops. The radius is a
+selector, and the list can be ordered by distance or by price.
+
+Choosing a file on that page is optional. With one, every shop shows
+what it would charge for that file with the chosen options, and the
+price is the price of the order: the search and the checkout call the
+same pricing function, so there is nothing to disagree about. A shop
+that does not offer those options is left out of the comparison rather
+than shown with a price nobody can pay.
+
+Choosing "Order from this shop" carries the file, the options and the
+shop into the order wizard, where the customer can change any of them
+before paying.
 
 ### Managing the admin accounts themselves
 
@@ -444,6 +469,14 @@ committed. The decisions are.
    from a labelled fixture set: chosen on one half and reported on the
    half that was held out. The report is advice, so it never stops an
    order.
+8. **The price on the shop search is the price of the order.** The search
+   and the checkout call the same pricing function, so the number the
+   customer compares is the number the customer is charged, and a test
+   creates a real order to prove it.
+9. **The address is looked up on the server.** The browser never holds
+   the map provider's key, and a shop owner who types their own
+   coordinates is believed before any lookup is made. See
+   [ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md).
 
 ## Known limitations
 
@@ -469,6 +502,12 @@ committed. The decisions are.
   documents, but real uploads would be better evidence, and adding a
   labelled real file is the next step. See
   [ADR 028](docs/adr/028-the-quality-check-runs-in-the-worker.md).
+- Turning an address into a point needs a key from the map provider
+  (`GOOGLE_GEOCODING_API_KEY`). Without one the platform still works: a
+  shop owner types the coordinates of their shop, and a customer who
+  cannot share a location sees the whole list. The provider is never
+  called in the test suite, so a real lookup has not been made yet. See
+  [ADR 030](docs/adr/030-the-address-is-looked-up-on-the-server.md).
 
 ## Author
 

@@ -275,6 +275,41 @@ conversion, including the alternatives that were rejected and why.
 
 ---
 
+## The shop the customer finds
+
+A customer wants a print shop near them and the price for their job.
+The price is the interesting part, because there is only one honest way
+to show it: the search and the checkout call the same pricing function,
+so the number the customer compares is the number the customer is
+charged. A test creates a real order through the real service and
+compares the two numbers, because two pieces of arithmetic that agree
+today drift apart by next month.
+
+The distance is measured by the database, on the geography column, with
+`ST_DWithin`, so the index is used and a shop outside the radius is not
+in the answer at all. The radius is in metres, and a test puts a shop a
+thousandth of a degree north of the customer and asks for about a
+hundred and eleven metres, which catches the latitude and longitude
+being swapped.
+
+**A shop that cannot do the job is not in the comparison.** When prices
+are asked for, the rate for the chosen options is joined into the query,
+so a shop without that rate is absent rather than present with a price
+nobody can pay.
+
+**The address is looked up on the server, and the shop owner's own
+coordinates win.** A shop owner who typed a latitude and a longitude is
+believed, because they know where their own shop is better than a map
+does, and a map will put a shop in the middle of a lake because the
+address on the letter is short. Only when there are no coordinates is
+the address looked up, and the lookup happens on this server, so the map
+provider's key never reaches the browser. A deployment without a key
+still works: the owner types the coordinates, and a customer who cannot
+share a location sees the whole list.
+[ADR 030](adr/030-the-address-is-looked-up-on-the-server.md)
+
+---
+
 ## How the rules are tested
 
 The rules above are not comments. Each one has a test that fails if the
@@ -300,6 +335,8 @@ rule is broken.
 | The quality rules find the bad pages | The labelled fixture set is measured, and the test asserts the targets on the half that was held out: at least 90% of the bad pages flagged, at most 10% of the good ones. |
 | A quality warning never blocks an order | An order is placed with the warnings unacknowledged, and with them acknowledged, and both go through. |
 | A quality report belongs to one customer | Another customer's report is 404, not 403, so the answer never confirms that it exists. |
+| The price on the shop search is the price of the order | A real order is created through the real service and its price is compared with the price the search showed. |
+| The place on the map is the place | A shop a thousandth of a degree north of the customer has to be about a hundred and eleven metres away, which fails if the latitude and the longitude are swapped. |
 
 ---
 
@@ -335,9 +372,10 @@ Being honest about the edges is part of explaining the design.
   need Redis. The deployment is one instance.
 - The queue polls every five seconds. WebSockets arrive in the phase where
   a live board actually needs them.
-- The PDF quality checker and the map view are not built. They are the
-  next phase and they are deliberately the next phase. The list of shops
-  near the customer is built, without the map.
+- The PDF quality checker is built, and the map view is not. The checker
+  measures the file on a labelled set and only advises; the map is the
+  next piece of Phase 2. The list of shops near the customer, with their
+  prices, is built, without the map.
 - A converted Word, Excel or PowerPoint file keeps the text, the
   headings, the pictures and the table contents. It does not keep the
   fonts, the exact table widths, the headers, the footers or the
