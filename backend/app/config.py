@@ -101,13 +101,50 @@ class Settings(BaseSettings):
 
     google_maps_api_key: str = ""
 
-    # The key the server uses to turn an address into a point. It is a
-    # different key from the one the browser uses for the map, because
-    # the two are restricted in different ways: the map key belongs to
-    # a list of websites, and this one belongs to the server's own
-    # address. A key that is given to a browser is a key that anybody
-    # can lift, and this one is a secret.
+    # Which provider turns an address into a point.
+    #
+    # "nominatim" is the public instance of OpenStreetMap's geocoder:
+    # free, no key and no account. It is run on donated servers and its
+    # policy asks for four things, which are done here: one call a
+    # second for the whole application, a user agent that says who is
+    # asking, the answers cached, and the attribution shown.
+    #
+    # "google" is the commercial one. It matches an Indian address
+    # better, and it asks for a billing account.
+    #
+    # "none" means there is no geocoder at all, and the features that
+    # need one ask for the coordinates instead.
+    geocoding_provider: str = "nominatim"
+
+    # The key the server uses to turn an address into a point, when the
+    # provider is Google. It is a different key from the one the browser
+    # uses for the map, because the two are restricted in different
+    # ways: the map key belongs to a list of websites, and this one
+    # belongs to the server's own address. A key that is given to a
+    # browser is a key that anybody can lift, and this one is a secret.
     google_geocoding_api_key: str = ""
+
+    # Who the application says it is when it asks the map provider. The
+    # policy asks for a user agent that identifies the application
+    # rather than the one a library sets by itself, and for a way to
+    # reach the operator. The address is in the repository, which is
+    # where the operator can be found.
+    geocoding_user_agent: str = (
+        "SmartPrintingNetwork/1.0 (+https://github.com/areyypriyanshu/smart-printing-network)"
+    )
+
+    # Where the OpenStreetMap geocoder lives. The public instance is
+    # the default. A deployment that wants its own instance, or a
+    # different provider's, changes this one value and restarts: the
+    # policy asks for the service to be swappable without a software
+    # update.
+    nominatim_base_url: str = "https://nominatim.openstreetmap.org"
+
+    # The shortest time between two calls to the map provider, in
+    # seconds. The policy asks for no more than one a second from the
+    # whole application, so this is a limit on the process and not on a
+    # customer.
+    geocoding_min_interval: float = 1.0
 
     # Email. The console sender writes the message to the log, which is
     # what a local development machine uses and what a deployment must
@@ -135,6 +172,16 @@ class Settings(BaseSettings):
     def _validate_environment(self) -> Self:
         if self.env not in {"local", "test", "production"}:
             raise ValueError(f"ENV must be local, test or production, not {self.env!r}")
+        if self.geocoding_provider not in {"nominatim", "google", "none"}:
+            raise ValueError(
+                f"GEOCODING_PROVIDER must be nominatim, google or none, "
+                f"not {self.geocoding_provider!r}"
+            )
+        if self.geocoding_provider == "google" and not self.google_geocoding_api_key:
+            raise ValueError(
+                "GOOGLE_GEOCODING_API_KEY is required when GEOCODING_PROVIDER=google. "
+                "Use GEOCODING_PROVIDER=nominatim for the free one."
+            )
         if self.testing_endpoints_enabled and self.env == "production":
             raise ValueError("the testing endpoints cannot be enabled when ENV=production")
         if self.spn_dev_auth and self.env == "production":

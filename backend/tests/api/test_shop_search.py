@@ -8,7 +8,7 @@ the customer is charged when they order.
 
 import uuid
 
-from app.gateways.geocoding import GeocodeResult, MemoryGeocoder
+from app.gateways.geocoding import GeocodeResult, MemoryGeocoder, NominatimGeocoder
 from app.gateways.payments import FakeGateway
 from app.models import ShopRate
 from app.schemas.order import OrderCreateRequest
@@ -499,6 +499,59 @@ def test_a_deployment_without_a_geocoder_says_so(client: TestClient, db_session:
 
     assert response.status_code == 503, response.text
     assert response.json()["error"]["code"] == "GEOCODING_UNAVAILABLE"
+
+
+def test_the_search_carries_the_attribution_the_provider_asks_for(
+    client: TestClient, db_session: Session
+) -> None:
+    """OpenStreetMap asks for its attribution to be shown wherever its
+    data is shown, and it is not optional."""
+    _seed(db_session)
+    client.app.state.geocoder = NominatimGeocoder(
+        user_agent="SmartPrintingNetwork/1.0 (+https://example.invalid)",
+    )
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        SEARCH,
+        params={"latitude": CENTRAL_LATITUDE, "longitude": CENTRAL_LONGITUDE},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert "OpenStreetMap" in response.json()["attribution"]
+
+
+def test_a_provider_that_asks_for_nothing_has_no_attribution(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    client.app.state.geocoder = MemoryGeocoder()
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        SEARCH,
+        params={"latitude": CENTRAL_LATITUDE, "longitude": CENTRAL_LONGITUDE},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["attribution"] is None
+
+
+def test_the_shop_list_carries_the_attribution_too(client: TestClient, db_session: Session) -> None:
+    """The list of shops shows places on the map as well, so it says
+    where the data came from."""
+    _seed(db_session)
+    client.app.state.geocoder = NominatimGeocoder(
+        user_agent="SmartPrintingNetwork/1.0 (+https://example.invalid)",
+    )
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get("/api/v1/shops", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert "OpenStreetMap" in response.json()["attribution"]
 
 
 def test_the_search_is_rate_limited(client: TestClient, db_session: Session) -> None:

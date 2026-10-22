@@ -103,7 +103,10 @@ def search_shops(
         )
         for row in rows
     ]
-    return ShopSearchResponse(items=items)
+    return ShopSearchResponse(
+        items=items,
+        attribution=geocoder.attribution if geocoder is not None else None,
+    )
 
 
 def _point_for(query: ShopSearchQuery, geocoder: Geocoder | None) -> tuple[float, float] | None:

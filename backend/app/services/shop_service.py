@@ -19,7 +19,13 @@ from app.schemas.shop import (
 )
 
 
-def list_public_shops(session: Session, *, limit: int, cursor: str | None) -> ShopListResponse:
+def list_public_shops(
+    session: Session,
+    *,
+    limit: int,
+    cursor: str | None,
+    attribution: str | None = None,
+) -> ShopListResponse:
     stmt = (
         select(
             Shop,
@@ -56,6 +62,7 @@ def list_public_shops(session: Session, *, limit: int, cursor: str | None) -> Sh
         items=items,
         next_cursor=next_cursor,
         cash_at_store_enabled=get_settings().cash_at_store_enabled,
+        attribution=attribution,
     )
 
 
@@ -66,6 +73,7 @@ def list_nearby_shops(
     longitude: float,
     radius_m: int,
     limit: int,
+    attribution: str | None = None,
 ) -> ShopListResponse:
     """The shops within a radius, nearest first.
 
@@ -111,10 +119,13 @@ def list_nearby_shops(
         items=items,
         next_cursor=None,
         cash_at_store_enabled=get_settings().cash_at_store_enabled,
+        attribution=attribution,
     )
 
 
-def get_public_shop(session: Session, shop_id: uuid.UUID) -> ShopResponse:
+def get_public_shop(
+    session: Session, shop_id: uuid.UUID, attribution: str | None = None
+) -> ShopResponse:
     row = session.execute(
         select(
             Shop,
@@ -134,6 +145,7 @@ def get_public_shop(session: Session, shop_id: uuid.UUID) -> ShopResponse:
         longitude=float(lng),
         min_order_paise=shop.min_order_paise,
         rates=_rates_for(session, [shop.id]).get(shop.id, []),
+        attribution=attribution,
     )
 
 

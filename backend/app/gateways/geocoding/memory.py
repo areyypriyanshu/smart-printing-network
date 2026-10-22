@@ -13,6 +13,10 @@ from app.gateways.geocoding.base import GeocodeError, GeocodeResult
 class MemoryGeocoder:
     """Answers from a dictionary."""
 
+    #: There is no provider behind this one, so there is nothing to
+    #: attribute.
+    attribution = None
+
     def __init__(self, results: dict[str, GeocodeResult] | None = None) -> None:
         self._results = {self._key(address): point for address, point in (results or {}).items()}
         #: Every address that was asked about, in order.

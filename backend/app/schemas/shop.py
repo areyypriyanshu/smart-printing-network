@@ -39,6 +39,9 @@ class ShopResponse(BaseModel):
     rates: list[RateItem]
     # How far away the shop is, in metres. Only the nearby search sets it.
     distance_m: int | None = None
+    # What has to be shown to a person when this shop's place on the map
+    # is shown to them. OpenStreetMap asks for it.
+    attribution: str | None = None
 
 
 class ShopListResponse(BaseModel):
@@ -54,6 +57,9 @@ class ShopListResponse(BaseModel):
     items: list[ShopResponse]
     next_cursor: str | None
     cash_at_store_enabled: bool = False
+    # What has to be shown to a person when the data here is shown to
+    # them. OpenStreetMap asks for it.
+    attribution: str | None = None
 
 
 class ShopSearchQuery(BaseModel):
@@ -134,6 +140,9 @@ class ShopSearchResponse(BaseModel):
     """The shops the search found."""
 
     items: list[ShopSearchItem]
+    # What has to be shown to a person when the data here is shown to
+    # them. OpenStreetMap asks for it.
+    attribution: str | None = None
 
 
 class VendorShopResponse(BaseModel):

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_geocoder, require_role
+from app.deps import get_attribution, get_geocoder, require_role
 from app.gateways.geocoding import Geocoder
 from app.models import User
 from app.rate_limit import user_rate_limit
@@ -29,8 +29,11 @@ def list_shops(
     cursor: str | None = Query(default=None),
     session: Session = Depends(get_db),
     _user: User = Depends(_customer_only),
+    attribution: str | None = Depends(get_attribution),
 ) -> ShopListResponse:
-    return shop_service.list_public_shops(session, limit=limit, cursor=cursor)
+    return shop_service.list_public_shops(
+        session, limit=limit, cursor=cursor, attribution=attribution
+    )
 
 
 @router.get("/nearby", response_model=ShopListResponse)
@@ -41,6 +44,7 @@ def list_nearby_shops(
     limit: int = Query(default=20, ge=1, le=100),
     session: Session = Depends(get_db),
     _user: User = Depends(_customer_only),
+    attribution: str | None = Depends(get_attribution),
 ) -> ShopListResponse:
     """The shops around a point, nearest first.
 
@@ -54,6 +58,7 @@ def list_nearby_shops(
         longitude=longitude,
         radius_m=radius_m,
         limit=limit,
+        attribution=attribution,
     )
 
 
@@ -90,5 +95,6 @@ def get_shop(
     shop_id: uuid.UUID,
     session: Session = Depends(get_db),
     _user: User = Depends(_customer_only),
+    attribution: str | None = Depends(get_attribution),
 ) -> ShopResponse:
-    return shop_service.get_public_shop(session, shop_id)
+    return shop_service.get_public_shop(session, shop_id, attribution=attribution)

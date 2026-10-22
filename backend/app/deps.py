@@ -128,6 +128,17 @@ def get_geocoder(request: Request) -> Geocoder | None:
     return geocoder
 
 
+def get_attribution(request: Request) -> str | None:
+    """What has to be shown when the provider's data is shown.
+
+    OpenStreetMap asks for its attribution to be displayed wherever its
+    data is displayed, and this is where the answer comes from: the
+    provider that is actually in use.
+    """
+    geocoder: Geocoder | None = request.app.state.geocoder
+    return geocoder.attribution if geocoder is not None else None
+
+
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     session: Session = Depends(get_db),
