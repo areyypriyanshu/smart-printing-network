@@ -17,7 +17,9 @@ orders from a counter screen.
 > job again while the file is still stored. Sprint 9 adds a queue-wait
 > range from real order events, with a Rough label when history is thin,
 > and a walk-forward accuracy report. ML is explicitly rejected on the
-> current simulated evidence.
+> current simulated evidence. Sprint 10 adds WebSocket live updates: order
+> status changes push to the shop board and the customer's order page in
+> real time, with polling fallback when the socket drops.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
@@ -36,7 +38,7 @@ orders from a counter screen.
 | 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
 | 1.6 | Print the file the customer actually has: Word, Excel and PowerPoint files are converted to PDF and printed. An error that names the fix. Print it again, share the pickup code, a phone number for the shop, and the shops near you. | **Built** |
 | 2 | PDF quality checker (effective DPI and blur), shop search, price comparison, map view, load baseline. | **Built** |
-| 3 | Sprint 9: queue-wait ranges from order events, batched shop-list estimates and an order-page estimate, simulated history and a leakage-free backtest. **Built**. Sprint 10: WebSocket live updates. **Planned**. | **Sprint 9 built; Sprint 10 planned** |
+| 3 | Sprint 9: queue-wait ranges from order events, batched shop-list estimates and an order-page estimate, simulated history and a leakage-free backtest. **Built**. Sprint 10: WebSocket live updates push order status changes to the shop board and customer order page, with polling fallback when the socket drops. **Built**. | **Sprint 9 and 10 built** |
 
 ## What it deliberately does not do
 
@@ -52,6 +54,7 @@ orders from a counter screen.
 flowchart LR
   B[Browser: React SPA] -->|HTTPS| C[Caddy]
   C -->|/api| A[FastAPI API]
+  C -->|/ws| A
   C -->|static files| F[Built frontend]
   A --> D[(PostgreSQL + PostGIS)]
   A --> S[(S3 / MinIO)]
@@ -603,8 +606,10 @@ committed. The decisions are.
 - Single-instance deployment. The rate limiter lives in the process, so a
   second API instance would need Redis. A login is limited per account
   and per address, so a campus behind one address is not locked out.
-- The vendor board polls every five seconds. WebSocket live updates are
-  Sprint 10 and are not built yet.
+- The vendor board polls every five seconds as fallback. WebSocket live
+  updates push order status changes to the shop board and customer order
+  page in real time (Sprint 10). Polling takes over when the socket is
+  closed or unavailable.
 - Queue estimates are only as reliable as vendor clicks. Late or batched Start
   and Ready actions distort the event-derived speed. A currently printing
   order counts at full size, and the range is not a confidence interval or a
