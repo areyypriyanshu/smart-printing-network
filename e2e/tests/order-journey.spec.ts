@@ -66,6 +66,16 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   ).match(/#(\d+)/)?.[1];
   expect(orderNumber).toBeTruthy();
 
+  // The estimate belongs to the shop, not a promised start time for this order.
+  await customer.getByRole("link", { name: "View order" }).click();
+  await expect(
+    customer.getByRole("region", { name: "Current queue wait at this shop" }),
+  ).toBeVisible();
+  await expect(
+    customer.getByText(/new order, until printing starts/),
+  ).toBeVisible();
+  const orderUrl = customer.url();
+
   // The shop works the order. A second browser, a different person.
   const vendorContext = await browser.newContext();
   const vendor = await vendorContext.newPage();
@@ -106,7 +116,7 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   await expect(card("Ready")).toHaveCount(0, { timeout: 15_000 });
 
   // The customer sees the finished order on the order page.
-  await customer.getByRole("link", { name: "View order" }).click();
+  await customer.goto(orderUrl);
   await expect(customer).toHaveURL(/\/orders\//);
   await expect(customer.getByText("Collected").first()).toBeVisible({
     timeout: 20_000,

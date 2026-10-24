@@ -11,6 +11,8 @@ export type ShopListResponse = components["schemas"]["ShopListResponse"];
 export type ShopResponse = components["schemas"]["ShopResponse"];
 export type ShopSearchItem = components["schemas"]["ShopSearchItem"];
 export type ShopSearchResponse = components["schemas"]["ShopSearchResponse"];
+export type WaitEstimateResponse =
+  components["schemas"]["WaitEstimateResponse"];
 export type VendorShopResponse = components["schemas"]["VendorShopResponse"];
 export type VendorShopUpdate = components["schemas"]["VendorShopUpdate"];
 export type UploadResponse = components["schemas"]["UploadResponse"];

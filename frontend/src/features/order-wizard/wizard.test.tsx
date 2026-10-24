@@ -32,6 +32,15 @@ const alpha: ShopResponse = {
   longitude: 72.87,
   min_order_paise: 0,
   rates: [{ paper_size: "A4", color: false, duplex: false, rate_paise: 200 }],
+  wait_estimate: {
+    shop_id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+    minimum_minutes: 3,
+    median_minutes: 5,
+    maximum_minutes: 7,
+    sample_count: 10,
+    rough: false,
+    algorithm_version: "1",
+  },
 };
 
 const beta: ShopResponse = {
@@ -188,6 +197,10 @@ describe("OrderWizardPage", () => {
 
     expect(await screen.findByText("Alpha Prints")).toBeInTheDocument();
     expect(await screen.findByText(/₹\s?10\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Current queue wait: 3–7 min/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Based on 10 recent print jobs/),
+    ).toBeInTheDocument();
 
     const betaItem = screen
       .getByRole("heading", { name: "Beta Print Hub" })

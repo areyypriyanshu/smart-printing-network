@@ -20,6 +20,7 @@ import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { pickupShareLink } from "../../lib/share";
 import { useShop } from "../shops";
+import { ShopWaitEstimate } from "../estimates";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -117,6 +118,10 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           {orderStatusLabel(order)}
         </h1>
       </div>
+
+      {!isTerminalStatus(order.status) && (
+        <ShopWaitEstimate shopId={order.shop_id} />
+      )}
 
       {order.pickup_code !== null && (
         <section

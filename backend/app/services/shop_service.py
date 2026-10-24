@@ -18,6 +18,7 @@ from app.schemas.shop import (
     VendorShopResponse,
     VendorShopUpdate,
 )
+from app.services import estimate_service
 
 
 def list_public_shops(
@@ -45,6 +46,7 @@ def list_public_shops(
     has_more = len(rows) > limit
     rows = rows[:limit]
     rates_by_shop = _rates_for(session, [row[0].id for row in rows])
+    estimates = estimate_service.estimates_for_shops_or_empty(session, [row[0].id for row in rows])
     items = [
         ShopResponse(
             id=shop.id,
@@ -55,6 +57,7 @@ def list_public_shops(
             longitude=float(lng),
             min_order_paise=shop.min_order_paise,
             rates=rates_by_shop.get(shop.id, []),
+            wait_estimate=estimates.get(shop.id),
         )
         for shop, lat, lng in rows
     ]
@@ -102,6 +105,7 @@ def list_nearby_shops(
     )
     rows = list(session.execute(stmt).all())
     rates_by_shop = _rates_for(session, [row[0].id for row in rows])
+    estimates = estimate_service.estimates_for_shops_or_empty(session, [row[0].id for row in rows])
     items = [
         ShopResponse(
             id=shop.id,
@@ -113,6 +117,7 @@ def list_nearby_shops(
             min_order_paise=shop.min_order_paise,
             rates=rates_by_shop.get(shop.id, []),
             distance_m=round(float(metres)),
+            wait_estimate=estimates.get(shop.id),
         )
         for shop, lat, lng, metres in rows
     ]

@@ -5,6 +5,7 @@ import { Alert, Button } from "../../components/ui";
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { useNearbyShops, useShops } from "../shops";
+import { WaitEstimate } from "../estimates";
 import { useShopQuotes, type ShopQuote } from "./api";
 import { describeOptions, type OptionsFormValues } from "./schemas";
 
@@ -195,6 +196,8 @@ export function ShopStep({
                   )}
                 </div>
                 <p className="text-sm text-steel">{shop.address}</p>
+
+                <WaitEstimate estimate={shop.wait_estimate} />
 
                 {shop.distance_m !== null && shop.distance_m !== undefined && (
                   <p className="text-xs text-steel">

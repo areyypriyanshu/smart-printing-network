@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:phone": "playwright test --config=playwright.phone.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

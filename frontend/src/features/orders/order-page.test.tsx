@@ -74,6 +74,9 @@ describe("OrderPage", () => {
     const history = screen.getByRole("region", { name: "History" });
     expect(history).toHaveTextContent("Waiting for payment");
     expect(history).toHaveTextContent("Paid, waiting for the shop");
+    expect(
+      await screen.findByLabelText("Current queue wait at this shop"),
+    ).toHaveTextContent(/0–0 min/);
   });
 
   it("hides the pickup code before the order is paid", async () => {

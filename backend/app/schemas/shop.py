@@ -55,6 +55,18 @@ class RatesReplaceRequest(BaseModel):
         return self
 
 
+class WaitEstimateResponse(BaseModel):
+    """The shop-level wait for a hypothetical new arrival, not an order ETA."""
+
+    shop_id: uuid.UUID
+    minimum_minutes: float = Field(ge=0)
+    median_minutes: float = Field(ge=0)
+    maximum_minutes: float = Field(ge=0)
+    sample_count: int = Field(ge=0)
+    rough: bool
+    algorithm_version: str
+
+
 class ShopResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -70,6 +82,8 @@ class ShopResponse(BaseModel):
     # What has to be shown to a person when this shop's place on the map
     # is shown to them. OpenStreetMap asks for it.
     attribution: str | None = None
+    # Present on batched shop lists. The order page uses the single-shop route.
+    wait_estimate: WaitEstimateResponse | None = None
 
 
 class ShopListResponse(BaseModel):
@@ -162,6 +176,8 @@ class ShopSearchItem(BaseModel):
     # when the customer did not ask for prices.
     price_paise: int | None = None
     rate_paise: int | None = None
+    # Batched with the search so a fifty-card page needs no fifty extra calls.
+    wait_estimate: WaitEstimateResponse | None = None
 
 
 class NearestShop(BaseModel):

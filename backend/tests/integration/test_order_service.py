@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.errors import Forbidden, InvalidTransition, PriceChanged, UploadAlreadyUsed
@@ -84,6 +85,41 @@ def test_create_order_writes_one_creation_event(db_session: Session) -> None:
     assert events[0].from_status is None
     assert events[0].to_status == "PENDING_PAYMENT"
     assert events[0].actor_type == "customer"
+
+
+def test_injected_clock_is_shared_by_order_fields_and_events(db_session: Session) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    order, _payment = order_service.create_order(
+        db_session,
+        customer_id=customer_id,
+        request=_request(upload_id, shop_id),
+        idempotency_key="clock-key",
+        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
+        now=created_at,
+    )
+    times = [created_at + timedelta(minutes=offset) for offset in (5, 6, 7, 17)]
+    for status, at in zip(("PAID", "ACCEPTED", "PRINTING", "READY"), times, strict=True):
+        order_service.transition(
+            db_session,
+            order_id=order.id,
+            to_status=status,
+            actor_type="webhook" if status == "PAID" else "vendor",
+            now=at,
+        )
+
+    events = list(
+        db_session.scalars(
+            select(OrderEvent).where(OrderEvent.order_id == order.id).order_by(OrderEvent.id)
+        )
+    )
+    assert [event.at for event in events] == [created_at, *times]
+    assert order.created_at == created_at
+    assert order.reserved_at == times[0]
+    assert order.ready_at == times[-1]
+    assert events[0].at == order.created_at
+    assert events[1].at == order.reserved_at
+    assert events[-1].at == order.ready_at
 
 
 def test_create_order_keeps_the_file_alive(db_session: Session) -> None:

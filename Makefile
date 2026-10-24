@@ -1,4 +1,4 @@
-.PHONY: up down build migrate seed lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query perf-seed perf-explain
+.PHONY: up down build migrate seed seed-history backtest-estimates lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query perf-seed perf-explain
 
 up:
 	@test -f .env || cp .env.example .env
@@ -16,6 +16,17 @@ migrate:
 
 seed:
 	docker compose run --rm api python -m app.cli seed
+
+# Simulated completed orders for the estimate backtest. The worker is stopped
+# so it cannot auto-reject a backdated intermediate order between service
+# calls. The trap starts it again even when seeding fails.
+seed-history:
+	@docker compose stop worker
+	@trap 'docker compose start worker >/dev/null 2>&1 || true' EXIT; \
+		docker compose run --rm api python -m app.cli seed-history
+
+backtest-estimates:
+	docker compose run --rm api python scripts/backtest_estimates.py
 
 # Load-test data for the queue endpoint: 200 reserved cash orders for
 # the first seeded shop. The orders go through the real service, so they

@@ -1,0 +1,48 @@
+{
+  "algorithm_version": "1",
+  "data_source": "simulated",
+  "simulated": true,
+  "target": "minutes from queue entry (PAID or RESERVED) to first PRINTING",
+  "baseline": "expanding global mean of actual waits already known at prediction time",
+  "range_note": "p25-p75 is a heuristic speed range, not a confidence interval",
+  "orders_read": 90,
+  "evaluated_orders": 89,
+  "skipped_warmup": 1,
+  "skipped_incomplete": 0,
+  "overall": {
+    "n": 89,
+    "rule_mae_minutes": 3.414,
+    "baseline_mae_minutes": 5.9899,
+    "rule_beats_baseline": true,
+    "rough_predictions": 29
+  },
+  "shops": [
+    {
+      "shop_id": "8e440659-83b2-40e1-80de-83317c6728f9",
+      "shop_name": "Campus Copy Center",
+      "n": 30,
+      "rule_mae_minutes": 3.8361,
+      "baseline_mae_minutes": 5.9857,
+      "rule_beats_baseline": true,
+      "rough_predictions": 10
+    },
+    {
+      "shop_id": "3cf089fe-dfd5-4196-8a1c-a56563549f47",
+      "shop_name": "Central Prints",
+      "n": 29,
+      "rule_mae_minutes": 3.6644,
+      "baseline_mae_minutes": 4.5344,
+      "rule_beats_baseline": true,
+      "rough_predictions": 9
+    },
+    {
+      "shop_id": "df8395ad-62cd-4627-ab80-59bb547a6e27",
+      "shop_name": "Quick Print House",
+      "n": 30,
+      "rule_mae_minutes": 2.75,
+      "baseline_mae_minutes": 7.4012,
+      "rule_beats_baseline": true,
+      "rough_predictions": 10
+    }
+  ]
+}

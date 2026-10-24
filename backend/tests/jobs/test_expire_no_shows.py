@@ -50,10 +50,14 @@ def _ready_cash_order(session: Session, *, hours_ago: int) -> object:
     from app.services import order_service
 
     customer, shop = _customer_and_shop(session)
-    order = create_reserved_order(session, customer=customer, shop=shop)
-    for to_status in ("ACCEPTED", "PRINTING"):
+    reserved_at = NOW - timedelta(hours=hours_ago, minutes=3)
+    order = create_reserved_order(session, customer=customer, shop=shop, reserved_at=reserved_at)
+    for to_status, at in (
+        ("ACCEPTED", reserved_at + timedelta(minutes=1)),
+        ("PRINTING", reserved_at + timedelta(minutes=2)),
+    ):
         order_service.transition(
-            session, order_id=order.id, to_status=to_status, actor_type="vendor"
+            session, order_id=order.id, to_status=to_status, actor_type="vendor", now=at
         )
     order_service.transition(
         session,

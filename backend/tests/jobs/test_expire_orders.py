@@ -26,10 +26,7 @@ def _unpaid_order(session: Session) -> Order:
     vendor = create_user(session, email="vendor@example.com", role="vendor")
     shop = create_shop(session, owner=vendor)
     create_full_rate_table(session, shop)
-    order = create_unpaid_order(session, customer=customer, shop=shop)
-    order.created_at = PAST
-    session.commit()
-    return order
+    return create_unpaid_order(session, customer=customer, shop=shop, created_at=PAST)
 
 
 def test_an_unpaid_order_past_the_window_expires(db_session: Session) -> None:

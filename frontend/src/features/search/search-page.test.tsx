@@ -30,6 +30,15 @@ const alpha: ShopSearchItem = {
   distance_m: 120,
   price_paise: 1000,
   rate_paise: 200,
+  wait_estimate: {
+    shop_id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+    minimum_minutes: 5,
+    median_minutes: 8,
+    maximum_minutes: 11,
+    sample_count: 3,
+    rough: true,
+    algorithm_version: "1",
+  },
 };
 
 const beta: ShopSearchItem = {
@@ -65,6 +74,12 @@ describe("the shop search", () => {
     expect(names).toEqual(["Alpha Prints", "Beta Print Hub"]);
     expect(screen.getByText(/120 m away/)).toBeInTheDocument();
     expect(screen.getByText(/2\.4 km away/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Current queue wait: 5–11 min/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Rough estimate · 3\/10 recent jobs/),
+    ).toBeInTheDocument();
   });
 
   it("keeps the list when the map is not switched on", async () => {

@@ -38,6 +38,17 @@ export const errorResponse = (
   );
 
 export const handlers = [
+  http.get("/api/v1/shops/:id/wait-estimate", ({ params }) =>
+    HttpResponse.json({
+      shop_id: String(params.id),
+      minimum_minutes: 0,
+      median_minutes: 0,
+      maximum_minutes: 0,
+      sample_count: 0,
+      rough: true,
+      algorithm_version: "1",
+    }),
+  ),
   http.get("/api/v1/me", () =>
     errorResponse(401, "UNAUTHENTICATED", "Authentication required"),
   ),

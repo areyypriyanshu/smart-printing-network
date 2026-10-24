@@ -352,6 +352,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shops/{shop_id}/wait-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wait Estimate
+         * @description The current shop-level wait for a new arrival, not an order-specific ETA.
+         */
+        get: operations["wait_estimate_api_v1_shops__shop_id__wait_estimate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/testing/simulate-payment": {
         parameters: {
             query?: never;
@@ -1355,6 +1375,7 @@ export interface components {
             phone?: string | null;
             /** Rates */
             rates: components["schemas"]["RateItem"][];
+            wait_estimate?: components["schemas"]["WaitEstimateResponse"] | null;
         };
         /**
          * ShopSearchItem
@@ -1388,6 +1409,7 @@ export interface components {
             price_paise?: number | null;
             /** Rate Paise */
             rate_paise?: number | null;
+            wait_estimate?: components["schemas"]["WaitEstimateResponse"] | null;
         };
         /**
          * ShopSearchResponse
@@ -1574,6 +1596,29 @@ export interface components {
             name?: string | null;
             /** Phone */
             phone?: string | null;
+        };
+        /**
+         * WaitEstimateResponse
+         * @description The shop-level wait for a hypothetical new arrival, not an order ETA.
+         */
+        WaitEstimateResponse: {
+            /** Algorithm Version */
+            algorithm_version: string;
+            /** Maximum Minutes */
+            maximum_minutes: number;
+            /** Median Minutes */
+            median_minutes: number;
+            /** Minimum Minutes */
+            minimum_minutes: number;
+            /** Rough */
+            rough: boolean;
+            /** Sample Count */
+            sample_count: number;
+            /**
+             * Shop Id
+             * Format: uuid
+             */
+            shop_id: string;
         };
     };
     responses: never;
@@ -3266,6 +3311,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShopResponse"];
+                };
+            };
+            /** @description The request was rejected, for example a wrong pickup code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The access token is missing or expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This account may not do that. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found, or not yours. The two are deliberately the same. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The state moved on, for example the price changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body is larger than the limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body did not validate. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many requests. The response carries a Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The map provider could not be reached, or this deployment has no key for one. Try again in a moment, or ask the browser for your location. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    wait_estimate_api_v1_shops__shop_id__wait_estimate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitEstimateResponse"];
                 };
             };
             /** @description The request was rejected, for example a wrong pickup code. */

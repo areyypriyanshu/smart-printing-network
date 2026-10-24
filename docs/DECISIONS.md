@@ -117,7 +117,7 @@ build.
 |---|---|
 | Delivery, couriers, route optimisation | Needs live location and failure handling. Pickup only. |
 | A CNN for blur detection | No labelled dataset and no evaluation. Effective DPI plus Laplacian variance on a labelled fixture set answers the same question and can be explained. |
-| Machine learning for price or wait estimates | Price is arithmetic. Wait estimates start as a rolling median and are only replaced by a model if they measurably lose to it on real data. |
+| Machine learning for price or wait estimates | Price is arithmetic. Wait estimates use recent speed quartiles and current unfinished work. ML is rejected unless a candidate beats that rule on time-separated real data; simulated history cannot justify it. See [ADR 033](adr/033-wait-estimates-and-the-ml-decision.md). |
 | Vendor payouts, GST invoicing | Marketplace money movement needs KYC, split payments and legal review. |
 | Email and SMS notifications | In app status only, for now. Clerk sends the one message that proves an address; the `EmailSender` interface is kept for the product email that this backlog will need, and Brevo plugs into it without code. |
 | Page ranges, binding, multi file orders | Whole document printing only. |

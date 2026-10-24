@@ -14,7 +14,10 @@ orders from a counter screen.
 > approves the shops that are allowed to take orders. A customer can check
 > a PDF before printing, find the shops near them, compare their prices,
 > see them on a map, share a pickup code on WhatsApp, and print the same
-> job again while the file is still stored.
+> job again while the file is still stored. Sprint 9 adds a queue-wait
+> range from real order events, with a Rough label when history is thin,
+> and a walk-forward accuracy report. ML is explicitly rejected on the
+> current simulated evidence.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
@@ -33,13 +36,14 @@ orders from a counter screen.
 | 1.5 | Pay at the shop: the same order, paid in cash at the counter. The data a settlement would need is recorded; the settlement is not built. | **Built** |
 | 1.6 | Print the file the customer actually has: Word, Excel and PowerPoint files are converted to PDF and printed. An error that names the fix. Print it again, share the pickup code, a phone number for the shop, and the shops near you. | **Built** |
 | 2 | PDF quality checker (effective DPI and blur), shop search, price comparison, map view, load baseline. | **Built** |
-| 3 | Live queue and wait estimates from real order history, WebSocket updates, estimate accuracy report. ML only if the data justifies it. | Planned |
+| 3 | Sprint 9: queue-wait ranges from order events, batched shop-list estimates and an order-page estimate, simulated history and a leakage-free backtest. **Built**. Sprint 10: WebSocket live updates. **Planned**. | **Sprint 9 built; Sprint 10 planned** |
 
 ## What it deliberately does not do
 
 - No delivery, no delivery tracking, no route optimisation (OR-Tools). Pickup only.
 - No CNN or deep learning. Blur and resolution checks use classical image analysis because it is enough and it is explainable.
 - No "AI price prediction". Price is arithmetic: `pages x copies x shop rate`, with a minimum order amount.
+- No ML wait prediction. Queue estimates use recent speed quartiles and current unfinished work. A model would have to beat that rule on time-separated real data; simulated history cannot justify one. See [ADR 033](docs/adr/033-wait-estimates-and-the-ml-decision.md).
 - No vendor payouts or settlements, no GST invoicing, no email or SMS notifications, no admin UI. The one message the platform sends is the link that proves an email address, which is part of the account rather than a notification.
 
 ## Architecture at a glance
@@ -237,6 +241,42 @@ browser's key is public and is restricted by the websites and the one
 API that may use it; the server's geocoding key never reaches the page.
 See [ADR 032](docs/adr/032-the-map-is-drawn-last.md).
 
+### Understanding the queue estimate
+
+Shop cards and the order page show a range for one narrow thing: how long a
+**new arrival** might wait from entering the shop's queue until printing
+starts. It is not a promised start or ready time for an existing order.
+`PAID`, cash `RESERVED`, `ACCEPTED` and `PRINTING` work counts; unpaid and
+already-ready orders do not. A currently printing order counts at full size
+because SPN does not record page-level progress.
+
+The range uses the p25, median and p75 of the shop's last 50 valid minutes per
+page-copy samples. It is a heuristic range, not a confidence interval. Fewer
+than 10 samples uses documented defaults and is labelled **Rough**. An empty
+queue is `0–0 min`. List responses include estimates in batch, while the order
+page calls `GET /shops/{id}/wait-estimate`; a failed estimate never blocks shop
+selection. See [ADR 033](docs/adr/033-wait-estimates-and-the-ml-decision.md).
+
+To reproduce the evaluation data and report locally:
+
+```bash
+make seed                  # create the demo shops first
+make seed-history          # 30 completed orders per shop; simulated, not real activity
+make backtest-estimates    # writes backend/estimate_backtest.json
+```
+
+`make seed-history` is deterministic, replaces only the server-owned
+`simulated-history/` storage-key dataset (never a customer order that happens
+to reuse the idempotency-key prefix), and stops the worker while backdated
+intermediate states are written. The orders go through the real create/transition services. No PDF
+objects are stored for this metadata-only history.
+
+The committed simulated report evaluates 89 of 90 orders (the first is baseline
+warm-up): rule MAE **3.4140 minutes** versus expanding-global-average MAE
+**5.9899 minutes**. This validates the evaluation pipeline on simulated data;
+it is not a production accuracy claim or evidence for ML. Per-shop numbers and
+the 29 rough predictions are in [`backend/estimate_backtest.json`](backend/estimate_backtest.json).
+
 ### Managing the admin accounts themselves
 
 Admin accounts are managed from the command line, by whoever holds the
@@ -413,6 +453,8 @@ printing a summary that looks fine.
 | `make openapi` | Exports `backend/openapi.json` and regenerates `frontend/src/api/schema.d.ts`. |
 | `make db-shell` | An interactive psql session against the local database. |
 | `make db-ui` | Starts the pgAdmin database browser on <http://localhost:5050>. |
+| `make seed-history` | Deterministic **simulated** completed orders through the real services; local only. |
+| `make backtest-estimates` | Walk-forward per-shop MAE against an expanding global-average baseline. |
 | `make perf-seed` | 200 reserved cash orders for the load test, made through the real services. |
 | `make perf-explain` | The search and queue plans, with synthetic rows, rolled back. |
 | `make reset` | Wipes local volumes and rebuilds from scratch. |
@@ -421,7 +463,12 @@ printing a summary that looks fine.
 
 - **Unit:** the pricing rule, the order state machine and the refund
   backoff, including property-based tests with Hypothesis, and the quality
-  rules against a labelled fixture set.
+  rules against a labelled fixture set, plus pure estimate math, percentile,
+  validation and Hypothesis monotonicity properties.
+- **Estimate evaluation:** real event histories replayed walk-forward, with a
+  future-outlier no-look-ahead test, deterministic simulated seeding and a
+  committed aggregate report. A report with no evaluable rows says so rather
+  than inventing a zero error.
 - **API and integration:** real PostgreSQL with PostGIS, the fake payment
   gateway and in-memory storage. Covers webhook replay, parallel webhook
   delivery, concurrent accept, authorization on every endpoint, and the
@@ -433,7 +480,8 @@ printing a summary that looks fine.
   real bug: registering a shop with an email that already existed returned
   a 500 instead of a 409.
 - **Coverage floors**, enforced in CI: 90% on `domain`, 90% on `services`,
-  80% overall. Currently 100%, 93% and 92%.
+  80% overall. Currently 93.2%, 92.2% and 91.8% (788 backend tests passed,
+  29 skipped as environment-specific).
 - **Load:** k6 drives quotes, shop search and the vendor queue from four
   customer accounts and one vendor, for 30 seconds, against the local
   stack. The thresholds fail the run if a p95 crosses its target or a
@@ -480,6 +528,7 @@ committed. The decisions are.
 | [`AGENTS.md`](AGENTS.md) | Rules and workflow for AI agents and contributors |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Start here.** Why the project is built the way it is |
 | [`docs/adr/`](docs/adr/) | One architecture decision record per decision |
+| [`backend/estimate_backtest.json`](backend/estimate_backtest.json) | The simulated, aggregate Sprint 9 accuracy report |
 | [`perf/BASELINE.md`](perf/BASELINE.md) | The phase 2 load baseline and the index review |
 | [`perf/k6/`](perf/k6/) | The load script and how to run it |
 
@@ -522,6 +571,12 @@ committed. The decisions are.
     by the provider's restrictions; a deployment with no key, a blocked
     script or a screen reader still gets the list, with the same shops
     and prices. See [ADR 032](docs/adr/032-the-map-is-drawn-last.md).
+11. **Estimates are evaluated, not labelled intelligent.** A queue-wait range
+    comes from current unfinished units and recent event-derived speed
+    quartiles. The backtest uses only information available at each prediction
+    point and compares MAE with an expanding global average. Simulated data
+    tests the plumbing, but cannot justify ML. See
+    [ADR 033](docs/adr/033-wait-estimates-and-the-ml-decision.md).
 
 ## Known limitations
 
@@ -548,8 +603,14 @@ committed. The decisions are.
 - Single-instance deployment. The rate limiter lives in the process, so a
   second API instance would need Redis. A login is limited per account
   and per address, so a campus behind one address is not locked out.
-- The vendor board polls every five seconds. WebSockets arrive in the
-  phase where a live board needs them.
+- The vendor board polls every five seconds. WebSocket live updates are
+  Sprint 10 and are not built yet.
+- Queue estimates are only as reliable as vendor clicks. Late or batched Start
+  and Ready actions distort the event-derived speed. A currently printing
+  order counts at full size, and the range is not a confidence interval or a
+  ready-time promise. The only accuracy report so far uses clearly labelled
+  simulated history; real pilot data is still needed before making an accuracy
+  claim or reconsidering ML.
 - The map is optional by design. It needs a Google Cloud project, the
   Maps JavaScript API, a billing account and a key restricted by the
   websites that may use it. Without a key the search still works and the

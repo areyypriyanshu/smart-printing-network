@@ -34,13 +34,14 @@ def _customer_and_shop(session: Session) -> tuple[User, Shop]:
 
 def _paid_order(session: Session, *, minutes_ago: int = 20) -> Order:
     customer, shop = _customer_and_shop(session)
-    order = create_paid_order(session, customer=customer, shop=shop)
-    # `reserved_at` is when the order entered the queue, and it is what
-    # the job reads. For an online order it is the moment it was paid.
-    order.paid_at = NOW - timedelta(minutes=minutes_ago)
-    order.reserved_at = NOW - timedelta(minutes=minutes_ago)
-    session.commit()
-    return order
+    paid_at = NOW - timedelta(minutes=minutes_ago)
+    return create_paid_order(
+        session,
+        customer=customer,
+        shop=shop,
+        created_at=paid_at - timedelta(minutes=1),
+        paid_at=paid_at,
+    )
 
 
 def test_a_paid_order_past_the_accept_window_is_rejected(db_session: Session) -> None:

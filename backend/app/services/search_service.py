@@ -34,6 +34,7 @@ from app.schemas.shop import (
     ShopSearchQuery,
     ShopSearchResponse,
 )
+from app.services import estimate_service
 from app.services.geocoding_service import geocode
 from app.services.upload_service import get_upload
 
@@ -125,6 +126,9 @@ def search_shops(
         )
         if item is not None:
             items.append(item)
+    estimates = estimate_service.estimates_for_shops_or_empty(session, [item.id for item in items])
+    for item in items:
+        item.wait_estimate = estimates.get(item.id)
     return ShopSearchResponse(
         items=items,
         attribution=geocoder.attribution if geocoder is not None else None,

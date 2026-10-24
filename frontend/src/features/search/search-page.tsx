@@ -14,6 +14,7 @@ import {
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { ShopMap } from "../map";
+import { WaitEstimate } from "../estimates";
 import {
   OPTION_DEFAULTS,
   OptionsFields,
@@ -487,6 +488,8 @@ export function SearchPage() {
                   )}
                 </div>
                 <p className="text-sm text-steel">{shop.address}</p>
+
+                <WaitEstimate estimate={shop.wait_estimate} />
 
                 {shop.distance_m != null && (
                   <p className="text-xs text-steel">

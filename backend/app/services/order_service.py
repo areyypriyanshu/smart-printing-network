@@ -143,6 +143,8 @@ def create_order(
         min_order_paise=shop.min_order_paise,
         price_paise=price_paise,
         idempotency_key=idempotency_key,
+        created_at=current,
+        updated_at=current,
     )
     session.add(order)
     session.flush()
@@ -153,6 +155,7 @@ def create_order(
             to_status=order.status,
             actor_type="customer",
             actor_id=customer_id,
+            at=current,
         )
     )
     upload.delete_after = None
@@ -184,6 +187,8 @@ def create_order(
         amount_paise=gateway_order.amount_paise,
         currency=gateway_order.currency,
         status="CREATED",
+        created_at=current,
+        updated_at=current,
     )
     session.add(payment)
     session.commit()
@@ -278,6 +283,7 @@ def transition(
             actor_type=actor_type,
             actor_id=actor_id,
             reason=reason,
+            at=current,
         )
     )
     session.commit()

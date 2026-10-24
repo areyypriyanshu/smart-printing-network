@@ -15,7 +15,7 @@ from app.gateways.identity.clerk_admin import ClerkAdminClient, ClerkAdminError
 from app.gateways.identity.fake import dev_subject_for
 from app.logging import setup_logging
 from app.models import AdminAction, Order, Shop, ShopRate, Upload, User
-from app.services import admin_service, identity_service
+from app.services import admin_service, history_seed_service, identity_service
 
 logger = logging.getLogger(__name__)
 
@@ -512,6 +512,12 @@ def main(
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("seed", help="seed 3 verified shops, rates and a customer")
+    history_parser = subparsers.add_parser(
+        "seed-history",
+        help="simulate completed orders through the real services (local only)",
+    )
+    history_parser.add_argument("--orders-per-shop", type=int, default=30)
+    history_parser.add_argument("--seed", type=int, default=9)
 
     verify_parser = subparsers.add_parser("verify-shop", help="mark a vendor's shop verified")
     verify_parser.add_argument("email", help="vendor account email")
@@ -587,6 +593,17 @@ def main(
     with session_factory() as session:
         if args.command == "seed":
             seed(session)
+            return 0
+        if args.command == "seed-history":
+            made = history_seed_service.seed_history(
+                session,
+                orders_per_shop=int(args.orders_per_shop),
+                seed=int(args.seed),
+            )
+            print(
+                f"Created {made} SIMULATED completed orders. "
+                "They are not real customer activity. Run `make backtest-estimates` next."
+            )
             return 0
         if args.command == "verify-shop":
             admin_id = _admin_id_for(session, args.by)

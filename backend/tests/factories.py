@@ -202,6 +202,7 @@ def create_unpaid_order(
     shop: Shop,
     page_count: int = 1,
     copies: int = 1,
+    created_at: datetime | None = None,
 ) -> Order:
     """An order that is created but not paid, waiting for its payment window."""
     upload = create_upload_row(session, customer=customer, page_count=page_count)
@@ -218,6 +219,7 @@ def create_unpaid_order(
         ),
         idempotency_key=uuid.uuid4().hex,
         gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
+        now=created_at,
     )
     return order
 
@@ -232,6 +234,8 @@ def create_paid_order(
     paper_size: str = "A4",
     color: bool = False,
     duplex: bool = False,
+    created_at: datetime | None = None,
+    paid_at: datetime | None = None,
 ) -> Order:
     """An order that a shop can see: created, then paid through the webhook path.
 
@@ -252,8 +256,11 @@ def create_paid_order(
         ),
         idempotency_key=uuid.uuid4().hex,
         gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
+        now=created_at,
     )
-    order_service.transition(session, order_id=order.id, to_status="PAID", actor_type="webhook")
+    order_service.transition(
+        session, order_id=order.id, to_status="PAID", actor_type="webhook", now=paid_at
+    )
     # The webhook is what captures the payment, so the factory does too.
     # Without this the order would be paid but hold no money, and a refund
     # would have nothing to refund.

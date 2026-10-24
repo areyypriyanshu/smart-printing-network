@@ -37,6 +37,10 @@ test("a customer finds the shops near them and compares their prices", async ({
     timeout: 20_000,
   });
   await expect(shop.getByText(/per page/)).toBeVisible();
+  await expect(shop.getByText(/Current queue wait:/)).toBeVisible();
+  await expect(
+    shop.getByText(/new order, until printing starts/),
+  ).toBeVisible();
 
   // The customer picks a shop, and the file and the options come with
   // them into the order.

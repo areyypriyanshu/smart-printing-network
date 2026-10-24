@@ -15,8 +15,9 @@ from app.schemas.shop import (
     ShopResponse,
     ShopSearchQuery,
     ShopSearchResponse,
+    WaitEstimateResponse,
 )
-from app.services import search_service, shop_service
+from app.services import estimate_service, search_service, shop_service
 
 router = APIRouter(
     prefix="/shops",
@@ -95,6 +96,20 @@ def search_shops(
     return search_service.search_shops(
         session, customer_id=_user.id, query=query, geocoder=geocoder
     )
+
+
+@router.get(
+    "/{shop_id}/wait-estimate",
+    response_model=WaitEstimateResponse,
+    dependencies=[Depends(user_rate_limit(60, 60, "wait-estimate"))],
+)
+def wait_estimate(
+    shop_id: uuid.UUID,
+    session: Session = Depends(get_db),
+    _user: User = Depends(_customer_only),
+) -> WaitEstimateResponse:
+    """The current shop-level wait for a new arrival, not an order-specific ETA."""
+    return estimate_service.get_wait_estimate(session, shop_id=shop_id)
 
 
 @router.get("/{shop_id}", response_model=ShopResponse)
