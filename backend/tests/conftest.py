@@ -133,7 +133,7 @@ def db_session(engine: Engine) -> Iterator[Session]:
 
 @pytest.fixture
 def client(db_session: Session) -> Iterator[TestClient]:
-    app = create_app()
+    app = create_app(enable_transition_listener=False, session_factory=lambda: db_session)
     app.state.storage = MemoryStorage()
     app.state.email_sender = MemoryEmailSender()
     app.state.token_verifier = FakeTokenVerifier()
@@ -155,7 +155,7 @@ def client_that_reports_failures(db_session: Session) -> Iterator[TestClient]:
     was told failed, so "the route answers 5xx" is a behaviour worth
     testing on its own.
     """
-    app = create_app()
+    app = create_app(enable_transition_listener=False, session_factory=lambda: db_session)
     app.state.storage = MemoryStorage()
     app.state.email_sender = MemoryEmailSender()
     app.state.token_verifier = FakeTokenVerifier()
@@ -175,7 +175,7 @@ def https_client(db_session: Session) -> Iterator[TestClient]:
     transport the request arrived on, so the test has to be able to make
     a request that arrived over TLS.
     """
-    app = create_app()
+    app = create_app(enable_transition_listener=False, session_factory=lambda: db_session)
     app.state.storage = MemoryStorage()
     app.state.email_sender = MemoryEmailSender()
     app.state.token_verifier = FakeTokenVerifier()

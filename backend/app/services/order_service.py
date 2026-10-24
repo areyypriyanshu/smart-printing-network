@@ -40,6 +40,7 @@ from app.schemas.order import (
     OrderResponse,
     ReorderResponse,
 )
+from app.services.live_service import notify_transition
 from app.services.upload_service import get_upload, presigned_download
 
 logger = logging.getLogger(__name__)
@@ -148,16 +149,17 @@ def create_order(
     )
     session.add(order)
     session.flush()
-    session.add(
-        OrderEvent(
-            order_id=order.id,
-            from_status=None,
-            to_status=order.status,
-            actor_type="customer",
-            actor_id=customer_id,
-            at=current,
-        )
+    opening_event = OrderEvent(
+        order_id=order.id,
+        from_status=None,
+        to_status=order.status,
+        actor_type="customer",
+        actor_id=customer_id,
+        at=current,
     )
+    session.add(opening_event)
+    session.flush()
+    notify_transition(session, order=order, event=opening_event)
     upload.delete_after = None
     session.commit()
     session.refresh(order)
@@ -275,17 +277,18 @@ def transition(
     if queues_refund(from_status, to_status):
         _queue_refund(session, order_id=order_id, now=current)
 
-    session.add(
-        OrderEvent(
-            order_id=order_id,
-            from_status=from_status,
-            to_status=to_status,
-            actor_type=actor_type,
-            actor_id=actor_id,
-            reason=reason,
-            at=current,
-        )
+    event = OrderEvent(
+        order_id=order_id,
+        from_status=from_status,
+        to_status=to_status,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        reason=reason,
+        at=current,
     )
+    session.add(event)
+    session.flush()
+    notify_transition(session, order=order, event=event)
     session.commit()
     session.refresh(order)
     return order

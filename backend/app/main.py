@@ -1,14 +1,21 @@
+import asyncio
+import logging
+import threading
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
+from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import get_settings
+from app.db import SessionLocal
 from app.errors import AppError, error_body, exception_handler, http_exception_handler
 from app.gateways.email import build_email_sender
 from app.gateways.geocoding import build_geocoder
@@ -34,11 +41,43 @@ from app.routers import (
     vendor,
     webhooks,
     webhooks_clerk,
+    ws,
 )
+from app.services.live_service import EventHub, listen_for_transitions
 
 API_PREFIX = "/api/v1"
 #: How much room the multipart envelope gets on top of the file itself.
 ENVELOPE_BYTES = 1024 * 1024
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Own the dedicated LISTEN connection and stop it cleanly on shutdown."""
+    app.state.transition_ready = threading.Event()
+    listener_task: asyncio.Task[None] | None = None
+    if app.state.enable_transition_listener:
+        listener_task = asyncio.create_task(
+            listen_for_transitions(
+                database_url=app.state.transition_database_url,
+                hub=app.state.event_hub,
+                ready_event=app.state.transition_ready,
+            )
+        )
+        app.state.transition_listener = listener_task
+    else:
+        app.state.transition_listener = None
+    try:
+        yield
+    finally:
+        if listener_task is not None:
+            listener_task.cancel()
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(listener_task, return_exceptions=True), timeout=5
+                )
+            except TimeoutError:
+                logger.error("transition_listener_shutdown_timeout")
 
 
 class BodyLimitMiddleware:
@@ -87,11 +126,21 @@ class BodyLimitMiddleware:
         await self.app(scope, limited_receive, send)
 
 
-def create_app() -> FastAPI:
+def create_app(
+    *,
+    enable_transition_listener: bool = True,
+    transition_database_url: str | None = None,
+    session_factory: Callable[[], Session] | None = None,
+) -> FastAPI:
     settings = get_settings()
     setup_logging(settings.log_level)
 
-    app = FastAPI(title="Smart Printing Network API", version="0.1.0")
+    app = FastAPI(title="Smart Printing Network API", version="0.1.0", lifespan=lifespan)
+    app.state.enable_transition_listener = enable_transition_listener
+    app.state.transition_database_url = transition_database_url or settings.database_url
+    app.state.session_factory = session_factory or SessionLocal
+    app.state.allowed_origins = tuple(settings.clerk_origin_list)
+    app.state.event_hub = EventHub()
     app.state.rate_limiter = RateLimiter()
     app.state.payment_gateway = build_payment_gateway(settings)
     app.state.email_sender = build_email_sender(settings)
@@ -141,6 +190,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(webhooks.router, prefix=API_PREFIX)
     app.include_router(webhooks_clerk.router, prefix=API_PREFIX)
+    app.include_router(ws.router)
     # Shadowing the method on the instance is the documented way to change
     # the OpenAPI document FastAPI produces.
     app.openapi = lambda: build_openapi(app)  # type: ignore[method-assign]

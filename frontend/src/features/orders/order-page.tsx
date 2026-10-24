@@ -1,5 +1,5 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import {
@@ -21,6 +21,11 @@ import { formatPaise } from "../../lib/money";
 import { pickupShareLink } from "../../lib/share";
 import { useShop } from "../shops";
 import { ShopWaitEstimate } from "../estimates";
+import {
+  LiveConnectionLabel,
+  useLiveChannel,
+  type ConnectionState,
+} from "../live";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -32,15 +37,31 @@ const eventTime = new Intl.DateTimeFormat("en-IN", {
 
 export function OrderPage() {
   const { orderId } = useParams<{ orderId: string }>();
+  const queryClient = useQueryClient();
+  const onMessage = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["orders", orderId] });
+  }, [queryClient, orderId]);
+  const liveState = useLiveChannel({
+    channel: orderId === undefined ? null : `/ws/orders/${orderId}`,
+    onMessage,
+    enabled: orderId !== undefined,
+  });
   const query = useQuery({
     queryKey: ["orders", orderId],
     queryFn: () => getOrder(orderId as string),
     enabled: orderId !== undefined,
-    refetchInterval: (current) =>
-      current.state.data !== undefined &&
-      isTerminalStatus(current.state.data.order.status)
-        ? false
-        : POLL_INTERVAL_MS,
+    refetchInterval: (current) => {
+      if (liveState === "live") return false;
+      const data = current.state.data;
+      if (
+        data !== undefined &&
+        data !== null &&
+        isTerminalStatus(data.order.status)
+      ) {
+        return false;
+      }
+      return POLL_INTERVAL_MS;
+    },
   });
 
   if (query.isPending) {
@@ -72,10 +93,16 @@ export function OrderPage() {
     );
   }
 
-  return <OrderDetail detail={query.data} />;
+  return <OrderDetail detail={query.data} liveState={liveState} />;
 }
 
-function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
+function OrderDetail({
+  detail,
+  liveState,
+}: {
+  detail: OrderDetailResponse;
+  liveState: ConnectionState;
+}) {
   const { order, events } = detail;
   const shop = useShop(order.shop_id);
   const navigate = useNavigate();
@@ -118,6 +145,8 @@ function OrderDetail({ detail }: { detail: OrderDetailResponse }) {
           {orderStatusLabel(order)}
         </h1>
       </div>
+
+      <LiveConnectionLabel state={liveState} />
 
       {!isTerminalStatus(order.status) && (
         <ShopWaitEstimate shopId={order.shop_id} />
