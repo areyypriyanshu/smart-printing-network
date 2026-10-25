@@ -1,9 +1,12 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQuery,
   useQueryClient,
   type UseMutationResult,
 } from "@tanstack/react-query";
+
+import { useLiveChannel } from "../live";
 
 import { apiRequest } from "../../api/client";
 import type { components } from "../../api/schema";
@@ -20,16 +23,22 @@ export function getQueue(): Promise<VendorQueueResponse> {
 }
 
 export function useQueue() {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const onMessage = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["vendor", "queue"] });
+  }, [queryClient]);
+  const liveState = useLiveChannel({ channel: "/ws/vendor", onMessage });
+  const query = useQuery({
     queryKey: ["vendor", "queue"],
     queryFn: getQueue,
     // The board is a live view of the counter. It polls while the tab is
     // visible and stops in the background so a forgotten tab does not keep
     // hammering the API.
-    refetchInterval: QUEUE_POLL_INTERVAL_MS,
+    refetchInterval: liveState === "live" ? false : QUEUE_POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
     retry: false,
   });
+  return { ...query, liveState };
 }
 
 type Action = "accept" | "reject" | "start" | "ready" | "cancel" | "collect";

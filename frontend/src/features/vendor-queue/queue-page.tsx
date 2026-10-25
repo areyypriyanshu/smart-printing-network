@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Alert, Button } from "../../components/ui";
+import { LiveConnectionLabel } from "../live";
 import { messageForError } from "../../lib/errors";
 import { useQueue, useVendorAction, type VendorOrder } from "./api";
 import { PickupDialog } from "./pickup-dialog";
@@ -102,9 +103,12 @@ export function VendorQueuePage() {
         <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
           Order queue
         </h1>
-        <p className="text-sm text-steel" aria-live="polite">
-          {items.length} active order{items.length === 1 ? "" : "s"}
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-steel" aria-live="polite">
+            {items.length} active order{items.length === 1 ? "" : "s"}
+          </p>
+          <LiveConnectionLabel state={queue.liveState} />
+        </div>
       </div>
 
       {items.length === 0 ? (

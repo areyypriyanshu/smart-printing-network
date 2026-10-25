@@ -99,6 +99,13 @@
 		reverse_proxy api:8000
 	}
 
+	# The live-update socket uses the same API and origin as the browser.
+	# Caddy's reverse proxy handles the WebSocket upgrade without a second
+	# public listener or a new credential in the URL.
+	handle /ws/* {
+		reverse_proxy api:8000
+	}
+
 	# Health checks for the uptime monitor and for the deploy smoke
 	# check. The readiness check also reports whether the database and the
 	# object storage are reachable, which is operational information and

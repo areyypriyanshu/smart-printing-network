@@ -89,41 +89,68 @@ export function PayStep({
   const [phase, setPhase] = useState<Phase>({ kind: "review" });
   const idempotencyKey = useRef(newIdempotencyKey());
 
-  const poll = useCallback(async (orderId: string, deadline: number) => {
-    while (Date.now() <= deadline) {
-      try {
-        const detail = await getOrder(orderId);
-        if (detail.order.status === "PAID") {
-          setPhase({ kind: "paid", order: detail });
-          return;
+  const poll = useCallback(
+    async (
+      orderId: string,
+      deadline: number,
+      controller: { cancelled: boolean },
+    ) => {
+      while (
+        !controller.cancelled &&
+        !document.hidden &&
+        Date.now() <= deadline
+      ) {
+        try {
+          const detail = await getOrder(orderId);
+          if (controller.cancelled || document.hidden) return;
+          if (detail.order.status === "PAID") {
+            setPhase({ kind: "paid", order: detail });
+            return;
+          }
+          if (
+            detail.order.status === "CANCELLED" ||
+            detail.order.status === "EXPIRED"
+          ) {
+            setPhase({
+              kind: "failed",
+              message: "This order was closed before the payment landed.",
+            });
+            return;
+          }
+        } catch {
+          // Keep polling; a transient failure must not lose the order.
         }
-        if (
-          detail.order.status === "CANCELLED" ||
-          detail.order.status === "EXPIRED"
-        ) {
-          setPhase({
-            kind: "failed",
-            message: "This order was closed before the payment landed.",
-          });
-          return;
-        }
-      } catch {
-        // Keep polling; a transient failure must not lose the order.
+        await new Promise((resolve) => {
+          setTimeout(resolve, POLL_INTERVAL_MS);
+        });
       }
-      await new Promise((resolve) => {
-        setTimeout(resolve, POLL_INTERVAL_MS);
-      });
-    }
-    setPhase({ kind: "unconfirmed", orderId });
+      if (!controller.cancelled && !document.hidden) {
+        setPhase({ kind: "unconfirmed", orderId });
+      }
+    },
+    [],
+  );
+
+  const [visibilityVersion, setVisibilityVersion] = useState(0);
+  useEffect(() => {
+    const onVisibilityChange = () =>
+      setVisibilityVersion((version) => version + 1);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
 
   useEffect(() => {
     if (phase.kind !== "confirming") return;
+    const controller = { cancelled: false };
     const timer = setTimeout(() => {
-      void poll(phase.orderId, Date.now() + deadlineMs);
+      void poll(phase.orderId, Date.now() + deadlineMs, controller);
     }, 0);
-    return () => clearTimeout(timer);
-  }, [phase, poll, deadlineMs]);
+    return () => {
+      controller.cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [phase, poll, deadlineMs, visibilityVersion]);
 
   const startPayment = async () => {
     setPhase({ kind: "paying" });

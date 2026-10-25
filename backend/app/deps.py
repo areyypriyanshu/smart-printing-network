@@ -2,11 +2,10 @@ from collections.abc import Callable
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.errors import AccountNotProvisioned, Forbidden, NotFound, Unauthenticated
+from app.errors import Unauthenticated
 from app.gateways.email import EmailSender
 from app.gateways.geocoding import Geocoder
 from app.gateways.identity import TokenVerifier, VerifiedIdentity
@@ -15,6 +14,13 @@ from app.gateways.payments import PaymentGatewayRouter
 from app.gateways.storage import Storage
 from app.models import Shop, User
 from app.services import identity_service
+from app.services.authorization_service import (
+    active_user_for_subject,
+    shop_for_vendor,
+)
+from app.services.authorization_service import (
+    require_role as service_require_role,
+)
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -58,17 +64,7 @@ def get_current_user(
     account that has been switched off is refused here even though the
     token itself is perfectly good.
     """
-    user = identity_service.find_by_subject(session, identity.subject)
-    if user is None:
-        # The token is good and the person has signed in, but they have
-        # not said what they are here for, so there is no account yet.
-        # The front end reads this and sends them to the page that asks.
-        raise AccountNotProvisioned(
-            "This account has not been set up yet. Choose what you are here for."
-        )
-    if not user.is_active:
-        raise Unauthenticated("Authentication required")
-    return user
+    return active_user_for_subject(session, identity.subject)
 
 
 def get_provisioned_user(
@@ -86,9 +82,7 @@ def get_provisioned_user(
 
 def require_role(*roles: str) -> Callable[..., User]:
     def dependency(user: User = Depends(get_current_user)) -> User:
-        if user.role not in roles:
-            raise Forbidden("Your role cannot perform this action")
-        return user
+        return service_require_role(user, *roles)
 
     return dependency
 
@@ -98,7 +92,7 @@ _customer_only = require_role("customer")
 
 
 def get_customer(user: User = Depends(_customer_only)) -> User:
-    return user
+    return service_require_role(user, "customer")
 
 
 def get_storage(request: Request) -> Storage:
@@ -178,7 +172,4 @@ def get_current_shop(
     user: User = Depends(_vendor_only),
     session: Session = Depends(get_db),
 ) -> Shop:
-    shop = session.scalar(select(Shop).where(Shop.owner_id == user.id))
-    if shop is None:
-        raise NotFound("Shop not found")
-    return shop
+    return shop_for_vendor(session, user)

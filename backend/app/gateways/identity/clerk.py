@@ -24,6 +24,7 @@ from typing import Any
 import jwt
 from jwt.algorithms import RSAAlgorithm
 
+from app.domain.origin import origin_allowed
 from app.errors import Unauthenticated
 from app.gateways.identity.base import VerifiedIdentity
 
@@ -203,7 +204,7 @@ class ClerkTokenVerifier:
 
         origin = claims.get("azp")
         if origin is not None and (
-            not isinstance(origin, str) or origin not in self._allowed_origins
+            not isinstance(origin, str) or not origin_allowed(origin, self._allowed_origins)
         ):
             # The token was minted for an address this deployment does
             # not serve. It is refused for the same reason a foreign

@@ -25,7 +25,7 @@ EXCEPTIONS = {
 
 def _documented() -> dict[str, set[int]]:
     """The statuses every route says it can answer."""
-    app = create_app()
+    app = create_app(enable_transition_listener=False)
     schema = app.openapi()
     documented: dict[str, set[int]] = {}
     for path, methods in schema["paths"].items():
@@ -57,7 +57,7 @@ def test_every_route_says_how_it_can_be_refused() -> None:
 
 def test_the_contract_knows_the_same_routes() -> None:
     """The schema the contract run reads is the one the application makes."""
-    app = create_app()
+    app = create_app(enable_transition_listener=False)
     schema = app.openapi()
 
     assert "/api/v1/webhooks/clerk" in schema["paths"]

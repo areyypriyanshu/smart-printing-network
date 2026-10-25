@@ -16,6 +16,7 @@ export default defineConfig({
       "/api": { target: proxyTarget, changeOrigin: true },
       "/healthz": { target: proxyTarget, changeOrigin: true },
       "/readyz": { target: proxyTarget, changeOrigin: true },
+      "/ws": { target: proxyTarget, changeOrigin: true, ws: true },
     },
   },
   test: {
