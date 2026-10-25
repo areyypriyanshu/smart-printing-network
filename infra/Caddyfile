@@ -1,7 +1,8 @@
 # Caddy configuration for the single origin.
 #
 # The browser only ever talks to this one host, so there is no CORS to
-# configure and the refresh cookie is always first party. Caddy obtains
+# configure and every request is same-origin. Authentication is a bearer
+# token checked by the API; the application sets no cookies. Caddy obtains
 # and renews the certificate on its own.
 #
 # SPN_DOMAIN  the domain to serve. Use localhost for a local run.

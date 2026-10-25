@@ -85,9 +85,9 @@ class Settings(BaseSettings):
     no_show_timeout_hours: int = 24
 
     # The limits on creating an account. Registering is the most
-    # expensive thing an anonymous caller can ask for, because the
-    # password is hashed with argon2id, and the work cannot be refused
-    # once it has started.
+    # expensive thing an anonymous caller can ask for: it writes a user
+    # row and has the identity provider send a verification message, and
+    # the work cannot be refused once it has started.
     #
     # The per address limits are generous on purpose: a campus puts
     # every student behind one address, so a limit that rations signups
@@ -98,8 +98,7 @@ class Settings(BaseSettings):
     # gets taken.
     # The total the whole deployment will create in a minute. This is
     # the limit that bounds the work rather than the attacker, and it is
-    # the reason a botnet cannot spend the server's CPU on password
-    # hashes.
+    # the reason a botnet cannot make the server do that work in a loop.
 
     google_maps_api_key: str = ""
 
