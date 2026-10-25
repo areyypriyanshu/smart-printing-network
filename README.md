@@ -475,15 +475,21 @@ printing a summary that looks fine.
 - **API and integration:** real PostgreSQL with PostGIS, the fake payment
   gateway and in-memory storage. Covers webhook replay, parallel webhook
   delivery, concurrent accept, authorization on every endpoint, and the
-  background jobs.
+  background jobs. The live-update tests drive real committed transitions:
+  a transition reaches the right shop channel and no other, a customer
+  cannot subscribe to another customer's order, a binary or oversized auth
+  frame is refused, and the socket closes when an account is deactivated.
 - **End to end:** Playwright against the whole Compose stack, plus axe
-  accessibility checks at WCAG 2.1 A and AA.
+  accessibility checks at WCAG 2.1 A and AA. One journey drops the live
+  socket on the vendor board and checks that the board falls back to
+  polling, keeps reading the queue, and still shows a change made outside
+  the page.
 - **Contract:** Schemathesis fuzzes the API from its own OpenAPI schema,
   with a token so the authenticated endpoints are reached too. It found a
   real bug: registering a shop with an email that already existed returned
   a 500 instead of a 409.
 - **Coverage floors**, enforced in CI: 90% on `domain`, 90% on `services`,
-  80% overall. Currently 93.2%, 92.2% and 91.8% (788 backend tests passed,
+  80% overall. Currently 93.2%, 92.4% and 91.7% (819 backend tests passed,
   29 skipped as environment-specific).
 - **Load:** k6 drives quotes, shop search and the vendor queue from four
   customer accounts and one vendor, for 30 seconds, against the local
