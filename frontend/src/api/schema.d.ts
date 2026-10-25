@@ -372,31 +372,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/testing/simulate-payment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Simulate Payment
-         * @description Mark an order paid, for local development.
-         *
-         *     The route is off unless a deployment turns it on, and it is bound to the
-         *     caller and to the order that caller owns. It is the only route that can
-         *     mark an order paid without a provider, so it must not be reachable by
-         *     an anonymous caller or by one customer on another's order.
-         */
-        post: operations["simulate_payment_api_v1_testing_simulate_payment_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/uploads": {
         parameters: {
             query?: never;
@@ -706,32 +681,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhooks/razorpay": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Razorpay Webhook
-         * @description Take a delivery from the payment provider.
-         *
-         *     The event id is required and it cannot be empty, and the contract
-         *     says so: a delivery without one cannot be deduplicated, and the
-         *     provider always sends one. The signature is not required in the
-         *     contract, because a delivery without one is refused with a signature
-         *     error, which is a better answer than a validation error.
-         */
-        post: operations["razorpay_webhook_api_v1_webhooks_razorpay_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1013,12 +962,6 @@ export interface components {
              */
             paper_size: "A4" | "A3";
             /**
-             * Payment Method
-             * @default online
-             * @enum {string}
-             */
-            payment_method: "online" | "at_store";
-            /**
              * Quality Acknowledged
              * @default false
              */
@@ -1037,7 +980,6 @@ export interface components {
         /** OrderCreateResponse */
         OrderCreateResponse: {
             order: components["schemas"]["OrderResponse"];
-            payment: components["schemas"]["PaymentCheckoutResponse"];
         };
         /** OrderDetailResponse */
         OrderDetailResponse: {
@@ -1125,19 +1067,6 @@ export interface components {
              * Format: uuid
              */
             upload_id: string;
-        };
-        /** PaymentCheckoutResponse */
-        PaymentCheckoutResponse: {
-            /** Amount Paise */
-            amount_paise: number;
-            /** Currency */
-            currency: string;
-            /** Key Id */
-            key_id?: string | null;
-            /** Provider */
-            provider: string;
-            /** Provider Order Id */
-            provider_order_id: string;
         };
         /**
          * QualityPageResponse
@@ -1330,21 +1259,10 @@ export interface components {
         /**
          * ShopListResponse
          * @description The shops a customer can order from.
-         *
-         *     `cash_at_store_enabled` is a platform setting, not a shop setting. It
-         *     travels with the shop list because this is the response the order
-         *     wizard already has when the customer reaches the payment step, and
-         *     the customer should not be offered a way to pay that the server is
-         *     going to refuse.
          */
         ShopListResponse: {
             /** Attribution */
             attribution?: string | null;
-            /**
-             * Cash At Store Enabled
-             * @default false
-             */
-            cash_at_store_enabled: boolean;
             /** Items */
             items: components["schemas"]["ShopResponse"][];
             /** Next Cursor */
@@ -1421,14 +1339,6 @@ export interface components {
             /** Items */
             items: components["schemas"]["ShopSearchItem"][];
             nearest?: components["schemas"]["NearestShop"] | null;
-        };
-        /** SimulatePaymentRequest */
-        SimulatePaymentRequest: {
-            /**
-             * Order Id
-             * Format: uuid
-             */
-            order_id: string;
         };
         /**
          * SuspendShopRequest
@@ -3499,104 +3409,6 @@ export interface operations {
             };
         };
     };
-    simulate_payment_api_v1_testing_simulate_payment_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SimulatePaymentRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description The request was rejected, for example a wrong pickup code. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The access token is missing or expired. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description This account may not do that. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not found, or not yours. The two are deliberately the same. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The state moved on, for example the price changed. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The request body is larger than the limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The request body did not validate. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too many requests. The response carries a Retry-After header. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     create_upload_api_v1_uploads_post: {
         parameters: {
             query?: never;
@@ -5310,103 +5122,6 @@ export interface operations {
                 "svix-id"?: string | null;
                 "svix-timestamp"?: string | null;
                 "svix-signature"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description The request was rejected, for example a wrong pickup code. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The access token is missing or expired. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description This account may not do that. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not found, or not yours. The two are deliberately the same. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The state moved on, for example the price changed. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The request body is larger than the limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The request body did not validate. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too many requests. The response carries a Retry-After header. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    razorpay_webhook_api_v1_webhooks_razorpay_post: {
-        parameters: {
-            query?: never;
-            header: {
-                "X-Razorpay-Signature"?: string;
-                "X-Razorpay-Event-Id": string;
             };
             path?: never;
             cookie?: never;

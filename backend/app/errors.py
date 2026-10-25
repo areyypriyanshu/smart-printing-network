@@ -182,18 +182,6 @@ class InvalidTransition(AppError):
     status_code = 409
 
 
-class PaymentNotApplied(AppError):
-    """The payment could not be applied to the order.
-
-    The provider retries a delivery it was told failed, so this is
-    answered with a status that says "try again". The event is not
-    recorded as applied, so the retry can still apply it.
-    """
-
-    code = "PAYMENT_NOT_APPLIED"
-    status_code = 503
-
-
 class ShopAlreadyVerified(AppError):
     """The shop is already approved, so there is nothing to approve."""
 
@@ -208,16 +196,6 @@ class ShopNotVerified(AppError):
     status_code = 409
 
 
-class PaymentGatewayError(AppError):
-    code = "PAYMENT_GATEWAY_ERROR"
-    status_code = 502
-
-
-class WebhookSignatureInvalid(AppError):
-    code = "WEBHOOK_SIGNATURE_INVALID"
-    status_code = 400
-
-
 class PickupCodeInvalid(AppError):
     code = "PICKUP_CODE_INVALID"
     status_code = 400
@@ -227,18 +205,6 @@ class FileUnavailable(AppError):
     """The file is no longer stored, so it cannot be printed again."""
 
     code = "FILE_UNAVAILABLE"
-    status_code = 409
-
-
-class CashPaymentDisabled(AppError):
-    """Paying at the shop is not switched on.
-
-    The feature is off by default, so a deployment that has not been
-    configured for it refuses the request rather than quietly booking a
-    cash order it cannot settle.
-    """
-
-    code = "CASH_PAYMENT_DISABLED"
     status_code = 409
 
 

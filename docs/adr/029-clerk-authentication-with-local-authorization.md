@@ -148,7 +148,8 @@ work.
 So the rule is: **Clerk sends every message that proves an identity,
 and Brevo sends every message that tells a customer something.** The
 application keeps its `EmailSender` interface, which is already a
-protocol with a test double, exactly like `PaymentGateway`. Brevo
+protocol with a test double, exactly like `PaymentGateway` was (that
+interface was removed with the online payment path in ADR 035). Brevo
 plugs into it with no code at all, because Brevo speaks SMTP and the
 `SMTP_*` settings already exist.
 

@@ -1,20 +1,20 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { signIn as signInHelper, signInAsCustomer } from "./helpers";
 
 // The whole product, in a browser, with two people.
 //
-// The customer uploads a file, gets a price, pays and is shown a pickup
-// code. The shop, in a second browser, works the order from the queue to
-// the handover. The customer sees the order collected.
-//
-// It runs against the local stack with the fake payment gateway, so no
-// money moves and no real payment provider is involved.
+// The customer uploads a file, gets a price, reserves the job and is
+// shown a pickup code. The shop, in a second browser, works the order
+// from the queue to the handover, and takes the cash at the counter.
+// The customer sees the order collected and paid.
 
 const SHOP_NAME = "Central Prints";
 const VENDOR_EMAIL = "vendor1@example.com";
 
-test("a customer pays and a shop hands the order over", async ({ browser }) => {
+test("a customer reserves a job and a shop hands it over", async ({
+  browser,
+}) => {
   const customerContext = await browser.newContext();
   const customer = await customerContext.newPage();
   await signInAsCustomer(customer);
@@ -42,12 +42,12 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   const shop = customer.locator("li").filter({ hasText: SHOP_NAME }).first();
   await expect(shop).toBeVisible();
   await shop.getByRole("button", { name: "Choose this shop" }).click();
-  await customer.getByRole("button", { name: "Continue to payment" }).click();
+  await customer.getByRole("button", { name: "Continue to reserve" }).click();
 
-  // The customer pays. The local stack uses the fake gateway, so the
-  // payment is confirmed immediately.
-  await customer.getByRole("button", { name: /pay/i }).click();
-  await expect(customer.getByText("Payment received")).toBeVisible({
+  // The job is booked and the money is paid at the counter, so the code
+  // is there straight away and there is no provider to wait for.
+  await customer.getByRole("button", { name: /reserve for/i }).click();
+  await expect(customer.getByText("Reserved for you")).toBeVisible({
     timeout: 30_000,
   });
   const pickupCode = (
@@ -62,7 +62,7 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   // The order number, so the shop can find this order and not somebody
   // else's that happens to be in the queue.
   const orderNumber = (
-    await customer.getByText(/Order #\d+ is paid/).textContent()
+    await customer.getByText(/Order #\d+ is booked/).textContent()
   ).match(/#(\d+)/)?.[1];
   expect(orderNumber).toBeTruthy();
 
@@ -91,7 +91,9 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
       .getByRole("article")
       .filter({ hasText: `#${orderNumber}` });
 
+  // The shop sees it is to be paid for at the counter.
   await expect(card("New")).toBeVisible({ timeout: 15_000 });
+  await expect(card("New").getByText("Pay at shop")).toBeVisible();
   await card("New").getByRole("button", { name: "Accept" }).click();
   await expect(card("Accepted")).toBeVisible({ timeout: 15_000 });
 
@@ -103,13 +105,14 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   await card("Printing").getByRole("button", { name: "Mark ready" }).click();
   await expect(card("Ready")).toBeVisible({ timeout: 15_000 });
 
-  // A wrong code is refused.
+  // The shop is told how much to take, and a wrong code is refused.
   await card("Ready").getByRole("button", { name: "Verify pickup" }).click();
+  await expect(vendor.getByText(/Take ₹/)).toBeVisible();
   await vendor.getByLabel("Pickup code").fill("000000");
   await vendor.getByRole("button", { name: "Hand over" }).click();
   await expect(vendor.getByRole("alert")).toContainText(/code does not match/i);
 
-  // The right code completes the order.
+  // The right code hands the printout over, and takes the money.
   await vendor.getByLabel("Pickup code").fill(pickupCode as string);
   await vendor.getByRole("button", { name: "Hand over" }).click();
   // A collected order is no longer active, so it leaves the board.
@@ -118,7 +121,7 @@ test("a customer pays and a shop hands the order over", async ({ browser }) => {
   // The customer sees the finished order on the order page.
   await customer.goto(orderUrl);
   await expect(customer).toHaveURL(/\/orders\//);
-  await expect(customer.getByText("Collected").first()).toBeVisible({
+  await expect(customer.getByText(/Collected and paid in cash/i)).toBeVisible({
     timeout: 20_000,
   });
   // The pickup code is still shown, because it is the customer's proof.

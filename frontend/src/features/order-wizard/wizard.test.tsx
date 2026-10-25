@@ -276,7 +276,7 @@ describe("the quality check in the review step", () => {
       (await screen.findAllByRole("button", { name: "Choose this shop" }))[0],
     );
     await user.click(
-      await screen.findByRole("button", { name: /continue to payment/i }),
+      await screen.findByRole("button", { name: /continue to reserve/i }),
     );
 
     expect(
@@ -285,7 +285,9 @@ describe("the quality check in the review step", () => {
     expect(screen.getByText(/page 2/i)).toBeInTheDocument();
     // The order is still there: the warnings do not take the checkout
     // away.
-    expect(screen.getByRole("button", { name: /pay/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reserve for/i }),
+    ).toBeInTheDocument();
   });
 });
 

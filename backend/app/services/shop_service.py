@@ -7,7 +7,6 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import cast, delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.errors import NotFound, ValidationError
 from app.models import Shop, ShopRate
 from app.schemas.shop import (
@@ -65,7 +64,6 @@ def list_public_shops(
     return ShopListResponse(
         items=items,
         next_cursor=next_cursor,
-        cash_at_store_enabled=get_settings().cash_at_store_enabled,
         attribution=attribution,
     )
 
@@ -124,7 +122,6 @@ def list_nearby_shops(
     return ShopListResponse(
         items=items,
         next_cursor=None,
-        cash_at_store_enabled=get_settings().cash_at_store_enabled,
         attribution=attribution,
     )
 

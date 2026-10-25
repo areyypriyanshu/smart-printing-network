@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from app.models import Order, OrderEvent, ShopRate
+from app.models import Order, OrderEvent, Payment, ShopRate
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -57,15 +57,24 @@ def test_create_order_returns_the_order_with_a_price(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["order"]["status"] == "PENDING_PAYMENT"
+    assert body["order"]["status"] == "RESERVED"
     assert body["order"]["price_paise"] == PAGES * COPIES * BASE_PAISE
     assert body["order"]["page_count"] == PAGES
-    assert body["order"]["pickup_code"] is None
+    code = body["order"]["pickup_code"]
+    assert len(code) == 6 and code.isdigit()
     assert body["order"]["order_no"] > 0
-    assert body["payment"]["provider"] == "fake"
-    assert body["payment"]["amount_paise"] == PAGES * COPIES * BASE_PAISE
-    assert body["payment"]["currency"] == "INR"
-    assert body["payment"]["provider_order_id"].startswith("fake_order_")
+
+    db_session.expire_all()
+    order_id = uuid.UUID(body["order"]["id"])
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order_id))
+    assert payment is not None
+    assert payment.provider == "cash"
+    assert payment.status == "CREATED"
+    assert payment.amount_paise == PAGES * COPIES * BASE_PAISE
+    assert payment.currency == "INR"
+    assert payment.provider_order_id is not None
+    assert payment.provider_order_id.startswith("cash_order_")
+    assert payment.provider_payment_id is None
 
 
 def test_create_order_requires_an_idempotency_key(client: TestClient, db_session: Session) -> None:
@@ -246,8 +255,8 @@ def test_order_detail_contains_the_timeline(client: TestClient, db_session: Sess
 
     assert response.status_code == 200
     body = response.json()
-    assert body["order"]["status"] == "PENDING_PAYMENT"
-    assert [event["to_status"] for event in body["events"]] == ["PENDING_PAYMENT"]
+    assert body["order"]["status"] == "RESERVED"
+    assert [event["to_status"] for event in body["events"]] == ["RESERVED"]
 
 
 def test_order_creation_rejects_invalid_copies(client: TestClient, db_session: Session) -> None:

@@ -79,14 +79,14 @@ test("a Word document is printed like any other file", async ({
   const shop = customer.locator("li").filter({ hasText: SHOP_NAME }).first();
   await expect(shop).toBeVisible();
   await shop.getByRole("button", { name: "Choose this shop" }).click();
-  await customer.getByRole("button", { name: "Continue to payment" }).click();
-  await customer.getByRole("button", { name: /^Pay /i }).click();
+  await customer.getByRole("button", { name: "Continue to reserve" }).click();
+  await customer.getByRole("button", { name: /^Reserve for /i }).click();
 
-  await expect(customer.getByText("Payment received")).toBeVisible({
+  await expect(customer.getByText("Reserved for you")).toBeVisible({
     timeout: 30_000,
   });
   const orderNumber = (
-    await customer.getByText(/Order #\d+ is paid/).textContent()
+    await customer.getByText(/Order #\d+ is booked/).textContent()
   ).match(/#(\d+)/)?.[1];
   expect(orderNumber).toBeTruthy();
   const orderId = (

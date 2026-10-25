@@ -1,7 +1,7 @@
 # ADR 009: A payment gateway interface with a fake implementation
 
 Date: 2026-10-19
-Status: Accepted
+Status: Superseded by ADR 035 (cash only)
 Requirement: FR-8, FR-13 (order, payment and refunds)
 
 ## Context

@@ -224,7 +224,9 @@ function OrderDetail({
             ? order.paid_at === null
               ? "Cash at the counter"
               : "Cash paid at the counter"
-            : "Paid online"}
+            : order.paid_at === null
+              ? "Online payment not completed"
+              : "Paid online"}
         </dd>
       </dl>
 

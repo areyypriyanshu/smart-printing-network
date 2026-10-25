@@ -1,7 +1,7 @@
 # ADR 023: The deployment runs the commit it reviewed, in a mode it pins
 
 Date: 2026-10-19
-Status: Accepted
+Status: Accepted; the payment-provider checks described here were removed with ADR 035, and the identity provider's checks took their place
 Requirement: deployability (a project wide constraint)
 
 ## Context

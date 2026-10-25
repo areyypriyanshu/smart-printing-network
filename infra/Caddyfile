@@ -56,9 +56,9 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
-		# The policy allows the Razorpay checkout, the web fonts, the map
-		# and the identity provider, and nothing else from a third party.
-		# The app itself ships no inline scripts.
+		# The policy allows the web fonts, the map and the identity
+		# provider, and nothing else from a third party. The app itself
+		# ships no inline scripts.
 		#
 		# The map is the provider's script, its tiles and the requests it
 		# makes from the page. It is loaded only when the customer
@@ -83,7 +83,7 @@
 		# for never finishes, so nobody can create an account. The empty
 		# address reaches no host: a data address is the bytes in the
 		# address itself.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' https://checkout.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com https://maps.googleapis.com https://maps.gstatic.com; frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; connect-src 'self' data: https://api.razorpay.com {$CLERK_FAPI_URL} https://*.protect.clerk.com:* https://maps.googleapis.com https://*.googleapis.com; img-src 'self' data: https://img.clerk.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com https://maps.googleapis.com https://maps.gstatic.com; frame-src 'self' {$CLERK_FAPI_URL} https://challenges.cloudflare.com https://*.protect.clerk.com; connect-src 'self' data: {$CLERK_FAPI_URL} https://*.protect.clerk.com:* https://maps.googleapis.com https://*.googleapis.com; img-src 'self' data: https://img.clerk.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 

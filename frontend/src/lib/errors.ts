@@ -36,9 +36,6 @@ const MESSAGES: Record<string, string> = {
   SHOP_ALREADY_VERIFIED: "This shop is already approved and taking orders.",
   SHOP_NOT_VERIFIED:
     "This shop was never approved, so there is nothing to suspend.",
-  PAYMENT_GATEWAY_ERROR:
-    "The payment provider could not start the payment. Try again shortly.",
-  WEBHOOK_SIGNATURE_INVALID: "The payment notification could not be verified.",
   ADDRESS_NOT_FOUND:
     "We could not find that address. Try a nearby area or a well known place.",
   GEOCODING_UNAVAILABLE:

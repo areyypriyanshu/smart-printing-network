@@ -9,7 +9,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.gateways.payments import CashGateway
 from app.jobs import expire_no_shows
 from app.models import (
     Order,
@@ -142,12 +141,14 @@ def test_expiry_queues_no_refund(db_session: Session) -> None:
     assert payment.refund_next_attempt_at is None
 
 
-def test_a_paid_order_nobody_collected_is_not_expired(db_session: Session) -> None:
-    """An online order has the customer's money in it.
+def test_a_historical_paid_order_nobody_collected_is_not_expired(
+    db_session: Session,
+) -> None:
+    """An order booked online has the customer's money in it.
 
-    Expiring it would take that money without giving it back, so the job
-    leaves it alone. A paid order that is never collected needs a
-    different decision, and a refund path of its own.
+    There is no provider left to refund through, so expiring it would
+    take that money without giving it back. The job leaves it alone; a
+    person has to settle it.
     """
     from app.services import order_service
 
@@ -234,7 +235,7 @@ def _seed_ready_cash_order(engine) -> tuple[uuid.UUID, str, uuid.UUID]:
         shop = create_shop(session, owner=vendor, name=f"No Show Shop {run_id}")
         create_full_rate_table(session, shop)
         upload = create_upload_row(session, customer=customer, page_count=1)
-        order, _payment = order_service.create_order(
+        order = order_service.create_order(
             session,
             customer_id=customer.id,
             request=OrderCreateRequest(
@@ -244,10 +245,8 @@ def _seed_ready_cash_order(engine) -> tuple[uuid.UUID, str, uuid.UUID]:
                 color=False,
                 duplex=False,
                 copies=1,
-                payment_method="at_store",
             ),
             idempotency_key=uuid.uuid4().hex,
-            gateway=CashGateway(),
         )
         for to_status in ("ACCEPTED", "PRINTING"):
             order_service.transition(

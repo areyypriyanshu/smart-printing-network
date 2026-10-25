@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
     create_full_rate_table,
-    create_paid_order,
+    create_reserved_order,
     create_shop,
     create_user,
     login_headers,
@@ -49,7 +49,7 @@ def _store_the_file(client: TestClient, session: Session, order: Order) -> Uploa
 
 def test_reordering_copies_the_file(client: TestClient, db_session: Session) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     _store_the_file(client, db_session, order)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
@@ -76,7 +76,7 @@ def test_reordering_copies_the_file(client: TestClient, db_session: Session) -> 
 
 def test_the_copy_has_its_own_retention_window(client: TestClient, db_session: Session) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     _store_the_file(client, db_session, order)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
@@ -95,7 +95,7 @@ def test_reordering_after_the_file_is_deleted_says_so(
 ) -> None:
     """The file is gone. The honest answer is to upload it again."""
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     upload = db_session.get(Upload, order.upload_id)
     assert upload is not None
     upload.file_deleted_at = datetime.now(UTC)
@@ -114,7 +114,7 @@ def test_the_order_detail_says_whether_the_file_is_still_there(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.get(f"{ORDERS}/{order.id}", headers=headers)
@@ -135,7 +135,7 @@ def test_a_customer_cannot_reorder_somebody_elses_order(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     create_user(db_session, email=OTHER_EMAIL)
     headers = login_headers(client, OTHER_EMAIL)
 
@@ -147,7 +147,7 @@ def test_a_customer_cannot_reorder_somebody_elses_order(
 
 def test_reordering_needs_authentication(client: TestClient, db_session: Session) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
 
     response = client.post(f"{ORDERS}/{order.id}/reorder")
 
@@ -156,7 +156,7 @@ def test_reordering_needs_authentication(client: TestClient, db_session: Session
 
 def test_a_vendor_cannot_reorder_a_customers_job(client: TestClient, db_session: Session) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, "vendor@example.com")
 
     response = client.post(f"{ORDERS}/{order.id}/reorder", headers=headers)
@@ -169,7 +169,7 @@ def test_reordering_leaves_the_original_order_alone(
 ) -> None:
     """A new order is a new order. The old one is not touched."""
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     _store_the_file(client, db_session, order)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
@@ -177,6 +177,6 @@ def test_reordering_leaves_the_original_order_alone(
 
     stored = db_session.get(Order, order.id)
     assert stored is not None
-    assert stored.status == "PAID"
+    assert stored.status == "RESERVED"
     uploads = list(db_session.scalars(select(Upload)))
     assert len(uploads) == 2

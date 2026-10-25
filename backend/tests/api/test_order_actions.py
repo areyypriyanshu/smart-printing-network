@@ -1,15 +1,12 @@
-import uuid
-
 from app.models import Payment, Upload
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
-    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
-    create_paid_order,
+    create_reserved_order,
     create_shop,
-    create_upload_row,
+    create_unpaid_order,
     create_user,
     login_headers,
 )
@@ -27,11 +24,11 @@ def _seed(session: Session) -> tuple[object, object]:
     return customer, shop
 
 
-def test_a_customer_can_cancel_an_order_that_is_still_waiting_for_payment(
+def test_a_customer_can_cancel_an_order_the_shop_has_not_accepted(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.post(f"{ORDERS}/{order.id}/cancel", headers=headers)
@@ -40,9 +37,11 @@ def test_a_customer_can_cancel_an_order_that_is_still_waiting_for_payment(
     assert response.json()["status"] == "CANCELLED"
 
 
-def test_cancelling_a_paid_order_queues_a_refund(client: TestClient, db_session: Session) -> None:
+def test_cancelling_before_the_money_is_taken_leaves_the_payment_uncaptured(
+    client: TestClient, db_session: Session
+) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.post(f"{ORDERS}/{order.id}/cancel", headers=headers)
@@ -51,14 +50,14 @@ def test_cancelling_a_paid_order_queues_a_refund(client: TestClient, db_session:
     assert response.json()["status"] == "CANCELLED"
     payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
     assert payment is not None
-    assert payment.status == "REFUND_PENDING"
+    assert payment.status == "CREATED"
 
 
 def test_a_customer_cannot_cancel_after_the_shop_accepted(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     vendor_headers = login_headers(client, "vendor@example.com")
     client.post(f"/api/v1/vendor/orders/{order.id}/accept", headers=vendor_headers)
     headers = login_headers(client, CUSTOMER_EMAIL)
@@ -73,7 +72,7 @@ def test_cancelling_another_customers_order_is_not_found(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     create_user(db_session, email=OTHER_CUSTOMER_EMAIL)
     headers = login_headers(client, OTHER_CUSTOMER_EMAIL)
 
@@ -87,7 +86,7 @@ def test_a_customer_gets_a_short_lived_link_to_their_own_file(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.get(f"{ORDERS}/{order.id}/file", headers=headers)
@@ -103,7 +102,7 @@ def test_a_customer_cannot_get_another_customers_file(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     create_user(db_session, email=OTHER_CUSTOMER_EMAIL)
     headers = login_headers(client, OTHER_CUSTOMER_EMAIL)
 
@@ -117,7 +116,7 @@ def test_a_file_that_was_purged_is_not_found(client: TestClient, db_session: Ses
     from datetime import UTC, datetime
 
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     upload = db_session.get(Upload, order.upload_id)
     assert upload is not None
     upload.file_deleted_at = datetime.now(UTC)
@@ -131,7 +130,7 @@ def test_a_file_that_was_purged_is_not_found(client: TestClient, db_session: Ses
 
 def test_the_file_endpoint_requires_authentication(client: TestClient, db_session: Session) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
 
     response = client.get(f"{ORDERS}/{order.id}/file")
 
@@ -142,7 +141,7 @@ def test_the_file_endpoint_is_forbidden_for_a_vendor(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, "vendor@example.com")
 
     response = client.get(f"{ORDERS}/{order.id}/file", headers=headers)
@@ -154,7 +153,7 @@ def test_the_customer_order_detail_shows_the_pickup_code(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.get(f"{ORDERS}/{order.id}", headers=headers)
@@ -163,27 +162,12 @@ def test_the_customer_order_detail_shows_the_pickup_code(
     assert response.json()["order"]["pickup_code"] == order.pickup_code
 
 
-def test_an_unpaid_order_has_no_pickup_code(client: TestClient, db_session: Session) -> None:
-    from app.gateways.payments import FakeGateway
-    from app.schemas.order import OrderCreateRequest
-    from app.services import order_service
-
+def test_a_historical_unpaid_order_has_no_pickup_code(
+    client: TestClient, db_session: Session
+) -> None:
+    """A row left by the online version never issued a code."""
     customer, shop = _seed(db_session)
-    upload = create_upload_row(db_session, customer=customer, page_count=1)
-    order, _payment = order_service.create_order(
-        db_session,
-        customer_id=customer.id,
-        request=OrderCreateRequest(
-            upload_id=upload.id,
-            shop_id=shop.id,
-            paper_size="A4",
-            color=False,
-            duplex=False,
-            copies=1,
-        ),
-        idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
-    )
+    order = create_unpaid_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.get(f"{ORDERS}/{order.id}", headers=headers)

@@ -30,8 +30,6 @@ QUOTES = "/api/v1/quotes"
 
 def _settings(**overrides: object) -> Settings:
     values: dict[str, object] = {
-        "payment_provider": "fake",
-        "fake_webhook_secret": "a-key-the-operator-chose",
         "env": "local",
     }
     values.update(overrides)

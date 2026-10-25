@@ -1,13 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router";
 
-import {
-  createOrder,
-  getOrder,
-  simulatePayment,
-  type OrderDetailResponse,
-  type OrderResponse,
-} from "../../api/orders";
+import { createOrder, type OrderResponse } from "../../api/orders";
 import type { UploadResponse } from "../../api/client";
 import {
   Alert,
@@ -18,12 +12,7 @@ import {
 import { messageForError } from "../../lib/errors";
 import { formatPaise } from "../../lib/money";
 import { pickupShareLink } from "../../lib/share";
-import { openCheckout } from "../../lib/razorpay";
-import {
-  describeOptions,
-  type OptionsFormValues,
-  type PaymentMethod,
-} from "./schemas";
+import { describeOptions, type OptionsFormValues } from "./schemas";
 
 type Shop = {
   id: string;
@@ -42,30 +31,17 @@ type PayStepProps = {
   options: OptionsFormValues;
   shop: Shop;
   quote: Quote;
-  paymentMethod: PaymentMethod;
-  // Whether the platform is offering paying at the shop at all. The
-  // server is the authority, so the choice is only shown when the server
-  // says it is on.
-  cashAtStoreEnabled: boolean;
-  onPaymentMethodChange: (method: PaymentMethod) => void;
   onBack: () => void;
   qualityAcknowledged?: boolean;
-  deadlineMs?: number;
 };
 
 type Phase =
   | { kind: "review" }
-  | { kind: "paying" }
-  | { kind: "confirming"; orderId: string }
-  | { kind: "paid"; order: OrderDetailResponse }
-  // A cash order is booked straight away. There is no provider to wait
-  // for, so there is nothing to poll and nothing to confirm.
+  | { kind: "reserving" }
+  // The order is booked and the money is paid at the counter, so there is
+  // nothing to wait for and nothing to confirm.
   | { kind: "reserved"; order: OrderResponse }
-  | { kind: "unconfirmed"; orderId: string }
   | { kind: "failed"; message: string };
-
-const POLL_INTERVAL_MS = 2000;
-const POLL_DEADLINE_MS = 60_000;
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -79,81 +55,14 @@ export function PayStep({
   options,
   shop,
   quote,
-  paymentMethod,
-  cashAtStoreEnabled,
-  onPaymentMethodChange,
   onBack,
   qualityAcknowledged = false,
-  deadlineMs = POLL_DEADLINE_MS,
 }: PayStepProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "review" });
   const idempotencyKey = useRef(newIdempotencyKey());
 
-  const poll = useCallback(
-    async (
-      orderId: string,
-      deadline: number,
-      controller: { cancelled: boolean },
-    ) => {
-      while (
-        !controller.cancelled &&
-        !document.hidden &&
-        Date.now() <= deadline
-      ) {
-        try {
-          const detail = await getOrder(orderId);
-          if (controller.cancelled || document.hidden) return;
-          if (detail.order.status === "PAID") {
-            setPhase({ kind: "paid", order: detail });
-            return;
-          }
-          if (
-            detail.order.status === "CANCELLED" ||
-            detail.order.status === "EXPIRED"
-          ) {
-            setPhase({
-              kind: "failed",
-              message: "This order was closed before the payment landed.",
-            });
-            return;
-          }
-        } catch {
-          // Keep polling; a transient failure must not lose the order.
-        }
-        await new Promise((resolve) => {
-          setTimeout(resolve, POLL_INTERVAL_MS);
-        });
-      }
-      if (!controller.cancelled && !document.hidden) {
-        setPhase({ kind: "unconfirmed", orderId });
-      }
-    },
-    [],
-  );
-
-  const [visibilityVersion, setVisibilityVersion] = useState(0);
-  useEffect(() => {
-    const onVisibilityChange = () =>
-      setVisibilityVersion((version) => version + 1);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
-
-  useEffect(() => {
-    if (phase.kind !== "confirming") return;
-    const controller = { cancelled: false };
-    const timer = setTimeout(() => {
-      void poll(phase.orderId, Date.now() + deadlineMs, controller);
-    }, 0);
-    return () => {
-      controller.cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [phase, poll, deadlineMs, visibilityVersion]);
-
-  const startPayment = async () => {
-    setPhase({ kind: "paying" });
+  const reserve = async () => {
+    setPhase({ kind: "reserving" });
     try {
       const created = await createOrder(
         {
@@ -164,38 +73,11 @@ export function PayStep({
           duplex: options.duplex,
           copies: options.copies,
           expected_price_paise: quote.price_paise,
-          payment_method: paymentMethod,
           quality_acknowledged: qualityAcknowledged,
         },
         idempotencyKey.current,
       );
-      const orderId = created.order.id;
-      const payment = created.payment;
-
-      // A cash order is already booked. The money changes hands at the
-      // counter, so there is no checkout to open and nothing to wait for.
-      if (payment.provider === "cash") {
-        setPhase({ kind: "reserved", order: created.order });
-        return;
-      }
-
-      const keyId = payment.key_id ?? null;
-      if (payment.provider === "razorpay" && keyId !== null) {
-        await openCheckout({
-          key: keyId,
-          amount: payment.amount_paise,
-          order_id: payment.provider_order_id,
-          currency: payment.currency,
-          name: "Smart Printing Network",
-          description: `${upload.page_count} page print job`,
-          handler: () => setPhase({ kind: "confirming", orderId }),
-          modal: { ondismiss: () => setPhase({ kind: "review" }) },
-        });
-        return;
-      }
-
-      await simulatePayment(orderId);
-      setPhase({ kind: "confirming", orderId });
+      setPhase({ kind: "reserved", order: created.order });
     } catch (error) {
       setPhase({ kind: "failed", message: messageForError(error) });
     }
@@ -241,56 +123,11 @@ export function PayStep({
     );
   }
 
-  if (phase.kind === "paid") {
-    const order = phase.order.order;
-    return (
-      <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
-        <h2 className={sectionTitleClassName()}>Payment received</h2>
-        <p className="text-sm text-steel">
-          Order #{order.order_no} is paid. Show this code at the counter.
-        </p>
-        <p className="font-mono text-3xl tracking-[0.3em] text-ink">
-          {order.pickup_code}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            to={`/orders/${order.id}`}
-            className={buttonClassName("primary")}
-          >
-            View order
-          </Link>
-        </div>
-      </section>
-    );
-  }
-
-  if (phase.kind === "unconfirmed") {
-    return (
-      <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
-        <h2 className={sectionTitleClassName()}>
-          Still confirming your payment
-        </h2>
-        <Alert>
-          We have not heard back from the payment provider yet. Do not pay again
-          — this order is still being checked.
-        </Alert>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            to={`/orders/${phase.orderId}`}
-            className={buttonClassName("secondary")}
-          >
-            Check the order
-          </Link>
-        </div>
-      </section>
-    );
-  }
-
   if (phase.kind === "failed") {
     return (
       <section className="flex flex-col gap-4 rounded-xl border border-hairline bg-canvas p-6">
         <h2 className={sectionTitleClassName()}>
-          We could not start the payment
+          We could not reserve this order
         </h2>
         <Alert>{phase.message}</Alert>
         <div className="flex flex-wrap gap-3">
@@ -311,7 +148,7 @@ export function PayStep({
         aria-label="Your order"
         className="flex flex-col gap-3 rounded-xl border border-hairline bg-canvas p-6"
       >
-        <h2 className={sectionTitleClassName()}>Review and pay</h2>
+        <h2 className={sectionTitleClassName()}>Review and reserve</h2>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
           <dt className="text-steel">File</dt>
           <dd className="text-ink">
@@ -332,54 +169,16 @@ export function PayStep({
             {formatPaise(quote.price_paise)}
           </dd>
         </dl>
+        <p className="text-sm text-steel">
+          You pay {formatPaise(quote.price_paise)} in cash at the counter when
+          you collect. The shop gets the order straight away, and you pay
+          nothing unless you pick it up.
+        </p>
       </section>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium text-ink">
-          How would you like to pay?
-        </legend>
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-hairline-strong bg-canvas px-4 py-2 text-sm text-ink has-checked:border-primary has-checked:bg-cream-deeper">
-          <input
-            type="radio"
-            name="payment-method"
-            value="online"
-            className="accent-primary"
-            checked={paymentMethod === "online"}
-            onChange={() => onPaymentMethodChange("online")}
-          />
-          Pay online by card or UPI
-        </label>
-        {cashAtStoreEnabled && (
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-hairline-strong bg-canvas px-4 py-2 text-sm text-ink has-checked:border-primary has-checked:bg-cream-deeper">
-            <input
-              type="radio"
-              name="payment-method"
-              value="at_store"
-              className="accent-primary"
-              checked={paymentMethod === "at_store"}
-              onChange={() => onPaymentMethodChange("at_store")}
-            />
-            Pay at the shop in cash when you collect
-          </label>
-        )}
-        {paymentMethod === "at_store" && (
-          <p className="text-sm text-steel">
-            You pay {formatPaise(quote.price_paise)} in cash at the counter. The
-            shop gets the order the same way, and the money changes hands when
-            you pick it up.
-          </p>
-        )}
-      </fieldset>
-
-      {phase.kind === "confirming" && (
+      {phase.kind === "reserving" && (
         <p role="status" className="text-sm text-steel">
-          Confirming your payment…
-        </p>
-      )}
-
-      {phase.kind === "paying" && (
-        <p role="status" className="text-sm text-steel">
-          Starting the payment…
+          Reserving your order…
         </p>
       )}
 
@@ -388,13 +187,11 @@ export function PayStep({
           Back
         </Button>
         <Button
-          onClick={() => void startPayment()}
-          pending={phase.kind === "paying"}
-          pendingLabel="Starting payment…"
+          onClick={() => void reserve()}
+          pending={phase.kind === "reserving"}
+          pendingLabel="Reserving…"
         >
-          {paymentMethod === "at_store"
-            ? `Reserve for ${formatPaise(quote.price_paise)}`
-            : `Pay ${formatPaise(quote.price_paise)}`}
+          Reserve for {formatPaise(quote.price_paise)}
         </Button>
       </div>
     </div>

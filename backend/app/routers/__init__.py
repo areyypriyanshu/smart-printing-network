@@ -9,7 +9,6 @@ from app.routers import (
     shops,
     uploads,
     vendor,
-    webhooks,
     webhooks_clerk,
 )
 
@@ -24,6 +23,5 @@ __all__ = [
     "shops",
     "uploads",
     "vendor",
-    "webhooks",
     "webhooks_clerk",
 ]

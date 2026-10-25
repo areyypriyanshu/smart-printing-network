@@ -12,8 +12,7 @@ Run it in the API container, against the local stack:
     docker compose run --rm -v "$PWD/perf:/perf" api \
         python /perf/seed_queue.py --orders 200
 
-The script refuses to run in production, and it refuses to run when
-paying at the shop is switched off, because the orders it makes are
+The script refuses to run in production. The orders it makes are
 cash orders waiting at the counter. It does not take money and it does
 not touch the object store.
 """
@@ -27,7 +26,6 @@ from sqlalchemy import delete, func, select
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.gateways.payments import CashGateway
 from app.models import Order, OrderEvent, Payment, Shop, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -95,10 +93,6 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     if settings.env == "production":
         raise SystemExit("The load-test seed is for local development only.")
-    if not settings.cash_at_store_enabled:
-        raise SystemExit(
-            "Cash orders are off. Set CASH_AT_STORE_ENABLED=true in .env."
-        )
     if args.orders < 1:
         raise SystemExit("--orders must be at least 1.")
 
@@ -113,7 +107,6 @@ def main(argv: list[str] | None = None) -> int:
         shop = shop_for(session, args.shop_email)
         customer = customer_for(session)
         now = datetime.now(UTC)
-        gateway = CashGateway()
 
         for index in range(args.orders):
             upload = Upload(
@@ -137,10 +130,8 @@ def main(argv: list[str] | None = None) -> int:
                     color=False,
                     duplex=False,
                     copies=1,
-                    payment_method="at_store",
                 ),
                 idempotency_key=f"{KEY_PREFIX}{uuid.uuid4().hex}",
-                gateway=gateway,
                 # Oldest first, so the queue has a believable order.
                 now=now - timedelta(seconds=args.orders - index),
             )

@@ -1,9 +1,8 @@
 """Turning an address into a point on the earth.
 
-The gateway is an interface for the same reason the payment gateway and
-the mail gateway are: the application must not know which provider
-answers, and the answer must be replaceable in a test without a
-network.
+The gateway is an interface for the same reason the mail gateway is:
+the application must not know which provider answers, and the answer
+must be replaceable in a test without a network.
 
 An address in this application is a string a person typed. A point is a
 latitude and a longitude. The conversion between them is somebody

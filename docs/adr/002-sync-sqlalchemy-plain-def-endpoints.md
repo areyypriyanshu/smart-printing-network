@@ -1,7 +1,7 @@
 # ADR 002: Sync SQLAlchemy and plain def endpoints
 
 Date: 2026-10-19
-Status: Accepted
+Status: Accepted (the Razorpay call named in Context was removed by ADR 035)
 Requirement: all Phase 1 backend work, BACKEND_STRUCTURE
 
 ## Context

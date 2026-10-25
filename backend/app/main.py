@@ -24,7 +24,6 @@ from app.gateways.identity import (
     ClerkTokenVerifier,
     FakeTokenVerifier,
 )
-from app.gateways.payments import build_payment_gateway
 from app.gateways.storage import S3Storage
 from app.logging import RequestIdMiddleware, setup_logging
 from app.rate_limit import RateLimiter
@@ -39,7 +38,6 @@ from app.routers import (
     shops,
     uploads,
     vendor,
-    webhooks,
     webhooks_clerk,
     ws,
 )
@@ -142,7 +140,6 @@ def create_app(
     app.state.allowed_origins = tuple(settings.clerk_origin_list)
     app.state.event_hub = EventHub()
     app.state.rate_limiter = RateLimiter()
-    app.state.payment_gateway = build_payment_gateway(settings)
     app.state.email_sender = build_email_sender(settings)
     # The geocoder turns an address into a point. There is no key, there
     # is no geocoder, and the application copes: the features that
@@ -188,7 +185,6 @@ def create_app(
     app.include_router(quality.router, prefix=API_PREFIX)
     app.include_router(orders.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
-    app.include_router(webhooks.router, prefix=API_PREFIX)
     app.include_router(webhooks_clerk.router, prefix=API_PREFIX)
     app.include_router(ws.router)
     # Shadowing the method on the instance is the documented way to change

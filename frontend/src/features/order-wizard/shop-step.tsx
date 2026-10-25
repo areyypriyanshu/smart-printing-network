@@ -314,7 +314,7 @@ export function ShopStep({
           Back
         </Button>
         {selected !== undefined && selected.state.status === "ok" && (
-          <Button onClick={onContinue}>Continue to payment</Button>
+          <Button onClick={onContinue}>Continue to reserve</Button>
         )}
       </div>
     </div>

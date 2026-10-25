@@ -43,10 +43,11 @@ listed at the end; none is a code defect introduced by this sprint.
   policy.
 - The CSP has `object-src 'none'`, `base-uri 'self'`, `form-action
   'self'` and `frame-ancestors 'none'`. Third-party sources are limited
-  to Razorpay, the identity provider, Google Maps, Google Fonts and the
-  identity provider's fraud-protection widget. `'unsafe-inline'` for
-  styles and `'unsafe-eval'` plus `data:` for the fraud widget are
-  required by those providers and are commented in the Caddyfile.
+  to the identity provider, Google Maps, Google Fonts and the identity
+  provider's fraud-protection widget. No payment provider is allowed,
+  because none is used. `'unsafe-inline'` for styles and `'unsafe-eval'`
+  plus `data:` for the fraud widget are required by those providers and
+  are commented in the Caddyfile.
 
 ### Cookies and sessions
 
@@ -82,16 +83,22 @@ listed at the end; none is a code defect introduced by this sprint.
 - The WebSocket channel is derived on the server: a vendor socket is the
   shop that owns the account; a customer socket is that customer's order.
 
-### Money and webhooks
+### Money and the pickup code
 
 - Prices are integer paise, computed only by `domain/pricing.py`, and the
   database has a `CHECK` constraint for the price formula.
-- The fake and real gateways sign webhooks. The handler verifies on the
-  raw body with a constant-time comparison, deduplicates by event id,
-  checks amount and currency, commits the event and its effect in one
-  transaction, and returns 5xx on transient failure so the provider
-  retries.
-- Late payments on expired orders are refunded.
+- The platform moves no money. The customer pays the shop in cash, and
+  the amount to collect comes from the stored price, not from the client.
+  Collection captures the payment and sets `paid_at` in the same
+  transaction as the status change, so a collected order cannot exist
+  without a recorded payment. See ADR 035.
+- The pickup code is compared in constant time and limited to five wrong
+  attempts per order. It is issued at reservation, so it is a claim
+  ticket rather than proof of payment; the shop is told the amount to
+  take.
+- No payment webhook, gateway key or card data exists in the application.
+  The only webhook left is the identity provider's, verified on the raw
+  body with a constant-time comparison and deduplicated by event id.
 
 ### Input limits and abuse
 
@@ -133,10 +140,11 @@ listed at the end; none is a code defect introduced by this sprint.
    configured geocoder. The default is OpenStreetMap's public service,
    and the setting can be pointed at a self-hosted instance or turned
    off. See ADR 031.
-4. **Test-mode payments.** Razorpay runs in test mode; no real money
-   moves. A production launch needs live keys, a webhook secret in the
-   instance environment, and a fresh review of the live gateway path.
+4. **Historical online payments.** Orders paid online before 2026-10-25
+   keep their payment rows and statuses. There is no refund job any more,
+   so a `REFUND_PENDING` row left by the old flow is handled manually.
+   This is documented in ADR 035 rather than hidden.
 
 No SAST tool is wired in beyond Ruff and mypy. Bandit or Semgrep would be
 a reasonable next step, but neither is a substitute for the tests around
-money, authorization and the webhook.
+money, authorization and order state.

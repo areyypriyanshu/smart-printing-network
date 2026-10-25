@@ -3,16 +3,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.errors import Forbidden, InvalidTransition, PriceChanged, UploadAlreadyUsed
-from app.gateways.payments import FakeGateway
-from app.models import Order, OrderEvent, Payment, ShopRate, Upload
+from app.models import Order, OrderEvent, ShopRate, Upload
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tests.factories import (
-    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
+    create_paid_order,
     create_shop,
     create_upload_row,
     create_user,
@@ -49,14 +48,12 @@ def _seed(session: Session) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
 def _create(
     session: Session, customer_id: uuid.UUID, shop_id: uuid.UUID, upload_id: uuid.UUID
 ) -> Order:
-    order, _payment = order_service.create_order(
+    return order_service.create_order(
         session,
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="key-1",
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
-    return order
 
 
 def test_create_order_snapshots_price_and_options(db_session: Session) -> None:
@@ -64,13 +61,14 @@ def test_create_order_snapshots_price_and_options(db_session: Session) -> None:
 
     order = _create(db_session, customer_id, shop_id, upload_id)
 
-    assert order.status == "PENDING_PAYMENT"
+    assert order.status == "RESERVED"
+    assert order.payment_method == "at_store"
     assert order.page_count == PAGES
     assert order.rate_paise == BASE_PAISE
     assert order.min_order_paise == 0
     assert order.price_paise == EXPECTED_PRICE
     assert order.copies == COPIES
-    assert order.pickup_code is None
+    assert order.pickup_code is not None
     assert order.paid_at is None
     assert order.order_no > 0
 
@@ -83,28 +81,27 @@ def test_create_order_writes_one_creation_event(db_session: Session) -> None:
     events = list(db_session.scalars(select(OrderEvent).where(OrderEvent.order_id == order.id)))
     assert len(events) == 1
     assert events[0].from_status is None
-    assert events[0].to_status == "PENDING_PAYMENT"
+    assert events[0].to_status == "RESERVED"
     assert events[0].actor_type == "customer"
 
 
 def test_injected_clock_is_shared_by_order_fields_and_events(db_session: Session) -> None:
     customer_id, shop_id, upload_id = _seed(db_session)
     created_at = datetime(2026, 1, 1, tzinfo=UTC)
-    order, _payment = order_service.create_order(
+    order = order_service.create_order(
         db_session,
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="clock-key",
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
         now=created_at,
     )
-    times = [created_at + timedelta(minutes=offset) for offset in (5, 6, 7, 17)]
-    for status, at in zip(("PAID", "ACCEPTED", "PRINTING", "READY"), times, strict=True):
+    times = [created_at + timedelta(minutes=offset) for offset in (5, 6, 7)]
+    for status, at in zip(("ACCEPTED", "PRINTING", "READY"), times, strict=True):
         order_service.transition(
             db_session,
             order_id=order.id,
             to_status=status,
-            actor_type="webhook" if status == "PAID" else "vendor",
+            actor_type="vendor",
             now=at,
         )
 
@@ -115,10 +112,9 @@ def test_injected_clock_is_shared_by_order_fields_and_events(db_session: Session
     )
     assert [event.at for event in events] == [created_at, *times]
     assert order.created_at == created_at
-    assert order.reserved_at == times[0]
+    assert order.reserved_at == created_at
     assert order.ready_at == times[-1]
     assert events[0].at == order.created_at
-    assert events[1].at == order.reserved_at
     assert events[-1].at == order.ready_at
 
 
@@ -136,12 +132,11 @@ def test_duplicate_idempotency_key_returns_the_same_order(db_session: Session) -
     customer_id, shop_id, upload_id = _seed(db_session)
 
     first = _create(db_session, customer_id, shop_id, upload_id)
-    second, _payment = order_service.create_order(
+    second = order_service.create_order(
         db_session,
         customer_id=customer_id,
         request=_request(upload_id, shop_id),
         idempotency_key="key-1",
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
 
     assert second.id == first.id
@@ -158,7 +153,6 @@ def test_expected_price_mismatch_raises_price_changed(db_session: Session) -> No
             customer_id=customer_id,
             request=_request(upload_id, shop_id, expected_price_paise=EXPECTED_PRICE + 1),
             idempotency_key="key-1",
-            gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
         )
 
     assert error.value.details["current_price_paise"] == EXPECTED_PRICE
@@ -196,37 +190,7 @@ def test_second_order_for_the_same_upload_is_rejected(db_session: Session) -> No
             customer_id=customer_id,
             request=_request(upload_id, shop_id),
             idempotency_key="key-2",
-            gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
         )
-
-
-def test_transition_to_paid_sets_paid_at_and_pickup_code(db_session: Session) -> None:
-    customer_id, shop_id, upload_id = _seed(db_session)
-    order = _create(db_session, customer_id, shop_id, upload_id)
-
-    paid = order_service.transition(
-        db_session,
-        order_id=order.id,
-        to_status="PAID",
-        actor_type="webhook",
-    )
-
-    assert paid.status == "PAID"
-    assert paid.paid_at is not None
-    assert paid.pickup_code is not None
-    assert len(paid.pickup_code) == 6
-    assert paid.pickup_code.isdigit()
-
-    events = list(
-        db_session.scalars(
-            select(OrderEvent)
-            .where(OrderEvent.order_id == order.id)
-            .order_by(OrderEvent.at.asc(), OrderEvent.id.asc())
-        )
-    )
-    assert [event.to_status for event in events] == ["PENDING_PAYMENT", "PAID"]
-    assert events[1].from_status == "PENDING_PAYMENT"
-    assert events[1].actor_type == "webhook"
 
 
 def test_transition_to_a_terminal_status_schedules_file_deletion(db_session: Session) -> None:
@@ -258,7 +222,7 @@ def test_wrong_actor_for_a_transition_is_forbidden(db_session: Session) -> None:
 
     with pytest.raises(Forbidden):
         order_service.transition(
-            db_session, order_id=order.id, to_status="PAID", actor_type="customer"
+            db_session, order_id=order.id, to_status="ACCEPTED", actor_type="customer"
         )
 
 
@@ -276,117 +240,42 @@ def test_a_failing_event_insert_rolls_back_the_status_change(
 
     with pytest.raises(IntegrityError):
         order_service.transition(
-            db_session, order_id=order.id, to_status="PAID", actor_type="webhook"
+            db_session, order_id=order.id, to_status="ACCEPTED", actor_type="vendor"
         )
     db_session.rollback()
 
     stored = db_session.get(Order, order.id)
     assert stored is not None
-    assert stored.status == "PENDING_PAYMENT"
-    assert stored.paid_at is None
-    assert stored.pickup_code is None
+    assert stored.status == "RESERVED"
     events = list(db_session.scalars(select(OrderEvent).where(OrderEvent.order_id == order.id)))
-    assert [event.to_status for event in events] == ["PENDING_PAYMENT"]
+    assert [event.to_status for event in events] == ["RESERVED"]
 
 
-def _capture_payment(db_session: Session, order: Order) -> Payment:
-    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
-    assert payment is not None
-    payment.status = "CAPTURED"
-    payment.provider_payment_id = f"pay_test_{payment.id}"
-    db_session.commit()
-    return payment
-
-
-def test_rejecting_a_paid_order_queues_a_refund(db_session: Session) -> None:
+def test_the_pickup_code_never_changes_after_the_shop_accepts(db_session: Session) -> None:
     customer_id, shop_id, upload_id = _seed(db_session)
     order = _create(db_session, customer_id, shop_id, upload_id)
-    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
-    _capture_payment(db_session, order)
+    original = order.pickup_code
 
-    order_service.transition(
-        db_session, order_id=order.id, to_status="REJECTED", actor_type="vendor", reason="no"
-    )
-
-    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
-    assert payment is not None
-    assert payment.status == "REFUND_PENDING"
-    assert payment.refund_next_attempt_at is not None
-
-
-def test_cancelling_a_paid_order_queues_a_refund(db_session: Session) -> None:
-    customer_id, shop_id, upload_id = _seed(db_session)
-    order = _create(db_session, customer_id, shop_id, upload_id)
-    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
-    _capture_payment(db_session, order)
-
-    order_service.transition(
-        db_session, order_id=order.id, to_status="CANCELLED", actor_type="customer"
-    )
-
-    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
-    assert payment is not None
-    assert payment.status == "REFUND_PENDING"
-
-
-def test_cancelling_an_unpaid_order_queues_no_refund(db_session: Session) -> None:
-    customer_id, shop_id, upload_id = _seed(db_session)
-    order = _create(db_session, customer_id, shop_id, upload_id)
-
-    order_service.transition(
-        db_session, order_id=order.id, to_status="CANCELLED", actor_type="customer"
-    )
-
-    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
-    assert payment is not None
-    assert payment.status == "CREATED"
-    assert payment.refund_next_attempt_at is None
-
-
-def test_the_pickup_code_never_changes_after_payment(db_session: Session) -> None:
-    customer_id, shop_id, upload_id = _seed(db_session)
-    order = _create(db_session, customer_id, shop_id, upload_id)
-
-    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
-    paid = db_session.get(Order, order.id)
-    assert paid is not None
-    original = paid.pickup_code
-
-    order_service.transition(
-        db_session, order_id=order.id, to_status="ACCEPTED", actor_type="vendor"
-    )
-    order_service.transition(
-        db_session, order_id=order.id, to_status="PRINTING", actor_type="vendor"
-    )
-    order_service.transition(db_session, order_id=order.id, to_status="READY", actor_type="vendor")
+    for to_status in ("ACCEPTED", "PRINTING", "READY"):
+        order_service.transition(
+            db_session, order_id=order.id, to_status=to_status, actor_type="vendor"
+        )
 
     stored = db_session.get(Order, order.id)
     assert stored is not None
     assert stored.pickup_code == original
 
 
-def test_the_refund_flag_and_the_status_change_commit_together(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    customer_id, shop_id, upload_id = _seed(db_session)
-    order = _create(db_session, customer_id, shop_id, upload_id)
-    order_service.transition(db_session, order_id=order.id, to_status="PAID", actor_type="webhook")
-    _capture_payment(db_session, order)
+def test_a_historical_paid_order_can_still_be_worked(db_session: Session) -> None:
+    """A row left in PAID by the online version is still the shop's work."""
+    vendor = create_user(db_session, email="vendor@example.com", role="vendor")
+    customer = create_user(db_session, email="customer@example.com")
+    shop = create_shop(db_session, owner=vendor)
+    create_full_rate_table(db_session, shop)
+    order = create_paid_order(db_session, customer=customer, shop=shop)
 
-    def broken_refund(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("refund queueing failed")
+    accepted = order_service.transition(
+        db_session, order_id=order.id, to_status="ACCEPTED", actor_type="vendor"
+    )
 
-    monkeypatch.setattr(order_service, "_queue_refund", broken_refund)
-
-    with pytest.raises(RuntimeError):
-        order_service.transition(
-            db_session, order_id=order.id, to_status="REJECTED", actor_type="vendor"
-        )
-    db_session.rollback()
-
-    stored = db_session.get(Order, order.id)
-    assert stored is not None
-    assert stored.status == "PAID"
-    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
-    assert payment is not None
-    assert payment.status == "CAPTURED"
+    assert accepted.status == "ACCEPTED"

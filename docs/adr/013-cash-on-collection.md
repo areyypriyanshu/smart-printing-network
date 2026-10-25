@@ -1,7 +1,7 @@
 # ADR 013: Cash on collection, as a second payment method
 
 Date: 2026-10-20
-Status: Accepted
+Status: Accepted; cash is the only payment method since ADR 035
 Requirement: FR-8, FR-9, FR-10, FR-11, FR-13 (Sprint 5.5)
 
 ## Context

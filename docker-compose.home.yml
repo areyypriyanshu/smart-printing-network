@@ -59,29 +59,15 @@ services:
     environment:
       WEB_CONCURRENCY: "1"
       # The production topology pins the application's mode, and the
-      # home stack is that topology. It runs in demo mode until the
-      # operator has Razorpay and SMTP credentials, because production
-      # mode refuses to start without them and a site that does not
-      # start is not a deployment.
+      # home stack is that topology. Orders are paid in cash at the
+      # counter, so production mode needs no payment provider. It still
+      # wants SMTP for verification mail, so a demo without a mail
+      # account sets SPN_HOME_ENV=local and EMAIL_PROVIDER=console in
+      # .env.
       #
       # The default is production, so a .env that forgets to choose
-      # gets the stricter mode. Set SPN_HOME_ENV=local in .env, with
-      # PAYMENT_PROVIDER=fake and EMAIL_PROVIDER=console, for the demo
-      # deployment, and switch it to production when the real keys are
-      # in place.
+      # gets the stricter mode.
       ENV: ${SPN_HOME_ENV:-production}
-      # The testing surface, which lets a customer mark their own order
-      # as paid. It is off by default here for the same reason it is off
-      # in the production topology: it is the only route that can mark
-      # an order paid without a provider, and it must not be reachable
-      # by an anonymous caller.
-      #
-      # In demo mode it is safe, because the payment provider is the
-      # fake one and there is no money involved: the route is bound to
-      # the order the caller owns, and the application refuses it
-      # outright when ENV=production. It is what the end to end smoke
-      # test uses to walk the payment step.
-      TESTING_ENDPOINTS_ENABLED: ${SPN_HOME_TESTING_ENDPOINTS:-false}
     mem_limit: 640m
     mem_reservation: 256m
     cpus: 1.00

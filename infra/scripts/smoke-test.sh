@@ -2,22 +2,24 @@
 # End to end smoke test against a running deployment.
 #
 # Walks the whole order flow the way a person would: a customer uploads a
-# PDF, sees a price, pays, and the shop works the order from the queue to
-# the handover against the pickup code. It checks the answer at every
-# step, so it fails loudly rather than printing a summary that looks fine.
+# PDF, sees a price, reserves the job, and the shop works the order from
+# the queue to the handover against the pickup code. The customer pays in
+# cash at the counter, so there is no payment provider to call. It checks
+# the answer at every step, so it fails loudly rather than printing a
+# summary that looks fine.
 #
 # Usage:
 #   infra/scripts/smoke-test.sh                       # the local dev stack
 #   BASE_URL=https://localhost infra/scripts/smoke-test.sh
 #
-# It needs the seeded demo accounts, so run `make seed` first. The local
-# stack uses the fake payment gateway, so the payment step is simulated.
+# It needs the seeded demo accounts, so run `make seed` first. It signs
+# in through the local way in, which is refused in production, so it
+# cannot run against a deployment that has SPN_DEV_AUTH off.
 
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8000}"
 API="${BASE_URL}/api/v1"
-PASSWORD="${SEED_PASSWORD:-spn-demo-password}"
 CUSTOMER_EMAIL="${CUSTOMER_EMAIL:-customer@example.com}"
 VENDOR_EMAIL="${VENDOR_EMAIL:-vendor1@example.com}"
 
@@ -84,8 +86,8 @@ PY
 
 login() {
 	local email="$1"
-	curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" -X POST "${API}/auth/login" -H 'Content-Type: application/json' \
-		-d "{\"email\":\"${email}\",\"password\":\"${PASSWORD}\"}" |
+	curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" -X POST "${API}/auth/dev-session" -H 'Content-Type: application/json' \
+		-d "{\"email\":\"${email}\"}" |
 		python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'
 }
 
@@ -165,7 +167,7 @@ PRICE="$(printf '%s' "${QUOTE}" | python3 -c 'import json,sys; print(json.load(s
 	fail "the quote was refused: ${QUOTE}"
 echo "quoted ${PRICE} paise"
 
-step "the customer places the order"
+step "the customer reserves the order"
 ORDER="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" -X POST "${API}/orders" -H "Authorization: Bearer ${CUSTOMER_TOKEN}" \
 	-H "Idempotency-Key: smoke-$(date +%s)-$$" -H 'Content-Type: application/json' \
 	-d "{\"upload_id\":\"${UPLOAD_ID}\",\"shop_id\":\"${SHOP_ID}\",\"paper_size\":\"A4\",\"color\":false,\"duplex\":false,\"copies\":2,\"expected_price_paise\":${PRICE}}")"
@@ -173,23 +175,12 @@ ORDER_ID="$(printf '%s' "${ORDER}" | python3 -c 'import json,sys; print(json.loa
 	fail "the order was refused: ${ORDER}"
 echo "order ${ORDER_ID}"
 
-step "the order is not paid yet"
-STATUS="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/orders/${ORDER_ID}" -H "Authorization: Bearer ${CUSTOMER_TOKEN}" |
+step "the order is reserved with a pickup code"
+read -r STATUS CODE <<<"$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/orders/${ORDER_ID}" -H "Authorization: Bearer ${CUSTOMER_TOKEN}" |
 	python3 -c 'import json,sys; d=json.load(sys.stdin)["order"]; print(d["status"], d["pickup_code"])')"
-[ "${STATUS%% *}" = "PENDING_PAYMENT" ] || fail "the order should be waiting for payment, it is ${STATUS}"
-echo "waiting for payment, no pickup code yet"
-
-step "the payment arrives and the order is paid"
-SIMULATE="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" -X POST "${API}/testing/simulate-payment" -H "Authorization: Bearer ${CUSTOMER_TOKEN}" \
-	-H 'Content-Type: application/json' -d "{\"order_id\":\"${ORDER_ID}\"}")" || fail "the payment was refused: ${SIMULATE}"
-DETAIL="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/orders/${ORDER_ID}" -H "Authorization: Bearer ${CUSTOMER_TOKEN}")"
-read -r STATUS CODE <<<"$(printf '%s' "${DETAIL}" | python3 -c '
-import json,sys
-order = json.load(sys.stdin)["order"]
-print(order["status"], order["pickup_code"])')"
-[ "${STATUS}" = "PAID" ] || fail "the order should be paid, it is ${STATUS}"
-[ -n "${CODE}" ] || fail "a paid order must have a pickup code"
-echo "paid, pickup code ${CODE}"
+[ "${STATUS}" = "RESERVED" ] || fail "the order should be reserved, it is ${STATUS}"
+[ -n "${CODE}" ] || fail "a reserved order must have a pickup code"
+echo "reserved, pickup code ${CODE}"
 
 step "the shop sees the order in the queue"
 QUEUE="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/vendor/queue" -H "Authorization: Bearer ${VENDOR_TOKEN}")"
@@ -234,9 +225,10 @@ COLLECTED="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" -X POST "${API}/vendor
 echo "collected"
 
 step "the customer sees the finished order"
-FINAL="$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/orders/${ORDER_ID}" -H "Authorization: Bearer ${CUSTOMER_TOKEN}" |
-	python3 -c 'import json,sys; print(json.load(sys.stdin)["order"]["status"])')"
+read -r FINAL PAID_AT <<<"$(curl -sS "${CURL_ARGS[@]+"${CURL_ARGS[@]}"}" "${API}/orders/${ORDER_ID}" -H "Authorization: Bearer ${CUSTOMER_TOKEN}" |
+	python3 -c 'import json,sys; d=json.load(sys.stdin)["order"]; print(d["status"], d["paid_at"])')"
 [ "${FINAL}" = "COLLECTED" ] || fail "the customer should see COLLECTED, they see ${FINAL}"
-echo "${FINAL}"
+[ "${PAID_AT}" != "None" ] || fail "a collected cash order should record when it was paid"
+echo "${FINAL}, paid at ${PAID_AT}"
 
 printf '\nSMOKE TEST PASSED against %s\n' "${BASE_URL}"

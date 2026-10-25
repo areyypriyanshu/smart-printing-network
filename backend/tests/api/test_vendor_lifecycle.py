@@ -1,15 +1,16 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.models import Order, Payment
+from app.models import Payment
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
-    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
-    create_paid_order,
+    create_reserved_order,
     create_shop,
+    create_unpaid_order,
     create_user,
     login_headers,
 )
@@ -35,12 +36,18 @@ def _order_path(order_id: uuid.UUID) -> str:
     return f"/api/v1/vendor/orders/{order_id}"
 
 
-def test_queue_lists_paid_orders_oldest_payment_first(
+def test_queue_lists_reserved_orders_oldest_reservation_first(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    first = create_paid_order(db_session, customer=customer, shop=shop, copies=1)
-    second = create_paid_order(db_session, customer=customer, shop=shop, copies=2)
+    first = create_reserved_order(
+        db_session,
+        customer=customer,
+        shop=shop,
+        copies=1,
+        reserved_at=datetime.now(UTC) - timedelta(minutes=2),
+    )
+    second = create_reserved_order(db_session, customer=customer, shop=shop, copies=2)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(QUEUE, headers=headers)
@@ -52,7 +59,7 @@ def test_queue_lists_paid_orders_oldest_payment_first(
 
 def test_queue_never_returns_the_pickup_code(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(QUEUE, headers=headers)
@@ -64,7 +71,7 @@ def test_queue_never_returns_the_pickup_code(client: TestClient, db_session: Ses
 
 def test_queue_hides_orders_of_another_shop(client: TestClient, db_session: Session) -> None:
     customer, _shop, other_shop = _seed(db_session)
-    create_paid_order(db_session, customer=customer, shop=other_shop)
+    create_reserved_order(db_session, customer=customer, shop=other_shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(QUEUE, headers=headers)
@@ -73,13 +80,14 @@ def test_queue_hides_orders_of_another_shop(client: TestClient, db_session: Sess
     assert response.json()["items"] == []
 
 
-def test_queue_hides_orders_that_are_not_paid_yet(client: TestClient, db_session: Session) -> None:
+def test_queue_hides_a_historical_order_that_was_never_paid(
+    client: TestClient, db_session: Session
+) -> None:
+    """A row left in PENDING_PAYMENT was never the shop's work."""
     customer, shop, _ = _seed(db_session)
-    create_paid_order(db_session, customer=customer, shop=shop)
+    create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
-
-    # An order that is still waiting for payment must not appear in the queue.
-    order = _create_unpaid_order(db_session, customer=customer, shop=shop)
+    order = create_unpaid_order(db_session, customer=customer, shop=shop)
 
     response = client.get(QUEUE, headers=headers)
 
@@ -108,7 +116,7 @@ def test_vendor_order_detail_hides_another_shops_order(
     client: TestClient, db_session: Session
 ) -> None:
     customer, _shop, other_shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=other_shop)
+    order = create_reserved_order(db_session, customer=customer, shop=other_shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(_order_path(order.id), headers=headers)
@@ -121,7 +129,7 @@ def test_vendor_order_detail_never_exposes_the_pickup_code(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(_order_path(order.id), headers=headers)
@@ -130,12 +138,12 @@ def test_vendor_order_detail_never_exposes_the_pickup_code(
     body = response.json()
     assert "pickup_code" not in body["order"]
     assert str(order.pickup_code) not in response.text
-    assert body["order"]["status"] == "PAID"
+    assert body["order"]["status"] == "RESERVED"
 
 
-def test_vendor_accepts_a_paid_order(client: TestClient, db_session: Session) -> None:
+def test_vendor_accepts_a_reserved_order(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.post(f"{_order_path(order.id)}/accept", headers=headers)
@@ -146,7 +154,7 @@ def test_vendor_accepts_a_paid_order(client: TestClient, db_session: Session) ->
 
 def test_accepting_twice_is_an_invalid_transition(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
 
@@ -158,7 +166,7 @@ def test_accepting_twice_is_an_invalid_transition(client: TestClient, db_session
 
 def test_a_customer_cannot_accept_an_order(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     response = client.post(f"{_order_path(order.id)}/accept", headers=headers)
@@ -168,7 +176,7 @@ def test_a_customer_cannot_accept_an_order(client: TestClient, db_session: Sessi
 
 def test_rejecting_requires_a_reason(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.post(f"{_order_path(order.id)}/reject", headers=headers, json={})
@@ -177,11 +185,11 @@ def test_rejecting_requires_a_reason(client: TestClient, db_session: Session) ->
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_rejecting_queues_a_refund_for_the_customer(
+def test_rejecting_records_the_reason_and_takes_no_money(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.post(
@@ -193,12 +201,12 @@ def test_rejecting_queues_a_refund_for_the_customer(
     assert response.json()["status_reason"] == "Out of toner"
     payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
     assert payment is not None
-    assert payment.status == "REFUND_PENDING"
+    assert payment.status == "CREATED"
 
 
 def test_vendor_can_start_and_mark_ready(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
 
@@ -215,7 +223,7 @@ def test_collecting_with_the_right_code_completes_the_order(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
     client.post(f"{_order_path(order.id)}/start", headers=headers)
@@ -233,7 +241,7 @@ def test_collecting_with_the_wrong_code_is_rejected(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
     client.post(f"{_order_path(order.id)}/start", headers=headers)
@@ -249,7 +257,7 @@ def test_collecting_with_the_wrong_code_is_rejected(
 
 def test_the_sixth_pickup_attempt_is_rate_limited(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
     client.post(f"{_order_path(order.id)}/start", headers=headers)
@@ -274,7 +282,7 @@ def test_cancelling_an_accepted_order_requires_a_reason(
     client: TestClient, db_session: Session
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
 
@@ -283,11 +291,9 @@ def test_cancelling_an_accepted_order_requires_a_reason(
     assert response.status_code == 422
 
 
-def test_cancelling_an_accepted_order_queues_a_refund(
-    client: TestClient, db_session: Session
-) -> None:
+def test_cancelling_an_accepted_order_cancels_it(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
     client.post(f"{_order_path(order.id)}/accept", headers=headers)
 
@@ -299,12 +305,12 @@ def test_cancelling_an_accepted_order_queues_a_refund(
     assert response.json()["status"] == "CANCELLED"
     payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
     assert payment is not None
-    assert payment.status == "REFUND_PENDING"
+    assert payment.status == "CREATED"
 
 
 def test_a_vendor_cannot_touch_another_shops_order(client: TestClient, db_session: Session) -> None:
     customer, _shop, other_shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=other_shop)
+    order = create_reserved_order(db_session, customer=customer, shop=other_shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.post(f"{_order_path(order.id)}/accept", headers=headers)
@@ -317,7 +323,7 @@ def test_vendor_file_url_is_only_for_own_shops_orders(
     client: TestClient, db_session: Session
 ) -> None:
     customer, _shop, other_shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=other_shop)
+    order = create_reserved_order(db_session, customer=customer, shop=other_shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(f"{_order_path(order.id)}/file", headers=headers)
@@ -327,7 +333,7 @@ def test_vendor_file_url_is_only_for_own_shops_orders(
 
 def test_vendor_file_url_points_at_the_stored_pdf(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
 
     response = client.get(f"{_order_path(order.id)}/file", headers=headers)
@@ -341,7 +347,7 @@ def test_vendor_file_url_points_at_the_stored_pdf(client: TestClient, db_session
 
 def test_customer_cannot_reach_vendor_endpoints(client: TestClient, db_session: Session) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, CUSTOMER_EMAIL)
 
     actions = [
@@ -362,41 +368,17 @@ def test_customer_cannot_reach_vendor_endpoints(client: TestClient, db_session: 
     assert file_response.status_code == 403
 
 
-def _create_unpaid_order(session: Session, *, customer: object, shop: object) -> Order:
-    from app.gateways.payments import FakeGateway
-    from app.schemas.order import OrderCreateRequest
-    from app.services import order_service
-    from tests.factories import create_upload_row
-
-    upload = create_upload_row(session, customer=customer, page_count=1)
-    order, _payment = order_service.create_order(
-        session,
-        customer_id=customer.id,
-        request=OrderCreateRequest(
-            upload_id=upload.id,
-            shop_id=shop.id,
-            paper_size="A4",
-            color=False,
-            duplex=False,
-            copies=1,
-        ),
-        idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
-    )
-    return order
-
-
 @pytest.mark.parametrize(
     "status",
-    ["PAID", "ACCEPTED", "PRINTING", "READY"],
+    ["RESERVED", "ACCEPTED", "PRINTING", "READY"],
 )
 def test_queue_contains_every_active_status(
     client: TestClient, db_session: Session, status: str
 ) -> None:
     customer, shop, _ = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
-    if status != "PAID":
+    if status != "RESERVED":
         client.post(f"{_order_path(order.id)}/accept", headers=headers)
     if status in {"PRINTING", "READY"}:
         client.post(f"{_order_path(order.id)}/start", headers=headers)

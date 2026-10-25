@@ -105,7 +105,7 @@ def test_history_seed_refuses_production(
 ) -> None:
     monkeypatch.setattr(
         "app.services.history_seed_service.get_settings",
-        lambda: type("Settings", (), {"env": "production", "cash_at_store_enabled": True})(),
+        lambda: type("Settings", (), {"env": "production"})(),
     )
 
     with pytest.raises(SystemExit):

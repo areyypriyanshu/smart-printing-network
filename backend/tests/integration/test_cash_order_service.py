@@ -1,16 +1,15 @@
-"""Paying at the shop, at the service level.
+"""The order lifecycle at the service level.
 
 The API tests show the behaviour from outside. These show the things
-that only the service can prove: that the money and the status change
-commit together, that a cash order never touches the refund path, and
-that the online path is untouched.
+that only the service can prove: that the cash capture and the status
+change commit together, and that a reservation never touches money.
 """
 
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.gateways.payments import CashGateway, GatewayError
+from app.errors import InvalidTransition
 from app.models import Order, OrderEvent, Payment, Upload
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -36,7 +35,7 @@ def _seed(session: Session) -> tuple[object, object]:
     return customer, shop
 
 
-def _cash_request(upload_id: uuid.UUID, shop_id: uuid.UUID) -> OrderCreateRequest:
+def _request(upload_id: uuid.UUID, shop_id: uuid.UUID) -> OrderCreateRequest:
     return OrderCreateRequest(
         upload_id=upload_id,
         shop_id=shop_id,
@@ -44,22 +43,20 @@ def _cash_request(upload_id: uuid.UUID, shop_id: uuid.UUID) -> OrderCreateReques
         color=False,
         duplex=False,
         copies=1,
-        payment_method="at_store",
     )
 
 
-def test_creating_a_cash_order_reserves_it_and_records_a_cash_payment(
+def test_creating_an_order_reserves_it_and_records_a_cash_payment(
     db_session: Session,
 ) -> None:
     customer, shop = _seed(db_session)
     upload = create_upload_row(db_session, customer=customer, page_count=1)
 
-    order, payment = order_service.create_order(
+    order = order_service.create_order(
         db_session,
         customer_id=customer.id,
-        request=_cash_request(upload.id, shop.id),
+        request=_request(upload.id, shop.id),
         idempotency_key=uuid.uuid4().hex,
-        gateway=CashGateway(),
     )
 
     assert order.status == "RESERVED"
@@ -68,23 +65,24 @@ def test_creating_a_cash_order_reserves_it_and_records_a_cash_payment(
     assert order.reserved_at is not None
     assert order.pickup_code is not None
     assert len(order.pickup_code) == 6
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
     assert payment.provider == "cash"
     assert payment.status == "CREATED"
     assert payment.amount_paise == order.price_paise
     assert payment.currency == "INR"
 
 
-def test_a_cash_order_records_one_opening_event(db_session: Session) -> None:
+def test_an_order_records_one_opening_event(db_session: Session) -> None:
     """It is booked in one step. It never passes through PENDING_PAYMENT."""
     customer, shop = _seed(db_session)
     upload = create_upload_row(db_session, customer=customer, page_count=1)
 
-    order, _payment = order_service.create_order(
+    order = order_service.create_order(
         db_session,
         customer_id=customer.id,
-        request=_cash_request(upload.id, shop.id),
+        request=_request(upload.id, shop.id),
         idempotency_key=uuid.uuid4().hex,
-        gateway=CashGateway(),
     )
 
     events = list(
@@ -100,7 +98,7 @@ def test_a_cash_order_records_one_opening_event(db_session: Session) -> None:
     assert events[0].actor_type == "customer"
 
 
-def test_collecting_a_cash_order_captures_the_money(db_session: Session) -> None:
+def test_collecting_an_order_captures_the_money(db_session: Session) -> None:
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
     for to_status in ("ACCEPTED", "PRINTING", "READY"):
@@ -118,6 +116,33 @@ def test_collecting_a_cash_order_captures_the_money(db_session: Session) -> None
     assert payment is not None
     assert payment.status == "CAPTURED"
     assert payment.provider_payment_id is not None
+
+
+def test_an_order_cannot_be_collected_twice(db_session: Session) -> None:
+    customer, shop = _seed(db_session)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
+    for to_status in ("ACCEPTED", "PRINTING", "READY"):
+        order_service.transition(
+            db_session, order_id=order.id, to_status=to_status, actor_type="vendor"
+        )
+    order_service.transition(
+        db_session, order_id=order.id, to_status="COLLECTED", actor_type="vendor"
+    )
+
+    with pytest.raises(InvalidTransition):
+        order_service.transition(
+            db_session, order_id=order.id, to_status="COLLECTED", actor_type="vendor"
+        )
+
+    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
+    assert payment is not None
+    assert payment.status == "CAPTURED"
+    events = db_session.scalars(
+        select(OrderEvent).where(
+            OrderEvent.order_id == order.id, OrderEvent.to_status == "COLLECTED"
+        )
+    ).all()
+    assert len(events) == 1
 
 
 def test_the_capture_and_the_status_change_commit_together(
@@ -151,7 +176,7 @@ def test_the_capture_and_the_status_change_commit_together(
     assert payment.status == "CREATED"
 
 
-def test_collecting_a_cash_order_creates_no_refund_row(db_session: Session) -> None:
+def test_collecting_an_order_creates_no_refund_row(db_session: Session) -> None:
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
     for to_status in ("ACCEPTED", "PRINTING", "READY"):
@@ -171,7 +196,7 @@ def test_collecting_a_cash_order_creates_no_refund_row(db_session: Session) -> N
     assert payment.refund_next_attempt_at is None
 
 
-def test_rejecting_a_cash_order_queues_no_refund(db_session: Session) -> None:
+def test_rejecting_an_order_takes_no_money(db_session: Session) -> None:
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
 
@@ -186,7 +211,7 @@ def test_rejecting_a_cash_order_queues_no_refund(db_session: Session) -> None:
     assert payment.refund_next_attempt_at is None
 
 
-def test_cancelling_a_cash_order_queues_no_refund(db_session: Session) -> None:
+def test_cancelling_an_order_takes_no_money(db_session: Session) -> None:
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
 
@@ -201,8 +226,13 @@ def test_cancelling_a_cash_order_queues_no_refund(db_session: Session) -> None:
     assert payment.refund_next_attempt_at is None
 
 
-def test_the_online_path_still_queues_a_refund(db_session: Session) -> None:
-    """The online path is untouched by any of this."""
+def test_a_historical_paid_order_can_be_rejected_without_a_refund(db_session: Session) -> None:
+    """No online provider is left to refund through; this is the documented gap.
+
+    The money of a row booked online before cash-only was taken by the
+    provider. Rejecting it leaves the payment record untouched for a
+    person to settle; the application does not pretend it refunded.
+    """
     customer, shop = _seed(db_session)
     order = create_paid_order(db_session, customer=customer, shop=shop)
 
@@ -213,35 +243,22 @@ def test_the_online_path_still_queues_a_refund(db_session: Session) -> None:
     assert rejected.status == "REJECTED"
     payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
     assert payment is not None
-    assert payment.status == "REFUND_PENDING"
-    assert payment.refund_next_attempt_at is not None
+    assert payment.status == "CAPTURED"
+    assert payment.refund_next_attempt_at is None
 
 
-def test_an_online_order_gets_a_reservation_time_when_it_is_paid(
-    db_session: Session,
-) -> None:
-    """The queue is ordered by this, for both payment methods."""
-    customer, shop = _seed(db_session)
-    order = create_paid_order(db_session, customer=customer, shop=shop)
-
-    assert order.reserved_at is not None
-    assert order.reserved_at == order.paid_at
-
-
-def test_a_cash_order_never_becomes_paid(db_session: Session) -> None:
+def test_an_order_never_becomes_paid_through_a_transition(db_session: Session) -> None:
     """There is no legal way to reach PAID from RESERVED."""
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
 
-    from app.errors import InvalidTransition
-
     with pytest.raises(InvalidTransition):
         order_service.transition(
-            db_session, order_id=order.id, to_status="PAID", actor_type="webhook"
+            db_session, order_id=order.id, to_status="PAID", actor_type="vendor"
         )
 
 
-def test_the_pickup_code_of_a_cash_order_never_changes(db_session: Session) -> None:
+def test_the_pickup_code_never_changes(db_session: Session) -> None:
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
     original = order.pickup_code
@@ -253,7 +270,7 @@ def test_the_pickup_code_of_a_cash_order_never_changes(db_session: Session) -> N
         assert stored.pickup_code == original
 
 
-def test_a_cash_order_releases_its_file_when_it_reaches_a_terminal_state(
+def test_an_order_releases_its_file_when_it_reaches_a_terminal_state(
     db_session: Session,
 ) -> None:
     """The PDF is deleted by the purge job once the order is done."""
@@ -269,12 +286,9 @@ def test_a_cash_order_releases_its_file_when_it_reaches_a_terminal_state(
     assert upload.delete_after is not None
 
 
-def test_a_cash_order_cannot_be_collected_before_the_shop_accepts_it(
+def test_an_order_cannot_be_collected_before_the_shop_accepts_it(
     db_session: Session,
 ) -> None:
-    """The lifecycle is the same for both methods."""
-    from app.errors import InvalidTransition
-
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
 
@@ -284,7 +298,7 @@ def test_a_cash_order_cannot_be_collected_before_the_shop_accepts_it(
         )
 
 
-def test_a_cash_order_keeps_its_place_in_the_queue(db_session: Session) -> None:
+def test_an_order_keeps_its_place_in_the_queue(db_session: Session) -> None:
     """The queue is ordered by when the order was reserved."""
     customer, shop = _seed(db_session)
     earlier = create_reserved_order(
@@ -306,39 +320,3 @@ def test_a_cash_order_keeps_its_place_in_the_queue(db_session: Session) -> None:
 
     assert [item.id for item in queue.items] == [earlier.id, later.id]
     assert all(item.paid_at is None for item in queue.items)
-
-
-def test_a_gateway_failure_cancels_a_cash_order(db_session: Session) -> None:
-    """A cash order that cannot be booked is cancelled, not left hanging."""
-    from app.errors import PaymentGatewayError
-    from app.gateways.payments.base import GatewayOrder, GatewayRefund
-
-    class BrokenCashGateway:
-        provider = "cash"
-        checkout_key_id = None
-
-        def create_order(self, **kwargs: object) -> GatewayOrder:
-            raise GatewayError("the counter could not be reached")
-
-        def verify_webhook_signature(self, *, raw_body: bytes, signature: str) -> bool:
-            return False
-
-        def refund(self, **kwargs: object) -> GatewayRefund:
-            raise GatewayError("never")
-
-    customer, shop = _seed(db_session)
-    upload = create_upload_row(db_session, customer=customer, page_count=1)
-
-    with pytest.raises(PaymentGatewayError):
-        order_service.create_order(
-            db_session,
-            customer_id=customer.id,
-            request=_cash_request(upload.id, shop.id),
-            idempotency_key=uuid.uuid4().hex,
-            gateway=BrokenCashGateway(),  # type: ignore[arg-type]
-        )
-
-    order = db_session.scalar(select(Order).where(Order.customer_id == customer.id))
-    assert order is not None
-    assert order.status == "CANCELLED"
-    assert order.status_reason == "gateway_error"

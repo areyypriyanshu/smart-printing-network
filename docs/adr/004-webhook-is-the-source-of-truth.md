@@ -1,7 +1,7 @@
 # ADR 004: The signed webhook, not the browser, decides that an order is paid
 
 Date: 2026-10-19
-Status: Accepted
+Status: Superseded by ADR 035 (cash only)
 Requirement: FR-8, FR-9, FR-13 (order and payment)
 
 ## Context

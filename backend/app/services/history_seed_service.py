@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.gateways.identity.fake import dev_subject_for
-from app.gateways.payments import CashGateway
 from app.models import Order, OrderEvent, Payment, QualityReport, Shop, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
@@ -36,8 +35,6 @@ def seed_history(
     settings = get_settings()
     if settings.env == "production":
         raise SystemExit("The simulated-history seed is for local development only.")
-    if not settings.cash_at_store_enabled:
-        raise SystemExit("Cash orders are off. Set CASH_AT_STORE_ENABLED=true first.")
     if orders_per_shop < 1 or orders_per_shop > 100:
         raise SystemExit("--orders-per-shop must be between 1 and 100.")
     current = datetime.now(UTC) if now is None else now
@@ -56,7 +53,6 @@ def seed_history(
 
     _remove_previous(session)
     customer = _customer(session)
-    gateway = CashGateway()
     made = 0
     for shop_index, shop in enumerate(shops):
         rng = random.Random(seed + shop_index * 1009)
@@ -111,7 +107,7 @@ def seed_history(
                 session.add(upload)
                 session.commit()
                 session.refresh(upload)
-                order, _payment = order_service.create_order(
+                order = order_service.create_order(
                     session,
                     customer_id=customer.id,
                     request=OrderCreateRequest(
@@ -121,10 +117,8 @@ def seed_history(
                         color=False,
                         duplex=False,
                         copies=copies,
-                        payment_method="at_store",
                     ),
                     idempotency_key=f"{SIMULATED_HISTORY_PREFIX}{shop.id}-{index}",
-                    gateway=gateway,
                     now=entry,
                 )
                 pending.append((order, upload, accepted, printing, ready, collected))

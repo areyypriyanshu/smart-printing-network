@@ -75,12 +75,11 @@ services:
     env_file: .env
     environment:
       # The production topology pins the application's mode. Every
-      # production-only check - the placeholder JWT secret, the test payment
-      # route, the Secure refresh cookie, the fake payment provider - is
-      # keyed on ENV, so it must not be left to an untracked file. A Compose
-      # "environment" entry overrides "env_file".
+      # production-only check - the placeholder JWT secret, the console
+      # email sender, the local way in - is keyed on ENV, so it must not
+      # be left to an untracked file. A Compose "environment" entry
+      # overrides "env_file".
       ENV: production
-      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?set PAYMENT_PROVIDER in the instance's .env}
       # The identity provider. These are the instance's own settings and
       # they are pinned here so that a deployment cannot start with the
       # wrong ones: the key set is fetched from the host, and the tokens
@@ -89,9 +88,6 @@ services:
       CLERK_ALLOWED_ORIGINS: ${CLERK_ALLOWED_ORIGINS:?set CLERK_ALLOWED_ORIGINS in the instance's .env}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?set CLERK_SECRET_KEY in the instance's .env}
       CLERK_WEBHOOK_SIGNING_SECRET: ${CLERK_WEBHOOK_SIGNING_SECRET:?set CLERK_WEBHOOK_SIGNING_SECRET in the instance's .env}
-      # The testing surface has no business in production, whatever the
-      # instance's .env says.
-      TESTING_ENDPOINTS_ENABLED: "false"
       # The local bypass mints a session without the identity provider,
       # so a deployment with it on would accept a session that was never
       # proved. It is off here whatever the instance's .env says, and the
@@ -128,7 +124,6 @@ services:
     environment:
       # The worker runs the same code as the API, so it is in the same mode.
       ENV: production
-      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?set PAYMENT_PROVIDER in the instance's .env}
       # The identity provider. These are the instance's own settings and
       # they are pinned here so that a deployment cannot start with the
       # wrong ones: the key set is fetched from the host, and the tokens
@@ -137,7 +132,6 @@ services:
       CLERK_ALLOWED_ORIGINS: ${CLERK_ALLOWED_ORIGINS:?set CLERK_ALLOWED_ORIGINS in the instance's .env}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?set CLERK_SECRET_KEY in the instance's .env}
       CLERK_WEBHOOK_SIGNING_SECRET: ${CLERK_WEBHOOK_SIGNING_SECRET:?set CLERK_WEBHOOK_SIGNING_SECRET in the instance's .env}
-      TESTING_ENDPOINTS_ENABLED: "false"
       SPN_DEV_AUTH: "false"
     command: python -m app.jobs.scheduler
     healthcheck:

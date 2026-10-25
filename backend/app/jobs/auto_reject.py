@@ -1,14 +1,12 @@
 """Turn away orders that no shop picked up.
 
-An order reaches the shop's queue once it is paid for online, or once it
-is reserved for cash. If no shop accepts it within the accept window, the
-order is rejected.
+An order reaches the shop's queue as soon as it is reserved, because the
+customer pays in cash when they collect it. If no shop accepts it within
+the accept window, the order is rejected. No money was taken, so there is
+nothing to give back.
 
-For an online order the customer has already paid, so the refund is
-queued by the transition itself, in the same transaction, and the money
-is never left unaccounted for. For a cash order no money was taken, so
-there is nothing to give back: the transition does not queue a refund,
-because a reserved order is not one of the states that can be refunded.
+PAID is included because orders booked by an earlier version of the
+application may still be waiting for a shop. No new order enters it.
 """
 
 import logging

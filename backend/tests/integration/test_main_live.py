@@ -3,7 +3,6 @@
 import uuid
 
 from app.gateways.identity.fake import FakeIdentityReader, FakeTokenVerifier
-from app.gateways.payments import CashGateway
 from app.gateways.storage import MemoryStorage
 from app.main import create_app
 from app.schemas.order import OrderCreateRequest
@@ -81,25 +80,22 @@ def test_idempotent_create_does_not_emit_an_opening_event_twice(live_client) -> 
         color=False,
         duplex=False,
         copies=1,
-        payment_method="at_store",
     )
     try:
         with _connect(client, "/ws/vendor") as socket:
             _auth(socket, _token(client, vendor_a.email))
             assert _receive(socket)["type"] == "subscribed"
-            first, _payment = order_service.create_order(
+            first = order_service.create_order(
                 session,
                 customer_id=customer.id,
                 request=request,
                 idempotency_key="repeat-live-test",
-                gateway=CashGateway(),
             )
-            second, _payment = order_service.create_order(
+            second = order_service.create_order(
                 session,
                 customer_id=customer.id,
                 request=request,
                 idempotency_key="repeat-live-test",
-                gateway=CashGateway(),
             )
             assert second.id == first.id
             first_message = _receive(socket)

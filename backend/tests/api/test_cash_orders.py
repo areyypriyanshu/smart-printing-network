@@ -1,23 +1,20 @@
 """Paying at the shop: the customer books the job and pays in cash.
 
-The whole point of this path is that it behaves like the online path in
-every way except when the money moves. The same order, the same pickup
-code, the same vendor queue, the same collect endpoint, the same audit
-trail. These tests are the observable version of that claim.
+Every order takes this path. The customer books the job, receives the
+pickup code, and the shop works it exactly like any other order and
+takes the money at the counter. These tests are the observable version
+of the whole order lifecycle.
 """
 
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from app.config import get_settings
 from app.models import Order, OrderEvent, Payment
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
-    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
-    create_paid_order,
     create_reserved_order,
     create_shop,
     create_upload_row,
@@ -44,7 +41,6 @@ def _book(
     client: TestClient,
     session: Session,
     *,
-    payment_method: str = "at_store",
     email: str = CUSTOMER_EMAIL,
     idempotency_key: str = "cash-1",
     copies: int = 1,
@@ -66,7 +62,6 @@ def _book(
             "color": False,
             "duplex": False,
             "copies": copies,
-            "payment_method": payment_method,
         },
     )
     assert response.status_code == 201, response.text
@@ -82,12 +77,11 @@ def _work_the_order(client: TestClient, order: Order, headers: dict[str, str]) -
         assert response.status_code == 200, response.text
 
 
-def test_booking_with_pay_at_the_shop_reserves_the_order(
-    client: TestClient, db_session: Session
-) -> None:
+def test_booking_reserves_the_order(client: TestClient, db_session: Session) -> None:
     """The order is booked, not paid, and it already has its code."""
     body = _book(client, db_session)
 
+    assert set(body) == {"order"}
     assert body["order"]["status"] == "RESERVED"
     assert body["order"]["payment_method"] == "at_store"
     assert body["order"]["pickup_code"] is not None
@@ -96,13 +90,10 @@ def test_booking_with_pay_at_the_shop_reserves_the_order(
     assert body["order"]["paid_at"] is None
 
 
-def test_a_cash_order_has_a_cash_payment_that_is_not_captured(
+def test_a_reserved_order_has_an_uncaptured_cash_payment(
     client: TestClient, db_session: Session
 ) -> None:
     body = _book(client, db_session)
-
-    assert body["payment"]["provider"] == "cash"
-    assert body["payment"]["key_id"] is None
 
     payment = db_session.scalar(
         select(Payment).where(Payment.order_id == uuid.UUID(body["order"]["id"]))
@@ -113,20 +104,10 @@ def test_a_cash_order_has_a_cash_payment_that_is_not_captured(
     assert payment.amount_paise == body["order"]["price_paise"]
 
 
-def test_booking_online_is_unchanged(client: TestClient, db_session: Session) -> None:
-    """The default method is the one that always worked."""
-    body = _book(client, db_session, payment_method="online")
-
-    assert body["order"]["status"] == "PENDING_PAYMENT"
-    assert body["order"]["payment_method"] == "online"
-    assert body["order"]["pickup_code"] is None
-    assert body["payment"]["provider"] == "fake"
-
-
-def test_booking_online_without_saying_so_is_unchanged(
+def test_a_payment_method_sent_by_an_old_client_is_ignored(
     client: TestClient, db_session: Session
 ) -> None:
-    """A client that does not know about cash keeps working."""
+    """There is nothing to choose: every order is paid at the counter."""
     customer = create_user(db_session, email=CUSTOMER_EMAIL)
     vendor = create_user(db_session, email=VENDOR_EMAIL, role="vendor")
     shop = create_shop(db_session, owner=vendor)
@@ -144,67 +125,13 @@ def test_booking_online_without_saying_so_is_unchanged(
             "color": False,
             "duplex": False,
             "copies": 1,
+            "payment_method": "online",
         },
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["order"]["status"] == "PENDING_PAYMENT"
-    assert response.json()["order"]["payment_method"] == "online"
-
-
-def test_an_unknown_payment_method_is_rejected(client: TestClient, db_session: Session) -> None:
-    """The method is a closed set."""
-    customer = create_user(db_session, email=CUSTOMER_EMAIL)
-    vendor = create_user(db_session, email=VENDOR_EMAIL, role="vendor")
-    shop = create_shop(db_session, owner=vendor)
-    create_full_rate_table(db_session, shop)
-    upload = create_upload_row(db_session, customer=customer, page_count=1)
-    headers = login_headers(client, CUSTOMER_EMAIL)
-
-    response = client.post(
-        ORDERS,
-        headers={**headers, "Idempotency-Key": "key-1"},
-        json={
-            "upload_id": str(upload.id),
-            "shop_id": str(shop.id),
-            "paper_size": "A4",
-            "color": False,
-            "duplex": False,
-            "copies": 1,
-            "payment_method": "cheque",
-        },
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
-
-
-def test_paying_at_the_shop_is_refused_when_it_is_switched_off(
-    client: TestClient, db_session: Session, monkeypatch
-) -> None:
-    """The feature is off by default, so a fresh deployment cannot use it."""
-    customer, shop = _seed(db_session)
-    upload = create_upload_row(db_session, customer=customer, page_count=1)
-    monkeypatch.setattr(get_settings(), "cash_at_store_enabled", False)
-
-    response = client.post(
-        ORDERS,
-        headers={**login_headers(client, CUSTOMER_EMAIL), "Idempotency-Key": "key-1"},
-        json={
-            "upload_id": str(upload.id),
-            "shop_id": str(shop.id),
-            "paper_size": "A4",
-            "color": False,
-            "duplex": False,
-            "copies": 1,
-            "payment_method": "at_store",
-        },
-    )
-
-    # The feature is checked before anything else, so the request is
-    # refused for that reason and not because the upload does not exist.
-    assert response.status_code == 409, response.text
-    assert response.json()["error"]["code"] == "CASH_PAYMENT_DISABLED"
+    assert response.json()["order"]["status"] == "RESERVED"
+    assert response.json()["order"]["payment_method"] == "at_store"
 
 
 def test_the_shop_sees_a_cash_order_in_its_queue(client: TestClient, db_session: Session) -> None:
@@ -230,7 +157,13 @@ def test_a_cash_order_does_not_sort_last_in_the_queue(
     reserved first is served first, even though it has no paid_at at all.
     """
     customer, shop = _seed(db_session)
-    later = create_paid_order(db_session, customer=customer, shop=shop, copies=2)
+    later = create_reserved_order(
+        db_session,
+        customer=customer,
+        shop=shop,
+        copies=2,
+        reserved_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
     earlier = create_reserved_order(
         db_session,
         customer=customer,
@@ -434,8 +367,8 @@ def test_a_customer_cannot_collect_their_own_cash_order(
     assert order.status == "RESERVED"
 
 
-def test_rejecting_a_cash_order_queues_no_refund(client: TestClient, db_session: Session) -> None:
-    """No money was taken, so nothing goes back."""
+def test_rejecting_a_reserved_order_takes_no_money(client: TestClient, db_session: Session) -> None:
+    """No money was taken, so there is nothing to give back."""
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = login_headers(client, VENDOR_EMAIL)
@@ -454,69 +387,13 @@ def test_rejecting_a_cash_order_queues_no_refund(client: TestClient, db_session:
     assert payment.refund_next_attempt_at is None
 
 
-def test_a_cash_order_is_never_marked_paid_by_a_webhook(
-    client: TestClient, db_session: Session
-) -> None:
-    """Only the webhook marks an online order paid, and it cannot reach here."""
-    import json
+def test_the_online_payment_entry_points_are_gone(client: TestClient) -> None:
+    """The webhook and the local payment simulation no longer exist."""
+    webhook = client.post("/api/v1/webhooks/razorpay", content=b"{}")
+    simulate = client.post("/api/v1/testing/simulate-payment", json={"order_id": str(uuid.uuid4())})
 
-    customer, shop = _seed(db_session)
-    order = create_reserved_order(db_session, customer=customer, shop=shop)
-    payment = db_session.scalar(select(Payment).where(Payment.order_id == order.id))
-    assert payment is not None
-    payload = json.dumps(
-        {
-            "event": "order.paid",
-            "payload": {
-                "payment": {
-                    "id": "pay_cash_1",
-                    "order_id": payment.provider_order_id,
-                    "amount": order.price_paise,
-                    "currency": "INR",
-                }
-            },
-        }
-    ).encode()
-    from app.gateways.payments import FakeGateway
-
-    signature = FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET).sign(payload)
-
-    response = client.post(
-        "/api/v1/webhooks/razorpay",
-        content=payload,
-        headers={
-            "X-Razorpay-Signature": signature,
-            "X-Razorpay-Event-Id": "evt_cash_1",
-        },
-    )
-
-    assert response.status_code == 200, response.text
-    assert response.json()["status"] == "already_paid"
-    db_session.refresh(order)
-    assert order.status == "RESERVED"
-    assert order.paid_at is None
-    db_session.refresh(payment)
-    assert payment.status == "CREATED"
-
-
-def test_the_simulated_payment_endpoint_does_not_pay_a_cash_order(
-    client: TestClient, db_session: Session
-) -> None:
-    """The local dev tool cannot mark a cash order paid either."""
-    customer, shop = _seed(db_session)
-    order = create_reserved_order(db_session, customer=customer, shop=shop)
-
-    response = client.post(
-        "/api/v1/testing/simulate-payment",
-        json={"order_id": str(order.id)},
-        headers=login_headers(client, CUSTOMER_EMAIL),
-    )
-
-    assert response.status_code == 200, response.text
-    assert response.json()["status"] == "already_paid"
-    db_session.refresh(order)
-    assert order.status == "RESERVED"
-    assert order.paid_at is None
+    assert webhook.status_code == 404
+    assert simulate.status_code == 404
 
 
 def test_the_customer_sees_the_cash_order_as_reserved(

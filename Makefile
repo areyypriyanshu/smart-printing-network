@@ -59,7 +59,6 @@ arch:
 test-unit:
 	cd backend && \
 		JWT_SECRET=test-only-jwt-secret \
-		FAKE_WEBHOOK_SECRET=test-only-fake-webhook-secret \
 		uv run pytest tests/unit
 
 test-api:
@@ -93,8 +92,8 @@ e2e:
 e2e-install:
 	cd e2e && npm ci && npx playwright install chromium
 
-# The whole product flow against a running stack: upload, price, pay,
-# queue, accept, print, ready, pickup.
+# The whole product flow against a running stack: upload, price,
+# reserve, queue, accept, print, ready, pickup.
 smoke:
 	./infra/scripts/smoke-test.sh
 
@@ -149,7 +148,7 @@ coverage:
 	docker compose run --rm api sh -c "pytest tests --cov=app --cov-report=term-missing && python scripts/check_coverage.py"
 
 openapi:
-	cd backend && FAKE_WEBHOOK_SECRET=test-only-fake-webhook-secret uv run python scripts/export_openapi.py
+	cd backend && uv run python scripts/export_openapi.py
 	cd frontend && npx openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts
 
 # Is the identity provider set up the way this project needs it? Reads

@@ -9,8 +9,8 @@ import { signInAsCustomer } from "./helpers";
 // the customer acknowledges it, and the order goes through anyway: the
 // check is advice, not a gate.
 //
-// It runs against the local stack, where the worker does the analysis
-// and the fake payment gateway takes the money.
+// It runs against the local stack, where the worker does the analysis.
+// The order is reserved and paid for in cash at the counter.
 //
 // The worker measures the file in the background, and it looks at the
 // queue every thirty seconds, so the report can take a minute to
@@ -44,7 +44,7 @@ test("a customer is warned about a low resolution file and still orders", async 
   const shop = customer.locator("li").filter({ hasText: SHOP_NAME }).first();
   await expect(shop).toBeVisible();
   await shop.getByRole("button", { name: "Choose this shop" }).click();
-  await customer.getByRole("button", { name: "Continue to payment" }).click();
+  await customer.getByRole("button", { name: "Continue to reserve" }).click();
 
   // The warning appears once the worker has measured the file. The
   // worker runs every thirty seconds, so this waits for two of its
@@ -63,8 +63,8 @@ test("a customer is warned about a low resolution file and still orders", async 
   });
 
   // The order goes through. The warning did not stop it.
-  await customer.getByRole("button", { name: /^Pay /i }).click();
-  await expect(customer.getByText("Payment received")).toBeVisible({
+  await customer.getByRole("button", { name: /^Reserve for /i }).click();
+  await expect(customer.getByText("Reserved for you")).toBeVisible({
     timeout: 30_000,
   });
 });

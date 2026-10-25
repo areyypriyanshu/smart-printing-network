@@ -1,8 +1,10 @@
 """Expire orders whose payment window closed.
 
-An order that nobody paid for is worthless after fifteen minutes: the
-upload it holds should be released and the customer should not be able to
-come back and pay for a stale order later.
+No new order waits for an online payment: every order is booked as
+`RESERVED` and paid in cash at the counter. This job exists for orders
+that an earlier version of the application left in `PENDING_PAYMENT`. It
+releases the file they hold, so a stale order cannot keep a PDF stored
+for ever.
 """
 
 import logging

@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from app.gateways.storage import MemoryStorage
 from app.jobs import scheduler
 from sqlalchemy.orm import Session
-from tests.factories import RecordingGateway
 
 NOW = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
 
@@ -36,7 +35,6 @@ def test_run_once_reports_every_job(db_session: Session) -> None:
         now=NOW,
         session_factory=lambda: BorrowedSession(db_session),
         storage=MemoryStorage(),
-        gateway=RecordingGateway(),
     )
 
     assert set(results) == {
@@ -44,7 +42,6 @@ def test_run_once_reports_every_job(db_session: Session) -> None:
         "auto_reject",
         "analyze_quality",
         "expire_no_shows",
-        "process_refunds",
         "purge_files",
     }
     assert all(count == 0 for count in results.values())
@@ -60,7 +57,6 @@ def test_a_failing_job_does_not_stop_the_others(db_session: Session, monkeypatch
         now=NOW,
         session_factory=lambda: BorrowedSession(db_session),
         storage=MemoryStorage(),
-        gateway=RecordingGateway(),
     )
 
     assert results["expire_orders"] == 0

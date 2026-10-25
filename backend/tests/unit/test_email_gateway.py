@@ -23,8 +23,6 @@ from app.gateways.email import (
 def _settings(**overrides: object) -> Settings:
     base = {
         "env": "local",
-        "payment_provider": "fake",
-        "fake_webhook_secret": "a-secret",
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]

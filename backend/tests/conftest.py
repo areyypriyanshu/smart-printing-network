@@ -14,46 +14,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
-from tests.factories import FAKE_WEBHOOK_SECRET
 
 TEST_DATABASE = f"spn_test_{uuid.uuid4().hex[:12]}"
-
-
-@pytest.fixture(autouse=True, scope="session")
-def fake_gateway_is_keyed() -> Iterator[None]:
-    """The fake gateway is keyed with the test secret, and the testing
-    surface is on.
-
-    The fake gateway takes no default secret, because a key that lives in
-    the application package is a key that ships in the repository. The
-    application and the test gateways have to agree on the key, so it is set
-    here for the whole session, and the testing routes are switched on the
-    same way the cash-at-store feature is.
-    """
-    settings = get_settings()
-    original_secret = settings.fake_webhook_secret
-    original_testing = settings.testing_endpoints_enabled
-    settings.fake_webhook_secret = FAKE_WEBHOOK_SECRET
-    settings.testing_endpoints_enabled = True
-    yield
-    settings.fake_webhook_secret = original_secret
-    settings.testing_endpoints_enabled = original_testing
-
-
-@pytest.fixture(autouse=True, scope="session")
-def cash_at_store_is_on() -> Iterator[None]:
-    """Paying at the shop is switched on for the test suite.
-
-    The feature is off by default in the code, so a deployment that has
-    not been configured for it cannot create a cash order by accident.
-    The tests need it on, and the one test that checks the disabled path
-    turns it off for itself.
-    """
-    settings = get_settings()
-    original = settings.cash_at_store_enabled
-    settings.cash_at_store_enabled = True
-    yield
-    settings.cash_at_store_enabled = original
 
 
 @pytest.fixture(autouse=True, scope="session")

@@ -42,7 +42,7 @@ const STEPS: Array<{ title: string; body: string; icon: IconName }> = [
   },
   {
     title: "Collect with a code",
-    body: "Pay online and pick up your prints at the counter by showing your pickup code.",
+    body: "Reserve your prints, then show your pickup code at the counter and pay in cash when you collect.",
     icon: "pin",
   },
 ];
@@ -74,7 +74,7 @@ const FAQS: Array<{ question: string; answer: string }> = [
   {
     question: "How do I collect my prints?",
     answer:
-      "You get a pickup code with your order. Show it at the counter once the shop accepts your job.",
+      "You get a pickup code with your order. Show it at the counter once the shop accepts your job, and pay the shop's price in cash when you collect.",
   },
   {
     question: "Which shops are on the network?",
@@ -172,8 +172,9 @@ export function LandingPage() {
               Print from a shop near you
             </h1>
             <p className="text-lg text-steel">
-              Upload a PDF, choose your print options, pay online and collect it
-              from a verified print shop with a pickup code.
+              Upload a PDF, choose your print options and reserve it at a
+              verified print shop. Collect it with a pickup code and pay in cash
+              at the counter.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link to="/register" className={buttonClassName("primary")}>

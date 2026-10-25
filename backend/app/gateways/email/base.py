@@ -1,8 +1,8 @@
 """Sending one message to one address.
 
-The gateway is an interface for the same reason the payment gateway is:
-the application must not know how a message is delivered, and the
-delivery must be replaceable in a test without a network.
+The gateway is an interface: the application must not know how a
+message is delivered, and the delivery must be replaceable in a test
+without a network.
 
 A message is a recipient, a subject and a body. The body is plain
 text. There is no HTML template and no attachment, because the only

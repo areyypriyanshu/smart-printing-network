@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.factories import (
     create_full_rate_table,
-    create_paid_order,
+    create_reserved_order,
     create_shop,
     create_user,
     login_headers,
@@ -236,7 +236,7 @@ def test_suspending_a_shop_leaves_its_orders_alone(client: TestClient, db_sessio
     shop = create_shop(db_session, owner=owner, is_verified=True)
     create_full_rate_table(db_session, shop)
     customer = create_user(db_session, email="customer@example.com", role="customer")
-    order = create_paid_order(db_session, customer=customer, shop=shop)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
     headers = _admin_headers(client, db_session)
 
     response = client.post(
@@ -247,7 +247,7 @@ def test_suspending_a_shop_leaves_its_orders_alone(client: TestClient, db_sessio
 
     assert response.status_code == 200, response.text
     db_session.refresh(order)
-    assert order.status == "PAID"
+    assert order.status == "RESERVED"
     assert order.pickup_code is not None
 
 

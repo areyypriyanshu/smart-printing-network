@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="arch-title arch-desc">
   <title id="arch-title">Smart Printing Network runtime architecture</title>
-  <desc id="arch-desc">A browser talks over HTTPS to Caddy, which serves the React app and proxies API traffic to FastAPI. The API and a worker use PostgreSQL with PostGIS and private S3 storage. Clerk proves identity, Razorpay provides test-mode payments and signed webhooks, and Nominatim geocodes shop addresses on the server.</desc>
+  <desc id="arch-desc">A browser talks over HTTPS to Caddy, which serves the React app and proxies API traffic to FastAPI. The API and a worker use PostgreSQL with PostGIS and private S3 storage. Clerk proves identity, orders are paid in cash at the counter, and Nominatim geocodes shop addresses on the server.</desc>
 
   <defs>
     <style>
@@ -104,7 +104,7 @@
   <text class="kicker" x="452" y="718">APPLICATION</text>
   <text class="title display" x="452" y="745">Worker</text>
   <text class="body" x="452" y="772">expire · auto-reject · no-show</text>
-  <text class="body" x="452" y="792">refunds · retention · quality</text>
+  <text class="body" x="452" y="792">retention · quality</text>
 
   <!-- Clerk -->
   <g filter="url(#shadow)">
@@ -115,23 +115,14 @@
   <text class="body" x="822" y="212">proves who someone is</text>
   <text class="body" x="822" y="232">roles live in this database</text>
 
-  <!-- Razorpay -->
-  <g filter="url(#shadow)">
-    <rect class="ext" x="800" y="270" width="330" height="120" rx="14"/>
-  </g>
-  <text class="kicker-ext" x="822" y="298">THIRD PARTY</text>
-  <text class="title display" x="822" y="325">Razorpay</text>
-  <text class="body" x="822" y="352">test mode only · API creates orders</text>
-  <text class="body" x="822" y="372">signed, deduplicated webhooks</text>
-
   <!-- Invariants note -->
-  <rect class="note" x="800" y="410" width="330" height="150" rx="14"/>
-  <text class="kicker" x="822" y="438">INVARIANTS</text>
-  <text class="title display" x="822" y="465" font-size="18">What this shape enforces</text>
-  <text class="body" x="822" y="492">Money is integer paise, priced server-side.</text>
-  <text class="body" x="822" y="512">Only a signed webhook marks online payments.</text>
-  <text class="body" x="822" y="532">One transition function writes each event.</text>
-  <text class="body" x="822" y="552">Jobs claim rows in Postgres. No broker.</text>
+  <rect class="note" x="800" y="270" width="330" height="150" rx="14"/>
+  <text class="kicker" x="822" y="298">INVARIANTS</text>
+  <text class="title display" x="822" y="325" font-size="18">What this shape enforces</text>
+  <text class="body" x="822" y="352">Money is integer paise, priced server-side.</text>
+  <text class="body" x="822" y="372">Cash is captured when the code is collected.</text>
+  <text class="body" x="822" y="392">One transition function writes each event.</text>
+  <text class="body" x="822" y="412">Jobs claim rows in Postgres. No broker.</text>
 
   <!-- Storage -->
   <g filter="url(#shadow)">
@@ -163,13 +154,6 @@
   <path class="flow-soft" d="M650,330 V290 H775 V200 H800" marker-end="url(#arrow-soft)"/>
   <text class="flow-label-ext" x="700" y="282" text-anchor="middle">verify token</text>
 
-  <!-- Flows: payments -->
-  <line class="flow-soft" x1="720" y1="345" x2="800" y2="345" marker-end="url(#arrow-soft)"/>
-  <text class="flow-label-ext" x="760" y="336" text-anchor="middle">create · refund</text>
-
-  <line class="flow-soft" x1="800" y1="380" x2="720" y2="380" marker-end="url(#arrow-soft)"/>
-  <text class="flow-label-ext" x="760" y="372" text-anchor="middle">signed webhook</text>
-
   <!-- Flows: storage -->
   <path class="flow" d="M720,460 H760 V660 H900 V690" marker-end="url(#arrow)"/>
   <text class="flow-label" x="830" y="652" text-anchor="middle">presigned URLs</text>
@@ -182,5 +166,5 @@
   <text class="flow-label-ext" transform="rotate(-90 388 620)" x="388" y="620" text-anchor="middle">geocode</text>
 
   <line x1="48" y1="850" x2="1152" y2="850" stroke="#eae3d7" stroke-width="1.5"/>
-  <text x="600" y="874" text-anchor="middle" font-size="12.5" fill="#6b6156">Money is integer paise · only a signed webhook marks online payments · every status change writes an event</text>
+  <text x="600" y="874" text-anchor="middle" font-size="12.5" fill="#6b6156">Money is integer paise · cash is recorded when the pickup code is collected · every status change writes an event</text>
 </svg>

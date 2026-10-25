@@ -6,9 +6,10 @@ per decision, each with the context, the decision, the alternatives that
 were rejected, the consequences and a trigger for revisiting it.
 
 The project is a print shop marketplace: a customer uploads a PDF, picks
-print options, sees the price from a shop's own rate card, pays, and
-collects the printout with a six digit pickup code. The shop works a
-queue of paid orders from a counter screen.
+print options, sees the price from a shop's own rate card, reserves the
+job, and pays in cash when collecting the printout with a six digit
+pickup code. The shop works a queue of reserved orders from a counter
+screen.
 
 The interesting part of this project is not the screens. It is that money
 moves only when the state machine says so, and that the rules are
@@ -18,19 +19,28 @@ enforced in more than one place.
 
 ## The six decisions that shape everything else
 
-### 1. The webhook, not the browser, decides that an order is paid
+### 1. The counter settles the payment, and the state machine decides when
 
-The browser can be closed, offline, or lying. A signed webhook is
-verified against the **raw request body** with a constant time
-comparison, deduplicated by the provider's event id, and checked for the
-amount and the currency before anything is marked as paid. A late payment
-on an expired order is refunded automatically.
+There is no online checkout to trust or to guard against a lying
+browser. A customer creates a reservation, the shop works it, and the
+cash is recorded when the pickup code is verified at the counter. The
+transition to `COLLECTED`, the `paid_at` timestamp and the payment row
+moving to `CAPTURED` commit in one transaction, so an order cannot be
+collected without the money being recorded, or recorded without the
+order being closed.
+
+A second Collect click finds the order already `COLLECTED` and is
+refused by the state machine; two clicks racing each other are decided
+by the same compare and swap that every other status change uses. It is
+not a second charge, and the test that collects twice asserts one
+`COLLECTED` event and one captured payment.
+[ADR 013](adr/013-cash-on-collection.md),
+[ADR 035](adr/035-cash-only-orders.md)
+
+The earlier online design, where a signed webhook decided that an order
+was paid, is kept as written but marked superseded: the provider is
+gone, while its statuses, payment rows and event table remain readable.
 [ADR 004](adr/004-webhook-is-the-source-of-truth.md),
-[ADR 005](adr/005-text-and-check-constraints.md)
-
-The event and the effect it causes are one transaction, so a delivery
-that failed is not spent and a capture is never left behind without an
-order.
 [ADR 022](adr/022-the-webhook-event-and-its-effect-are-one-transaction.md)
 
 ### 2. One function changes an order's status, and the database checks the price
@@ -53,30 +63,43 @@ A bug in the application cannot produce a wrong price.
 
 ### 3. The domain layer is pure, and that is enforced
 
-`app/domain/` is ten small modules with no imports outside the standard
+`app/domain/` is nine small modules with no imports outside the standard
 library. An import linter contract fails the build if it ever imports
 SQLAlchemy, FastAPI, Pydantic or anything from the rest of the app. The
-pricing rule, the state machine and the refund backoff schedule are
-therefore testable without a database, an event loop or a mock.
+pricing rule, the state machine and the pickup code are therefore
+testable without a database, an event loop or a mock.
 [ADR 001](adr/001-fastapi-over-node-express.md),
 [ADR 002](adr/002-sync-sqlalchemy-plain-def-endpoints.md)
 
-### 4. The payment provider sits behind an interface, with a real fake
+### 4. A removed feature leaves the code, but not the history
 
-`PaymentGateway` is a `Protocol`. `RazorpayGateway` uses `urllib` from
-the standard library rather than adding a dependency, and `FakeGateway`
-signs real HMAC webhooks. The whole test suite and the local stack run
-against the fake, so the money path is exercised the same way in every
-environment.
-[ADR 009](adr/009-payment-gateway-interface.md),
-[ADR 010](adr/010-price-invariant-enforced-by-the-database.md)
+There is no gateway interface, no checkout script and no payment
+webhook, because there is nothing left for them to talk to. The
+provider code was deleted rather than hidden behind a disabled flag: a
+module that can still take money is a liability even when the
+configuration says not to call it, and dead code that nobody exercises
+rots.
+
+The data is a different matter. `Payment` survives as a ledger row, and
+rows written by the online path stay readable, as do the
+`PENDING_PAYMENT` and `PAID` statuses and their transitions. The merged
+migrations are untouched and no new migration was needed, because
+removing a feature must not make yesterday's order unreadable. The
+identity webhook keeps using the event table it shared with payments.
+[ADR 035](adr/035-cash-only-orders.md),
+[ADR 009 as superseded](adr/009-payment-gateway-interface.md)
+
+The other external services still sit behind interfaces with real test
+doubles: the identity verifier has a development stand-in, storage has
+`MemoryStorage`, and email has a console sender, so the suite runs with
+no provider at all.
 
 ### 5. Background work is database driven, with no broker
 
 Expiring unpaid orders, rejecting orders no shop picked up, expiring
-no-shows, retrying refunds, deleting old files and analysing uploaded
-files for quality are six functions that query Postgres,
-claim rows with `FOR UPDATE SKIP LOCKED`, and update them conditionally.
+no-shows, deleting old files and analysing uploaded files for quality
+are five functions that query Postgres, claim rows with
+`FOR UPDATE SKIP LOCKED`, and update them conditionally.
 There is no Redis, no Celery and no separate queue to run, monitor or
 debug. A second worker is safe by construction.
 [ADR 003](adr/003-database-driven-jobs.md),
@@ -143,8 +166,8 @@ account is created from the command line, never over HTTP, because an
 admin is the person who decides which shops are allowed to take orders.
 
 A suspension takes a shop off the market without touching its existing
-orders: a customer who has already paid is owed that printout, and the
-shop that is printing it still has to be able to finish it. Every
+orders: a customer with an order in progress is owed that printout, and
+the shop that is printing it still has to be able to finish it. Every
 decision is recorded in `admin_actions`, with the admin, the shop, the
 time and the reason.
 [ADR 014](adr/014-admin-panel.md)
@@ -280,9 +303,9 @@ conversion, including the alternatives that were rejected and why.
 
 A customer wants a print shop near them and the price for their job.
 The price is the interesting part, because there is only one honest way
-to show it: the search and the checkout call the same pricing function,
-so the number the customer compares is the number the customer is
-charged. A test creates a real order through the real service and
+to show it: the search and the reservation call the same pricing
+function, so the number the customer compares is the number the
+customer pays at the counter. A test creates a real order through the real service and
 compares the two numbers, because two pieces of arithmetic that agree
 today drift apart by next month.
 
@@ -341,7 +364,8 @@ rule is broken.
 | The price rule holds | The database is asked to store a wrong price and refuses. |
 | The pickup code never changes | The order is driven through the whole lifecycle and the code is compared at the end. |
 | The shop never sees the pickup code | The real code is read out of the response body and the test fails if it is there. |
-| A webhook is only believed once | Two threads deliver the same event at the same time; the test asserts one capture, one transition, one event row. |
+| Cash is recorded when, and only when, the order is collected | The capture is broken on purpose; the test asserts the status, `paid_at` and the payment row all rolled back with it. |
+| An identity webhook delivery is acted on once | The same event id is delivered twice; the second answer is `duplicate`, the row count stays at one, and a replayed older name does not overwrite the newer one. |
 | The vendor cannot see another shop's order | The other shop's order returns 404, not 403, so the response never confirms that it exists. |
 | A pickup code cannot be guessed | Five wrong codes are allowed, the sixth is rate limited. |
 | A job can run twice | Every job is run twice and the second run has to do nothing. |
@@ -372,16 +396,16 @@ were rejected, the consequences and the trigger for revisiting it.
 | 001 | [ADR 001: FastAPI over Node/Express](adr/001-fastapi-over-node-express.md) |
 | 002 | [ADR 002: Sync SQLAlchemy and plain def endpoints](adr/002-sync-sqlalchemy-plain-def-endpoints.md) |
 | 003 | [ADR 003: Database-driven jobs, no Redis or Celery](adr/003-database-driven-jobs.md) |
-| 004 | [ADR 004: The signed webhook, not the browser, decides that an order is paid](adr/004-webhook-is-the-source-of-truth.md) |
+| 004 | [ADR 004: The signed webhook, not the browser, decides that an order is paid](adr/004-webhook-is-the-source-of-truth.md) — superseded by 035 |
 | 005 | [ADR 005: Text columns with CHECK constraints instead of Postgres enums](adr/005-text-and-check-constraints.md) |
 | 006 | [ADR 006: Classical image analysis instead of a neural network](adr/006-classical-image-analysis-not-a-cnn.md) |
 | 007 | [ADR 007: Polling first, WebSockets in Phase 3](adr/007-polling-before-websockets.md) |
 | 008 | [ADR 008: Single instance with Docker Compose before managed AWS services](adr/008-single-instance-docker-compose.md) |
-| 009 | [ADR 009: A payment gateway interface with a fake implementation](adr/009-payment-gateway-interface.md) |
+| 009 | [ADR 009: A payment gateway interface with a fake implementation](adr/009-payment-gateway-interface.md) — superseded by 035 |
 | 010 | [ADR 010: The price rule is enforced by a database constraint](adr/010-price-invariant-enforced-by-the-database.md) |
 | 011 | [ADR 011: Community-built MinIO image for local object storage](adr/011-community-minio-image.md) |
 | 012 | [ADR 012: In-memory sliding window rate limiter instead of slowapi](adr/012-in-memory-rate-limiter.md) |
-| 013 | [ADR 013: Cash on collection, as a second payment method](adr/013-cash-on-collection.md) |
+| 013 | [ADR 013: Cash on collection, now the only payment method](adr/013-cash-on-collection.md) |
 | 014 | [ADR 014: A narrow admin panel, not a general one](adr/014-admin-panel.md) |
 | 015 | [ADR 015: A database browser in the local stack](adr/015-database-browser-for-local-development.md) |
 | 016 | [ADR 016: Printing the file the student actually has](adr/016-office-file-upload.md) |
@@ -390,7 +414,7 @@ were rejected, the consequences and the trigger for revisiting it.
 | 019 | [ADR 019: Rate limiting a login per account and per address](adr/019-rate-limiting-a-login-per-account.md) |
 | 020 | [ADR 020: One style per role, written down once](adr/020-one-style-per-role.md) |
 | 021 | [ADR 021: The dialogs use the native `dialog` element, not Radix](adr/021-native-dialog-element.md) |
-| 022 | [ADR 022: The webhook event and the payment it causes are one transaction](adr/022-the-webhook-event-and-its-effect-are-one-transaction.md) |
+| 022 | [ADR 022: The webhook event and the payment it causes are one transaction](adr/022-the-webhook-event-and-its-effect-are-one-transaction.md) — superseded by 035 |
 | 023 | [ADR 023: The deployment runs the commit it reviewed, in a mode it pins](adr/023-the-deployment-runs-the-commit-it-reviewed.md) |
 | 024 | [ADR 024: The boundary refuses a value the database cannot hold](adr/024-the-boundary-refuses-a-value-the-database-cannot-hold.md) |
 | 025 | [ADR 025: The limits on creating an account](adr/025-the-limits-on-creating-an-account.md) |
@@ -403,6 +427,7 @@ were rejected, the consequences and the trigger for revisiting it.
 | 032 | [ADR 032: The map is drawn last, and the list is the map that always works](adr/032-the-map-is-drawn-last.md) |
 | 033 | [ADR 033: Queue-wait estimates stay rule-based; simulated data cannot justify ML](adr/033-wait-estimates-and-the-ml-decision.md) |
 | 034 | [ADR 034: Live updates over an authorized WebSocket, with polling as the fallback](adr/034-websocket-live-updates.md) |
+| 035 | [ADR 035: Cash at the counter, and no online payment path](adr/035-cash-only-orders.md) |
 
 ---
 
@@ -415,7 +440,7 @@ were rejected, the consequences and the trigger for revisiting it.
 | Object storage | S3, with MinIO locally | The bucket is private, so every download is a five minute presigned link. |
 | Frontend | React, TypeScript, Vite, TanStack Query | Server state in one place, types generated from the API contract rather than written by hand. |
 | Dialogs | The native `<dialog>` element | Focus trapping, Escape, an inert background and the top layer come from the browser, so there is no library to depend on. See [ADR 021](adr/021-native-dialog-element.md). |
-| Jobs | A worker container polling Postgres | Four periodic jobs do not need a broker. |
+| Jobs | A worker container polling Postgres | Five periodic jobs do not need a broker. |
 | Contracts | `openapi-typescript`, a drift check in CI, and a fuzzer | The frontend cannot silently drift from the backend. |
 | Deploy | One instance, Docker Compose, Caddy | Cheap, understandable, and it makes the whole path inspectable. |
 | Local database browser | pgAdmin in Compose, behind a profile | A reviewer can open the tables and the rows without installing a client. It is a development tool: it is never deployed, and CI never pulls it. See [ADR 015](adr/015-database-browser-for-local-development.md). |
@@ -429,11 +454,12 @@ The reasoning and the rejected alternatives for each of these are in
 
 Being honest about the edges is part of explaining the design.
 
-- Payments run in test mode. No real money moves and vendor payouts do
-  not exist.
+- There is no online payment. Cash is handed over at the counter and
+  recorded when the pickup code is verified, so vendor payouts do not
+  exist.
 - There is no page range, no binding and no multi file order.
 - One order per upload, one upload per order. A customer who abandons a
-  payment starts again with a new upload.
+  reservation starts again with a new upload.
 - The rate limiter lives in the process, so a second API instance would
   need Redis. The deployment is one instance.
 - The vendor board has a WebSocket, with polling every five seconds as

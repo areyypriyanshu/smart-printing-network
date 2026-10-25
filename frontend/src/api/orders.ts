@@ -6,10 +6,6 @@ export type OrderCreateResponse = components["schemas"]["OrderCreateResponse"];
 export type OrderDetailResponse = components["schemas"]["OrderDetailResponse"];
 export type OrderEventResponse = components["schemas"]["OrderEventResponse"];
 export type OrderListResponse = components["schemas"]["OrderListResponse"];
-export type PaymentCheckoutResponse =
-  components["schemas"]["PaymentCheckoutResponse"];
-
-export type PaymentMethod = "online" | "at_store";
 
 export type OrderCreateBody = {
   upload_id: string;
@@ -19,7 +15,6 @@ export type OrderCreateBody = {
   duplex: boolean;
   copies: number;
   expected_price_paise?: number;
-  payment_method?: PaymentMethod;
   quality_acknowledged?: boolean;
 };
 
@@ -113,11 +108,4 @@ export function reorderOrder(orderId: string): Promise<ReorderResponse> {
 export function listOrders(cursor?: number): Promise<OrderListResponse> {
   const query = cursor === undefined ? "" : `?cursor=${cursor}`;
   return apiRequest(`/orders${query}`);
-}
-
-export function simulatePayment(orderId: string): Promise<{ status: string }> {
-  return apiRequest("/testing/simulate-payment", {
-    method: "POST",
-    body: { order_id: orderId },
-  });
 }

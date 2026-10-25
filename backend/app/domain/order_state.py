@@ -33,15 +33,12 @@ ACTIVE_STATUSES: Final = frozenset({PAID, RESERVED, ACCEPTED, PRINTING, READY})
 
 TERMINAL: Final = frozenset({COLLECTED, REJECTED, CANCELLED, EXPIRED})
 
-# Only an order whose money has been captured can be refunded. A reserved
-# order has not been paid for, so rejecting or cancelling it moves no
-# money and must not queue a refund.
-REFUNDABLE_FROM: Final = frozenset({PAID, ACCEPTED})
-
-REFUNDABLE_TO: Final = frozenset({REJECTED, CANCELLED})
-
+# New orders are always reserved. PAID and PENDING_PAYMENT are kept so
+# that an order booked by an earlier version of the application can still
+# be read, worked by its shop, or cancelled. No new order enters either
+# state, and nothing can move an order into PAID.
 ALLOWED: Final[dict[str, frozenset[str]]] = {
-    PENDING_PAYMENT: frozenset({PAID, RESERVED, EXPIRED, CANCELLED}),
+    PENDING_PAYMENT: frozenset({EXPIRED, CANCELLED}),
     PAID: frozenset({ACCEPTED, REJECTED, CANCELLED}),
     RESERVED: frozenset({ACCEPTED, REJECTED, CANCELLED, EXPIRED}),
     ACCEPTED: frozenset({PRINTING, CANCELLED}),
@@ -49,11 +46,9 @@ ALLOWED: Final[dict[str, frozenset[str]]] = {
     READY: frozenset({COLLECTED, EXPIRED}),
 }
 
-ACTOR_TYPES: Final = frozenset({"customer", "vendor", "system", "webhook"})
+ACTOR_TYPES: Final = frozenset({"customer", "vendor", "system"})
 
 ALLOWED_ACTORS: Final[dict[tuple[str, str], frozenset[str]]] = {
-    (PENDING_PAYMENT, PAID): frozenset({"webhook"}),
-    (PENDING_PAYMENT, RESERVED): frozenset({"customer"}),
     (PENDING_PAYMENT, EXPIRED): frozenset({"system"}),
     (PENDING_PAYMENT, CANCELLED): frozenset({"customer", "system"}),
     (PAID, ACCEPTED): frozenset({"vendor"}),
@@ -71,10 +66,11 @@ ALLOWED_ACTORS: Final[dict[tuple[str, str], frozenset[str]]] = {
 }
 
 # The statuses a shop may see. An order becomes the shop's once the
-# customer has paid for it, or has reserved it to pay in cash at the
-# counter, and it stays visible afterwards so the shop can look at the
-# history of a job it worked on. An order that is still waiting for
-# payment, or that expired before anybody paid, was never the shop's.
+# customer has reserved it to pay in cash at the counter, and it stays
+# visible afterwards so the shop can look at the history of a job it
+# worked on. PAID is kept for orders booked by an earlier version. An
+# order that is still waiting for an online payment, or that expired
+# before anybody paid, was never the shop's.
 SHOP_VISIBLE_STATUSES: Final = frozenset(
     {RESERVED, PAID, ACCEPTED, PRINTING, READY, COLLECTED, REJECTED, CANCELLED}
 )
@@ -98,15 +94,3 @@ def is_terminal(status: str) -> bool:
 
 def is_active(status: str) -> bool:
     return status in ACTIVE_STATUSES
-
-
-def queues_refund(frm: str, to: str) -> bool:
-    """True when a transition means the customer must be refunded.
-
-    Only a rejection or a cancellation of an order that was already paid
-    moves money back. Cancelling an unpaid order moves nothing. The
-    transition has to be a legal one, so that this agrees with the
-    transition table rather than describing a move the state machine
-    forbids.
-    """
-    return can_transition(frm, to) and frm in REFUNDABLE_FROM and to in REFUNDABLE_TO

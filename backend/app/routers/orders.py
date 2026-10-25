@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_customer, get_payment_gateway, get_storage
-from app.gateways.payments import PaymentGateway
+from app.deps import get_customer, get_storage
 from app.gateways.storage import Storage
 from app.models import User
 from app.rate_limit import user_rate_limit
@@ -17,7 +16,6 @@ from app.schemas.order import (
     OrderDetailResponse,
     OrderListResponse,
     OrderResponse,
-    PaymentCheckoutResponse,
     ReorderResponse,
 )
 from app.services import order_service
@@ -42,27 +40,14 @@ def create_order(
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200),
     user: User = Depends(get_customer),
     session: Session = Depends(get_db),
-    gateway: PaymentGateway = Depends(get_payment_gateway),
 ) -> OrderCreateResponse:
-    order, payment = order_service.create_order(
+    order = order_service.create_order(
         session,
         customer_id=user.id,
         request=body,
         idempotency_key=idempotency_key,
-        gateway=gateway,
     )
-    return OrderCreateResponse(
-        order=order_service.order_response(order),
-        payment=PaymentCheckoutResponse(
-            provider=payment.provider,
-            provider_order_id=payment.provider_order_id,
-            amount_paise=payment.amount_paise,
-            currency=payment.currency,
-            # Only an order that is paid online has a checkout to open. A
-            # cash order is paid at the counter, so it gets no key.
-            key_id=(gateway.checkout_key_id if payment.provider == gateway.provider else None),
-        ),
-    )
+    return OrderCreateResponse(order=order_service.order_response(order))
 
 
 @router.get(

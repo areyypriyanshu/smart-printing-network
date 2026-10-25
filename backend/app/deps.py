@@ -10,7 +10,6 @@ from app.gateways.email import EmailSender
 from app.gateways.geocoding import Geocoder
 from app.gateways.identity import TokenVerifier, VerifiedIdentity
 from app.gateways.identity.clerk_admin import ClerkAdminClient
-from app.gateways.payments import PaymentGatewayRouter
 from app.gateways.storage import Storage
 from app.models import Shop, User
 from app.services import identity_service
@@ -155,17 +154,6 @@ def get_optional_user(
     if user is None or not user.is_active:
         return None
     return user
-
-
-def get_payment_gateway(request: Request) -> PaymentGatewayRouter:
-    """The gateway the application uses: the online provider and cash.
-
-    It is the concrete router rather than the interface because the local
-    simulate-payment endpoint has to sign a body the way the fake provider
-    does, and only the router knows which implementation is in use.
-    """
-    gateway: PaymentGatewayRouter = request.app.state.payment_gateway
-    return gateway
 
 
 def get_current_shop(

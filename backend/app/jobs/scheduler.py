@@ -23,14 +23,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.gateways.payments import PaymentGateway, build_payment_gateway
 from app.gateways.storage import S3Storage, Storage
 from app.jobs import (
     analyze_quality,
     auto_reject,
     expire_no_shows,
     expire_orders,
-    process_refunds,
     purge_files,
 )
 from app.logging import setup_logging
@@ -52,7 +50,6 @@ def run_once(
     now: datetime | None = None,
     session_factory: Callable[[], Session] = SessionLocal,
     storage: Storage | None = None,
-    gateway: PaymentGateway | None = None,
 ) -> dict[str, int]:
     """Run every job once and report how much each one did.
 
@@ -69,8 +66,6 @@ def run_once(
             access_key=settings.s3_access_key,
             secret_key=settings.s3_secret_key,
         )
-    if gateway is None:
-        gateway = build_payment_gateway(settings)
 
     jobs: list[tuple[str, Callable[[Session], int]]] = [
         ("expire_orders", lambda session: expire_orders.run(session, now=current)),
@@ -80,10 +75,6 @@ def run_once(
             lambda session: analyze_quality.run(session, storage=storage, now=current),
         ),
         ("expire_no_shows", lambda session: expire_no_shows.run(session, now=current)),
-        (
-            "process_refunds",
-            lambda session: process_refunds.run(session, now=current, gateway=gateway),
-        ),
         (
             "purge_files",
             lambda session: purge_files.run(session, storage=storage, now=current),

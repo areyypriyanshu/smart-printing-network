@@ -87,18 +87,10 @@ class ShopResponse(BaseModel):
 
 
 class ShopListResponse(BaseModel):
-    """The shops a customer can order from.
-
-    `cash_at_store_enabled` is a platform setting, not a shop setting. It
-    travels with the shop list because this is the response the order
-    wizard already has when the customer reaches the payment step, and
-    the customer should not be offered a way to pay that the server is
-    going to refuse.
-    """
+    """The shops a customer can order from."""
 
     items: list[ShopResponse]
     next_cursor: str | None
-    cash_at_store_enabled: bool = False
     # What has to be shown to a person when the data here is shown to
     # them. OpenStreetMap asks for it.
     attribution: str | None = None

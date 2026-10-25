@@ -60,8 +60,7 @@ test("a dropped live socket falls back to polling and the board stays current", 
   const shop = customer.locator("li").filter({ hasText: SHOP_NAME }).first();
   await expect(shop).toBeVisible();
   await shop.getByRole("button", { name: "Choose this shop" }).click();
-  await customer.getByRole("button", { name: "Continue to payment" }).click();
-  await customer.getByRole("radio", { name: /pay at the shop/i }).check();
+  await customer.getByRole("button", { name: "Continue to reserve" }).click();
   await customer.getByRole("button", { name: /reserve for/i }).click();
   await expect(customer.getByText("Reserved for you")).toBeVisible({
     timeout: 30_000,

@@ -60,10 +60,8 @@ volume_exists() {
 
 # The application secrets are not in a volume, so they are always the
 # operator's to change. A public JWT secret means anybody can mint an
-# access token for the local instance, and a public webhook key means
-# anybody can mark an order paid.
+# access token for the local instance.
 replace_placeholder JWT_SECRET "local-dev-placeholder-change-me-0123456789abcdef"
-replace_placeholder FAKE_WEBHOOK_SECRET "local-dev-placeholder-change-me-too-0123456789abcdef"
 
 # The service credentials are published in the template as well, and they
 # are only used when the volume is created. A volume that is already there

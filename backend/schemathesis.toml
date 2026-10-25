@@ -6,31 +6,7 @@
 # expects a request that fits the schema to be accepted.
 #
 # Three things in this API cannot be expressed by a schema, and each one
-# is listed here with the reason. A request that carries something only
-# the server issued is refused, and the refusal is correct.
-
-# The webhook is signed. A schema can say "a body", and it cannot say
-# "a body whose signature this server can check", so the fuzzer sends a
-# body with a signature of its own making and the server refuses it
-# with a signature error. That is the whole point of the route.
-#
-# The same is true of a file, which is why the upload endpoint is left
-# out of the contract run altogether. The webhook is the money path, so
-# it stays in the run and only its rejection is allowed.
-[[operations]]
-include-path = "/api/v1/webhooks/razorpay"
-checks.positive_data_acceptance.expected-statuses = [
-  "2xx",
-  "3xx",
-  "400",
-  "401",
-  "403",
-  "404",
-  "409",
-  "422",
-  "429",
-  "5xx",
-]
+# is listed here with the reason.
 
 # The cursor of a list is an opaque token this server issued. A schema
 # can say "a string", and it cannot say "a string we handed out", so

@@ -2,13 +2,13 @@
 
 <h1>Smart Printing Network</h1>
 
-<p><strong>Upload a document. Compare nearby print shops. Pay. Collect with a short code.</strong></p>
+<p><strong>Upload a document. Compare nearby print shops. Reserve. Collect and pay with a short code.</strong></p>
 
 <p>A full-stack printing marketplace built end to end with React, FastAPI and PostgreSQL. It takes a real file from upload to pickup, defends the money path with adversarial tests, and writes down every decision that was not obvious.</p>
 
 <p>
   <a href="https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml"><img src="https://github.com/areyypriyanshu/smart-printing-network/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="docs/PROJECT_SUMMARY.md#by-the-numbers"><img src="docs/coverage.svg" alt="Test coverage: 91.7%"></a>
+  <a href="docs/PROJECT_SUMMARY.md#by-the-numbers"><img src="docs/coverage.svg" alt="Test coverage: 91.6%"></a>
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.12">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&amp;logoColor=0b0b0b" alt="React 19">
   <img src="https://img.shields.io/badge/PostgreSQL-16%20%2B%20PostGIS-4169E1?logo=postgresql&amp;logoColor=white" alt="PostgreSQL 16 with PostGIS">
@@ -25,7 +25,7 @@
 </div>
 
 > [!IMPORTANT]
-> Payments run in Razorpay **test mode only**. No real money moves, vendor payouts are not implemented, and the platform takes no cut of a cash order.
+> Orders are paid in cash at the counter. The platform never holds a card or a wallet, so there is no payment provider, no online refund and no money in transit. Vendor payouts and invoicing are not implemented.
 
 ---
 
@@ -36,15 +36,15 @@ One place to print something without walking to three shops to ask for a price.
 | Capability | What it means |
 |---|---|
 | **Any common document** | PDF, Word, Excel or PowerPoint. Office files are converted to PDF with the standard library and PyMuPDF, and the quote counts the pages that will actually be printed. |
-| **A price you can trust** | Integer paise, computed only on the server. Search and checkout call the same function, and a database `CHECK` repeats the arithmetic as a last line of defence. |
+| **A price you can trust** | Integer paise, computed only on the server. Search and order creation call the same function, and a database `CHECK` repeats the arithmetic as a last line of defence. |
 | **Compare nearby shops** | Verified shops by distance, price and queue wait, in a list that works on its own and an optional map that loads only when it is scrolled into view. |
-| **Pay how you like** | Razorpay test mode with signed webhooks, or reserve now and pay cash at the counter. |
-| **Proof at pickup** | A short code that the shop checks in constant time and rate limits against guessing. Online orders get theirs only after the payment webhook; cash orders get theirs when they reserve. |
+| **Reserve, pay at the counter** | The customer books the job and gets a pickup code. The shop's listed price is paid in cash when the prints are collected. |
+| **Proof at pickup** | A short code that the shop checks in constant time and rate limits against guessing. The code is issued the moment the customer reserves. |
 | **Check before printing** | Effective DPI and blur measured in the worker, with a warning that names the problem instead of a score nobody can act on. |
 | **Live updates** | Order changes pushed over a WebSocket to the shop board and the customer's order page, with polling that takes over when the socket drops. |
-| **Built to operate** | Timeouts, auto-rejection, refund retries, file retention, shop approvals and an audit trail, all driven from the database. |
+| **Built to operate** | Timeouts, auto-rejection, file retention, shop approvals and an audit trail, all driven from the database. |
 
-**Status.** Phase 1 (accounts, upload, pricing, payment, pickup, vendor queue, refunds, retention), 1.5 (cash at the counter), 1.6 (Office files, reprint, code sharing, nearby shops), 2 (quality check, search, map, load baseline) and 3 (wait estimates, WebSocket live updates) are built end to end.
+**Status.** Phase 1 (accounts, upload, pricing, orders, pickup, vendor queue, retention), 1.5 (cash at the counter, now the only payment path), 1.6 (Office files, reprint, code sharing, nearby shops), 2 (quality check, search, map, load baseline) and 3 (wait estimates, WebSocket live updates) are built end to end.
 
 **Not built, on purpose.**
 
@@ -57,10 +57,10 @@ One place to print something without walking to three shops to ask for a price.
 ## Architecture at a glance
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Runtime architecture: a browser talks to Caddy, which proxies FastAPI; the API and worker share PostgreSQL with PostGIS and private S3 storage; Clerk proves identity, Razorpay provides test-mode payments and signed webhooks, and Nominatim geocodes addresses on the server." width="100%">
+  <img src="docs/architecture.svg" alt="Runtime architecture: a browser talks to Caddy, which proxies FastAPI; the API and worker share PostgreSQL with PostGIS and private S3 storage; Clerk proves identity and Nominatim geocodes addresses on the server." width="100%">
 </p>
 
-<p align="center"><sub>Solid lines are this system. Dashed lines are third parties. The browser is the only client, and Caddy is the only public entry point. <a href="docs/architecture.svg">Open the diagram full size.</a></sub></p>
+<p align="center"><sub>Solid lines are this system. Dashed lines are third parties. The browser is the only client, and Caddy is the only public entry point. There is no payment provider in the diagram because the platform calls none: the order is reserved, and the shop records the cash when the code is collected. <a href="docs/architecture.svg">Open the diagram full size.</a></sub></p>
 
 One origin, one database, no broker. Caddy serves the built React app and proxies `/api` and `/ws` to FastAPI, so there is no CORS configuration and the session token is held in memory rather than in an auth cookie. The API and the worker are separate processes over the same PostgreSQL and private object storage. There is no queue to operate. Clerk proves who a person is; the role and every authorization decision stay in this database.
 
@@ -69,11 +69,10 @@ One origin, one database, no broker. Caddy serves the built React app and proxie
 | **Browser** | React 19 SPA. TanStack Query for server state, a WebSocket client with polling fallback, and a Clerk session token kept in memory. The map is optional and loads on scroll. |
 | **Caddy** | The only public entry point. TLS, HSTS, CSP, security headers, static assets, `/api` and `/ws` on one origin, and a 54 MB request cap that sits above the 50 MB upload limit. |
 | **API** | FastAPI with sync SQLAlchemy. Routers delegate to services; pricing and state rules live in a pure domain layer; authorization is object-level and lives in the services. |
-| **Worker** | Expires unpaid orders, auto-rejects orders no shop accepts, expires uncollected cash orders, retries refunds, purges expired files and measures quality. Claims rows with `SKIP LOCKED`, so it is safe to run twice. |
-| **PostgreSQL + PostGIS** | Orders, payments, events, uploads, shops and webhook deduplication. Holds the price `CHECK` and the partial indexes the queue and search rely on. |
+| **Worker** | Expires historical unpaid orders, auto-rejects orders no shop accepts, expires uncollected orders, purges expired files and measures quality. Claims rows with `SKIP LOCKED`, so it is safe to run twice. |
+| **PostgreSQL + PostGIS** | Orders, payments (including historical online rows), events, uploads, shops and webhook deduplication. Holds the price `CHECK` and the partial indexes the queue and search rely on. |
 | **S3 / MinIO** | Private PDFs under random keys, reachable only through five-minute presigned URLs. Retention is enforced by `delete_after`, not by a cron script outside the app. |
 | **Clerk** | Proves identity and owns the password. The local account is keyed on the provider's subject, never on the email. |
-| **Razorpay** | Test-mode orders, refunds and signed, deduplicated webhooks. The webhook, not the browser, decides that an online order is paid. |
 | **Nominatim** | Server-side address lookup, cached and rate limited. The commercial provider's key, if one is configured, never reaches the browser. |
 
 ### How a request moves
@@ -83,7 +82,7 @@ One origin, one database, no broker. Caddy serves the built React app and proxie
 3. The API verifies the token, loads the local account by the provider's subject, and applies an ownership filter in the service. Cross-tenant access is a 404.
 4. PostgreSQL is the system of record. PDFs go to a private bucket and reach the browser only through a five-minute presigned URL.
 5. The worker shares the database and bucket but no in-memory state. Restarting it loses nothing; running two is safe.
-6. Razorpay webhooks arrive through Caddy. The API verifies the signature on the raw body and commits the effect once.
+6. There is no payment provider call. The order is booked with a pickup code, and the shop takes the cash when it verifies the code at the counter.
 
 ## Quickstart
 
@@ -171,19 +170,21 @@ Then open <https://localhost> after trusting Caddy's local certificate authority
 <details>
 <summary><strong>Walk the whole flow in one command</strong></summary>
 
-`make smoke` signs in, uploads a PDF, waits for the worker's quality check, sees a price and pays; the shop accepts, prints, marks ready and hands over; the customer downloads the file; a wrong pickup code is refused and the right one completes the order. It checks the answer at every step and fails loudly instead of printing a summary that looks fine.
+`make smoke` signs in, uploads a PDF, waits for the worker's quality check, sees a price and reserves the job; the shop accepts, prints, marks ready and hands it over; the customer downloads the file; a wrong pickup code is refused and the right one completes the order and records the cash payment. It checks the answer at every step and fails loudly instead of printing a summary that looks fine.
 
 </details>
 
 ## How it works
 
-### The signed webhook decides that an online order is paid
+### The order is booked, and the counter takes the money
 
-The browser can be closed, offline or malicious, so a client callback never marks an online order paid. An online order exists as `PENDING_PAYMENT` before checkout. When Razorpay calls back, the API verifies the signature on the raw bytes, deduplicates by event id, checks the amount and currency, and commits the payment, the order transition and its event in one transaction. A late payment is refunded. For an online order, the pickup code is generated only after the webhook, so an unpaid online order never carries a usable code. See [ADR 004](docs/adr/004-webhook-is-the-source-of-truth.md) and [ADR 022](docs/adr/022-the-webhook-event-and-its-effect-are-one-transaction.md).
+A customer uploads a file, compares each shop's price and reserves the job. The server computes the price again, writes the order as `RESERVED` with a pickup code, and records a cash payment row with nothing captured. The shop works the queue; when it verifies the code at the counter, the order becomes `COLLECTED` and the payment `CAPTURED` in the same transaction. The platform never holds a card or a wallet, so there is no online refund, no chargeback and no payment provider that can be down.
+
+Earlier versions supported online payment through Razorpay. That path was removed rather than switched off: it is not configured, its routes are gone, and no new order can enter `PENDING_PAYMENT` or `PAID`. The statuses, tables and check constraints stay, so historical orders remain readable. Historical online refunds no longer have an automatic path; the refund columns remain for manual settlement. See [ADR 035](docs/adr/035-cash-only-orders.md) and [ADR 013](docs/adr/013-cash-on-collection.md).
 
 ### The price is computed once, on the server
 
-Price is arithmetic: `pages × copies × shop rate`, with a minimum order amount, in integer paise. Search and checkout call the same pricing function, so the number a customer compares is the number they are charged. The client may send an expected price, but it is a guard, not the truth, and a database `CHECK` repeats the calculation. Cash orders reuse the same machinery: `RESERVED` when the customer books, `COLLECTED` and `CAPTURED` together when the shop takes the money. See [ADR 010](docs/adr/010-price-invariant-enforced-by-the-database.md) and [ADR 013](docs/adr/013-cash-on-collection.md).
+Price is arithmetic: `pages × copies × shop rate`, with a minimum order amount, in integer paise. Search and checkout call the same pricing function, so the number a customer compares is the number they pay. The client may send an expected price, but it is a guard, not the truth, and a database `CHECK` repeats the calculation. An order is `RESERVED` when the customer books, and `COLLECTED` with a `CAPTURED` cash payment together when the shop takes the money. See [ADR 010](docs/adr/010-price-invariant-enforced-by-the-database.md) and [ADR 013](docs/adr/013-cash-on-collection.md).
 
 ### Identity is proved elsewhere; authorization lives here
 
@@ -207,9 +208,9 @@ The suite is the spec, not an afterthought. Money and authorization get adversar
 
 | Measure | Result | Source |
 |---|---|---|
-| Backend tests | **819 passed, 29 skipped** | `make coverage`, real PostgreSQL 16 + PostGIS 3.6; skips are environment-specific |
-| Frontend tests | **168 passed** in 27 files | `make test-fe` (Vitest and Testing Library) |
-| Coverage | **91.7%** overall · **93.2%** domain · **92.4%** services | Floors of 80/90/90 enforced in CI |
+| Backend tests | **721 passed, 29 skipped** | `make coverage`, real PostgreSQL 16 + PostGIS 3.6; skips are environment-specific |
+| Frontend tests | **165 passed** in 27 files | `make test-fe` (Vitest and Testing Library) |
+| Coverage | **91.6%** overall · **93.0%** domain · **92.4%** services | Floors of 80/90/90 enforced in CI |
 | Quote latency | p95 **25.4 / 25.8 ms** over two runs | k6, 120 requests per run |
 | Shop search latency | p95 **137.2 / 133.1 ms** | k6, 60 requests per run; spatial index in the plan |
 | Vendor queue latency | p95 **61.0 / 28.4 ms** at **238 active orders** | k6, 30 requests per run; partial index used |
@@ -218,8 +219,7 @@ The suite is the spec, not an afterthought. Money and authorization get adversar
 
 What the tests actually prove:
 
-- **Payments:** forged signatures, duplicate delivery, wrong amounts, late payments and parallel webhooks. A late payment is refunded, and a duplicate can only apply once.
-- **Orders and authorization:** two shops accepting at once produce one winner. Every endpoint has an allowed and a forbidden-actor test, and cross-tenant reads return 404.
+- **Orders and money:** a second accept produces one winner; a rejection takes no money; the cash capture and the `COLLECTED` transition are atomic; a wrong pickup code is refused. Every endpoint has an allowed and a forbidden-actor test, and cross-tenant reads return 404.
 - **Jobs:** frozen-time tests, run-twice idempotency and concurrent workers with `SKIP LOCKED`.
 - **Schema:** migrations pass up, down, up; every new `CHECK` and unique rule has a constraint test.
 - **End to end:** Playwright over the whole Compose stack with axe checks at WCAG 2.1 A and AA. One journey drops the live socket and proves the vendor board falls back to polling.
@@ -264,9 +264,8 @@ The planning documents live with the maintainer and are not committed. The decis
 
 | Decision | Why it matters | ADR |
 |---|---|---|
-| The signed webhook is the source of truth | A browser can lie or disappear; the money path cannot depend on it | [004](docs/adr/004-webhook-is-the-source-of-truth.md) |
+| The order is cash at the counter | No provider dependency, no card data and no chargebacks; historical online rows stay readable | [035](docs/adr/035-cash-only-orders.md) |
 | The price is checked by the database | An application bug cannot store a wrong price | [010](docs/adr/010-price-invariant-enforced-by-the-database.md) |
-| The payment provider sits behind an interface with a real fake | The whole money path runs the same way in tests and locally, with no network | [009](docs/adr/009-payment-gateway-interface.md) |
 | Background work is database-driven | No Redis or Celery until a measured trigger; `SKIP LOCKED` instead | [003](docs/adr/003-database-driven-jobs.md) |
 | Clerk proves identity, this database authorizes | A provider cannot write a role or read another tenant's order | [029](docs/adr/029-clerk-authentication-with-local-authorization.md) |
 | Office files become PDFs with the standard library and PyMuPDF | Print the file the customer actually has, and quote the pages that will be printed | [016](docs/adr/016-office-file-upload.md) |
@@ -274,11 +273,11 @@ The planning documents live with the maintainer and are not committed. The decis
 | Wait estimates stay rule-based | Simulated data cannot justify ML; the backtest makes the rule accountable | [033](docs/adr/033-wait-estimates-and-the-ml-decision.md) |
 | Live updates are committed notifications | A rolled-back order announces nothing; the socket is only a hint | [034](docs/adr/034-websocket-live-updates.md) |
 
-The rest, including the alternatives that were rejected, are in [DECISIONS.md](docs/DECISIONS.md) and the 34 ADRs.
+The rest, including the alternatives that were rejected, are in [DECISIONS.md](docs/DECISIONS.md) and the 35 ADRs.
 
 ## Known limitations
 
-- Payments are test mode. Vendor payouts are not implemented, and the platform takes no cut of a cash order. It records the amount, method, shop, time and vendor so a settlement can be built later without a data migration.
+- Payment is cash at the counter. There is no online payment, payout or invoicing; the amount, shop and collection time are recorded so settlement can be added later without a data migration.
 - One shop per vendor account, one order per upload, and whole-document printing only. There are no page ranges, binding options, multi-file orders, ratings or QR codes.
 - A converted Office file keeps the text, headings, pictures and table contents, but not the exact fonts, table widths, headers, footers or columns. A customer who needs the exact layout uploads a PDF.
 - The deployment is single-instance. The rate limiter and the live-update hub live in the process, so a second API instance would need a shared transport.

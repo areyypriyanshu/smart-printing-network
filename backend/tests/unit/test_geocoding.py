@@ -36,9 +36,6 @@ from app.services.geocoding_service import geocode, resolve_shop_point
 #: needed, because there is one way to sign in.
 BASE: dict[str, object] = {
     "env": "local",
-    "payment_provider": "fake",
-    "fake_webhook_secret": "a-key-the-operator-chose",
-    "testing_endpoints_enabled": False,
     "clerk_fapi_url": "https://app.accounts.dev",
     "clerk_allowed_origins": "http://localhost:5173",
     "clerk_secret_key": "a-secret-the-operator-chose",

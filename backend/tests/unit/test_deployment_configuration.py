@@ -46,7 +46,6 @@ def test_the_production_stack_pins_the_mode() -> None:
     compose = _read("docker-compose.prod.yml")
 
     assert compose.count("ENV: production") >= 2
-    assert 'TESTING_ENDPOINTS_ENABLED: "false"' in compose
 
 
 def test_the_production_stack_does_not_trust_every_forwarded_address() -> None:
@@ -65,13 +64,15 @@ def test_the_production_stack_needs_the_identity_provider() -> None:
     """There is one way to sign in, so a deployment cannot start without it.
 
     The settings are pinned in the compose file rather than left to an
-    untracked file on the instance, and the ones that name the provider
-    have to be set for real. A Compose "environment" entry overrides
-    "env_file", so the two cannot disagree.
+    untracked file on the instance, and every one has to be set for
+    real. A Compose "environment" entry overrides "env_file", so the two
+    cannot disagree. The production template names each one, so an
+    operator who copies it is not left with a stack that refuses to
+    start.
     """
     compose = _read("docker-compose.prod.yml")
+    template = _read(".env.prod.example")
 
-    assert "PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:?" in compose
     for setting in (
         "CLERK_FAPI_URL",
         "CLERK_ALLOWED_ORIGINS",
@@ -79,6 +80,12 @@ def test_the_production_stack_needs_the_identity_provider() -> None:
         "CLERK_WEBHOOK_SIGNING_SECRET",
     ):
         assert f"{setting}: ${{{setting}:?" in compose, setting
+        assert f"{setting}=" in template, setting
+
+    # Orders are paid in cash at the counter, so there is no payment
+    # provider to configure. A new one needs a decision, not an env var.
+    assert "PAYMENT_PROVIDER" not in compose
+    assert "RAZORPAY" not in compose
 
 
 def test_the_content_security_policy_allows_the_identity_provider() -> None:
@@ -342,8 +349,8 @@ def test_the_example_environment_holds_placeholders_only() -> None:
     example = _read(".env.example")
 
     assert "JWT_SECRET=local-dev-placeholder-change-me" in example
-    assert "FAKE_WEBHOOK_SECRET=local-dev-placeholder-change-me" in example
-    assert "PAYMENT_PROVIDER=fake" in example
+    assert "RAZORPAY_KEY_SECRET" not in example
+    assert "FAKE_WEBHOOK_SECRET" not in example
 
 
 def test_the_local_secrets_are_generated_rather_than_shipped() -> None:
@@ -355,7 +362,7 @@ def test_the_local_secrets_are_generated_rather_than_shipped() -> None:
     """
     script = _read("infra/scripts/generate-dev-secrets.sh")
 
-    assert "FAKE_WEBHOOK_SECRET" in script
+    assert "JWT_SECRET" in script
     assert "openssl rand" in script
 
 

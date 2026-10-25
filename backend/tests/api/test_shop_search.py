@@ -10,14 +10,12 @@ import json
 import uuid
 
 from app.gateways.geocoding import GeocodeResult, MemoryGeocoder, NominatimGeocoder
-from app.gateways.payments import FakeGateway
 from app.models import ShopRate
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from tests.factories import (
-    FAKE_WEBHOOK_SECRET,
     create_full_rate_table,
     create_shop,
     create_upload_row,
@@ -241,7 +239,7 @@ def test_the_price_is_the_price_that_would_be_charged(
     assert len(body["items"]) == 1
     assert body["items"][0]["price_paise"] == 5 * 2 * 200
 
-    order, _payment = order_service.create_order(
+    order = order_service.create_order(
         db_session,
         customer_id=customer.id,
         request=OrderCreateRequest(
@@ -253,7 +251,6 @@ def test_the_price_is_the_price_that_would_be_charged(
             copies=2,
         ),
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
     )
     assert order.price_paise == body["items"][0]["price_paise"]
 

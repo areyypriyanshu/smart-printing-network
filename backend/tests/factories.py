@@ -1,68 +1,15 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from app.domain.pickup_code import generate_pickup_code
 from app.gateways.identity.fake import dev_subject_for
-from app.gateways.payments import CashGateway, FakeGateway, GatewayOrder, GatewayRefund
-from app.models import Order, Shop, ShopRate, Upload, User
+from app.models import Order, OrderEvent, Payment, Shop, ShopRate, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
 from fastapi.testclient import TestClient
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-# The key the fake gateway signs its webhooks with in the test suite.
-# The fake gateway takes no default on purpose: a key that lives in the
-# application package is a key that ships in the repository. The test
-# secret lives here, with the other test-only values.
-FAKE_WEBHOOK_SECRET = "test-only-fake-webhook-secret"
-
-
-class RecordingGateway:
-    """A payment gateway double that records what it was asked to do.
-
-    `refund_error` makes the refund call fail, which is how the retry and
-    backoff behaviour is tested.
-    """
-
-    provider = "fake"
-    checkout_key_id: str | None = None
-
-    def __init__(self, *, refund_error: Exception | None = None) -> None:
-        self.refund_error = refund_error
-        self.refund_calls: list[dict[str, object]] = []
-
-    def create_order(
-        self, *, amount_paise: int, receipt: str, currency: str = "INR"
-    ) -> GatewayOrder:
-        return GatewayOrder(
-            provider=self.provider,
-            provider_order_id=f"fake_order_{receipt}",
-            amount_paise=amount_paise,
-            currency=currency,
-        )
-
-    def verify_webhook_signature(self, *, raw_body: bytes, signature: str) -> bool:
-        return True
-
-    def refund(
-        self, *, provider_payment_id: str, amount_paise: int, idempotency_note: str
-    ) -> GatewayRefund:
-        self.refund_calls.append(
-            {
-                "provider_payment_id": provider_payment_id,
-                "amount_paise": amount_paise,
-                "idempotency_note": idempotency_note,
-            }
-        )
-        if self.refund_error is not None:
-            raise self.refund_error
-        return GatewayRefund(
-            provider=self.provider,
-            refund_id=f"refund_{idempotency_note}",
-            provider_payment_id=provider_payment_id,
-            amount_paise=amount_paise,
-        )
 
 
 def create_user(
@@ -204,23 +151,60 @@ def create_unpaid_order(
     copies: int = 1,
     created_at: datetime | None = None,
 ) -> Order:
-    """An order that is created but not paid, waiting for its payment window."""
+    """A row in PENDING_PAYMENT as the online-payment version left it.
+
+    Nothing in the application creates one now, and no transition leads
+    into PENDING_PAYMENT. It is here so the expiry job, which exists for
+    rows written before cash-only, stays covered.
+    """
     upload = create_upload_row(session, customer=customer, page_count=page_count)
-    order, _payment = order_service.create_order(
-        session,
+    now = datetime.now(UTC) if created_at is None else created_at
+    rate_paise = 200
+    price_paise = max(page_count * copies * rate_paise, shop.min_order_paise)
+    order = Order(
         customer_id=customer.id,
-        request=OrderCreateRequest(
-            upload_id=upload.id,
-            shop_id=shop.id,
-            paper_size="A4",
-            color=False,
-            duplex=False,
-            copies=copies,
-        ),
+        shop_id=shop.id,
+        upload_id=upload.id,
+        status="PENDING_PAYMENT",
+        payment_method="online",
+        paper_size="A4",
+        color=False,
+        duplex=False,
+        copies=copies,
+        page_count=page_count,
+        rate_paise=rate_paise,
+        min_order_paise=shop.min_order_paise,
+        price_paise=price_paise,
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
-        now=created_at,
+        created_at=now,
+        updated_at=now,
     )
+    session.add(order)
+    session.flush()
+    session.add(
+        Payment(
+            order_id=order.id,
+            provider="fake",
+            provider_order_id=f"fake_order_{order.id}",
+            amount_paise=price_paise,
+            currency="INR",
+            status="CREATED",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    session.add(
+        OrderEvent(
+            order_id=order.id,
+            from_status=None,
+            to_status="PENDING_PAYMENT",
+            actor_type="customer",
+            actor_id=customer.id,
+            at=now,
+        )
+    )
+    session.commit()
+    session.refresh(order)
     return order
 
 
@@ -237,35 +221,71 @@ def create_paid_order(
     created_at: datetime | None = None,
     paid_at: datetime | None = None,
 ) -> Order:
-    """An order that a shop can see: created, then paid through the webhook path.
+    """A PAID row as the online-payment version left it.
 
-    Goes through the real service so the order, its payment, its pickup code
-    and its event history look exactly like a paid order in production.
+    No new order can reach PAID, so this is built directly rather than
+    through the service. The row carries what the old version wrote: the
+    time the money was taken, the pickup code and a captured payment.
     """
     upload = create_upload_row(session, customer=customer, page_count=page_count)
-    order, payment = order_service.create_order(
-        session,
+    created = datetime.now(UTC) if created_at is None else created_at
+    paid = created if paid_at is None else paid_at
+    rate_paise = 200
+    price_paise = max(page_count * copies * rate_paise, shop.min_order_paise)
+    order = Order(
         customer_id=customer.id,
-        request=OrderCreateRequest(
-            upload_id=upload.id,
-            shop_id=shop.id,
-            paper_size=paper_size,
-            color=color,
-            duplex=duplex,
-            copies=copies,
-        ),
+        shop_id=shop.id,
+        upload_id=upload.id,
+        status="PAID",
+        payment_method="online",
+        paper_size=paper_size,
+        color=color,
+        duplex=duplex,
+        copies=copies,
+        page_count=page_count,
+        rate_paise=rate_paise,
+        min_order_paise=shop.min_order_paise,
+        price_paise=price_paise,
+        pickup_code=generate_pickup_code(),
         idempotency_key=uuid.uuid4().hex,
-        gateway=FakeGateway(webhook_secret=FAKE_WEBHOOK_SECRET),
-        now=created_at,
+        paid_at=paid,
+        reserved_at=paid,
+        created_at=created,
+        updated_at=paid,
     )
-    order_service.transition(
-        session, order_id=order.id, to_status="PAID", actor_type="webhook", now=paid_at
+    session.add(order)
+    session.flush()
+    payment = Payment(
+        order_id=order.id,
+        provider="fake",
+        provider_order_id=f"fake_order_{order.id}",
+        provider_payment_id=f"pay_test_{order.id}",
+        amount_paise=price_paise,
+        currency="INR",
+        status="CAPTURED",
+        created_at=created,
+        updated_at=paid,
     )
-    # The webhook is what captures the payment, so the factory does too.
-    # Without this the order would be paid but hold no money, and a refund
-    # would have nothing to refund.
-    payment.status = "CAPTURED"
-    payment.provider_payment_id = f"pay_test_{payment.id}"
+    session.add(payment)
+    session.add_all(
+        [
+            OrderEvent(
+                order_id=order.id,
+                from_status=None,
+                to_status="PENDING_PAYMENT",
+                actor_type="customer",
+                actor_id=customer.id,
+                at=created,
+            ),
+            OrderEvent(
+                order_id=order.id,
+                from_status="PENDING_PAYMENT",
+                to_status="PAID",
+                actor_type="webhook",
+                at=paid,
+            ),
+        ]
+    )
     session.commit()
     session.refresh(order)
     return order
@@ -287,7 +307,7 @@ def create_reserved_order(
     production.
     """
     upload = create_upload_row(session, customer=customer, page_count=page_count)
-    order, _payment = order_service.create_order(
+    order = order_service.create_order(
         session,
         customer_id=customer.id,
         request=OrderCreateRequest(
@@ -297,10 +317,8 @@ def create_reserved_order(
             color=False,
             duplex=False,
             copies=copies,
-            payment_method="at_store",
         ),
         idempotency_key=uuid.uuid4().hex,
-        gateway=CashGateway(),
         now=reserved_at,
     )
     session.refresh(order)
