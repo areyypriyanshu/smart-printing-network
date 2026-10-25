@@ -67,7 +67,6 @@ The raw numbers and methodology are in
 | How is money and payment handled? | [`docs/adr/004-webhook-is-the-source-of-truth.md`](adr/004-webhook-is-the-source-of-truth.md) |
 | What does the database enforce? | [`docs/adr/010-price-invariant-enforced-by-the-database.md`](adr/010-price-invariant-enforced-by-the-database.md) |
 | How is security checked? | [`docs/SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
-| What does it look like? | [`docs/DEMO.md`](DEMO.md), [`docs/screenshots/`](screenshots/) |
 
 ## Scope, stated plainly
 

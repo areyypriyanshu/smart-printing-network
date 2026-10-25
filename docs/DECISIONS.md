@@ -65,9 +65,9 @@ therefore testable without a database, an event loop or a mock.
 
 `PaymentGateway` is a `Protocol`. `RazorpayGateway` uses `urllib` from
 the standard library rather than adding a dependency, and `FakeGateway`
-signs real HMAC webhooks. The whole test suite, the local stack and the
-demo run against the fake, so the money path is exercised the same way in
-every environment.
+signs real HMAC webhooks. The whole test suite and the local stack run
+against the fake, so the money path is exercised the same way in every
+environment.
 [ADR 009](adr/009-payment-gateway-interface.md),
 [ADR 010](adr/010-price-invariant-enforced-by-the-database.md)
 

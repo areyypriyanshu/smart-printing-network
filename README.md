@@ -20,8 +20,8 @@ orders from a counter screen.
 > current simulated evidence. Sprint 10 adds WebSocket live updates: order
 > status changes push to the shop board and the customer's order page in
 > real time, with polling fallback when the socket drops. Sprint 11 is the
-> portfolio pass: a recorded demo, README screenshots, a one-page project
-> summary, dependency audits in CI and a written security review.
+> portfolio pass: a one-page project summary, dependency audits in CI and
+> a written security review. A recorded demo is deferred for now.
 > Payments run in Razorpay **test mode only**. No real money moves and shop
 > payouts are out of scope.
 
@@ -69,27 +69,6 @@ flowchart LR
 
 One origin, one TLS terminator, and no CORS: the app, the API and the
 WebSocket share a host.
-
-## See it
-
-The [3 minute demo](docs/demo/spn-demo.mp4) is a recording of the
-real product on the local stack: a customer compares shops with a real
-file, pays through the fake gateway, is shown a pickup code, and checks a
-deliberately low-resolution file; the shop then accepts, prints, marks
-ready and hands the order over. The captions are in the video, and the
-[written walkthrough](docs/DEMO.md) has the same steps in text.
-
-[![Watch the demo](docs/screenshots/06-payment-received.png)](docs/demo/spn-demo.mp4)
-
-| Customer | Shop |
-|---|---|
-| ![Comparing shops with a real file, prices and queue waits](docs/screenshots/03-compare-shops.png) | ![The vendor queue with a paid order](docs/screenshots/09-vendor-queue.png) |
-| ![Order page with pickup code and queue estimate](docs/screenshots/07-order-and-pickup-code.png) | ![Quality warning from the worker](docs/screenshots/10-quality-warning.png) |
-
-The screenshots are not mockups. They are captured from the running
-stack with the seeded shops and vendor and a demo customer created by the
-local way in, using `make screenshots`; the video is recorded by
-`make demo`. Both scripts live in [`e2e/`](e2e/).
 
 ## Tech stack
 
@@ -486,8 +465,6 @@ printing a summary that looks fine.
 | `make backtest-estimates` | Walk-forward per-shop MAE against an expanding global-average baseline. |
 | `make perf-seed` | 200 reserved cash orders for the load test, made through the real services. |
 | `make perf-explain` | The search and queue plans, with synthetic rows, rolled back. |
-| `make screenshots` | Capture the README screenshots from the running stack. |
-| `make demo` | Record the demo video from the running stack (needs `ffmpeg` to join the parts). |
 | `make reset` | Wipes local volumes and rebuilds from scratch. |
 
 ## Testing
@@ -566,10 +543,8 @@ committed. The decisions are.
 | [`AGENTS.md`](AGENTS.md) | Rules and workflow for AI agents and contributors |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Start here.** Why the project is built the way it is |
 | [`docs/adr/`](docs/adr/) | One architecture decision record per decision |
-| [`docs/DEMO.md`](docs/DEMO.md) | The written walkthrough of the demo video |
 | [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md) | One page of measurable facts, for a resume or a reviewer |
 | [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) | The final security pass: audits, headers, storage and residual risks |
-| [`docs/screenshots/`](docs/screenshots/) | The screenshots above, captured from the running stack |
 | [`backend/estimate_backtest.json`](backend/estimate_backtest.json) | The simulated, aggregate Sprint 9 accuracy report |
 | [`perf/BASELINE.md`](perf/BASELINE.md) | The phase 2 load baseline and the index review |
 | [`perf/k6/`](perf/k6/) | The load script and how to run it |
@@ -588,8 +563,8 @@ committed. The decisions are.
 4. **The domain layer is pure**, and an import linter contract fails the
    build if it ever imports a framework.
 5. **The payment provider sits behind an interface** with a real fake, so
-   the whole money path runs the same way in the tests, locally and in
-   the demo.
+   the whole money path runs the same way in the tests and on the local
+   stack.
 6. **Background work is database driven**, with no Redis and no Celery.
    Six functions, rows claimed with `SKIP LOCKED`, safe to run twice.
 7. **The quality check is measured, not guessed.** The thresholds come

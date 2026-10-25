@@ -1,4 +1,4 @@
-.PHONY: up down build migrate seed seed-history backtest-estimates lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query perf-seed perf-explain screenshots demo
+.PHONY: up down build migrate seed seed-history backtest-estimates lint typecheck arch test-unit test-api test-fe test-jobs check coverage openapi reset e2e e2e-install smoke prod-up prod-down prod-home-up prod-home-down db-shell db-ui graph graph-check graph-query perf-seed perf-explain
 
 up:
 	@test -f .env || cp .env.example .env
@@ -190,13 +190,3 @@ graph-check:
 #   make graph-query Q="how does an order become paid"
 graph-query:
 	graphify query "$(Q)" --budget 1500
-
-# The README screenshots and the demo video, recorded from the running
-# stack with the seeded accounts. They are real pages, not mockups:
-# start the stack, migrate and seed first. The scripts live in e2e/ and
-# use the same selectors as the end to end suite.
-screenshots:
-	cd e2e && node capture-screenshots.mjs
-
-demo:
-	cd e2e && node record-demo.mjs

@@ -80,21 +80,11 @@ graphify-out/
 docs/*
 !docs/adr/
 !docs/DECISIONS.md
-# The portfolio packaging is published for the same reason the decisions
-# are: a reader has to be able to see the product and the walkthrough.
-!docs/DEMO.md
+# The project summary, security review and coverage badge are published
+# for the same reason the decisions are: they are what a reviewer reads.
 !docs/PROJECT_SUMMARY.md
 !docs/SECURITY_REVIEW.md
 !docs/coverage.svg
-!docs/screenshots/
-!docs/screenshots/*.png
-!docs/demo/
-!docs/demo/*.mp4
-# The recorder keeps the raw parts so a failed ffmpeg does not lose the
-# performance. They are large and reproducible, so only the joined video
-# is published.
-docs/demo/*.webm
-docs/demo/raw/
 
 # Raw k6 summaries go here when --summary-export is used. They contain
 # the local test sessions the script made, so they are never committed.
