@@ -53,7 +53,7 @@ A bug in the application cannot produce a wrong price.
 
 ### 3. The domain layer is pure, and that is enforced
 
-`app/domain/` is three small files with no imports outside the standard
+`app/domain/` is ten small modules with no imports outside the standard
 library. An import linter contract fails the build if it ever imports
 SQLAlchemy, FastAPI, Pydantic or anything from the rest of the app. The
 pricing rule, the state machine and the refund backoff schedule are
@@ -73,8 +73,9 @@ every environment.
 
 ### 5. Background work is database driven, with no broker
 
-Expiring unpaid orders, rejecting orders no shop picked up, retrying
-refunds and deleting old files are four functions that query Postgres,
+Expiring unpaid orders, rejecting orders no shop picked up, expiring
+no-shows, retrying refunds, deleting old files and analysing uploaded
+files for quality are six functions that query Postgres,
 claim rows with `FOR UPDATE SKIP LOCKED`, and update them conditionally.
 There is no Redis, no Celery and no separate queue to run, monitor or
 debug. A second worker is safe by construction.
@@ -361,6 +362,50 @@ rule is broken.
 
 ---
 
+## All decision records
+
+Every decision has its own file, with the context, the alternatives that
+were rejected, the consequences and the trigger for revisiting it.
+
+| ADR | Decision |
+|---|---|
+| 001 | [ADR 001: FastAPI over Node/Express](adr/001-fastapi-over-node-express.md) |
+| 002 | [ADR 002: Sync SQLAlchemy and plain def endpoints](adr/002-sync-sqlalchemy-plain-def-endpoints.md) |
+| 003 | [ADR 003: Database-driven jobs, no Redis or Celery](adr/003-database-driven-jobs.md) |
+| 004 | [ADR 004: The signed webhook, not the browser, decides that an order is paid](adr/004-webhook-is-the-source-of-truth.md) |
+| 005 | [ADR 005: Text columns with CHECK constraints instead of Postgres enums](adr/005-text-and-check-constraints.md) |
+| 006 | [ADR 006: Classical image analysis instead of a neural network](adr/006-classical-image-analysis-not-a-cnn.md) |
+| 007 | [ADR 007: Polling first, WebSockets in Phase 3](adr/007-polling-before-websockets.md) |
+| 008 | [ADR 008: Single instance with Docker Compose before managed AWS services](adr/008-single-instance-docker-compose.md) |
+| 009 | [ADR 009: A payment gateway interface with a fake implementation](adr/009-payment-gateway-interface.md) |
+| 010 | [ADR 010: The price rule is enforced by a database constraint](adr/010-price-invariant-enforced-by-the-database.md) |
+| 011 | [ADR 011: Community-built MinIO image for local object storage](adr/011-community-minio-image.md) |
+| 012 | [ADR 012: In-memory sliding window rate limiter instead of slowapi](adr/012-in-memory-rate-limiter.md) |
+| 013 | [ADR 013: Cash on collection, as a second payment method](adr/013-cash-on-collection.md) |
+| 014 | [ADR 014: A narrow admin panel, not a general one](adr/014-admin-panel.md) |
+| 015 | [ADR 015: A database browser in the local stack](adr/015-database-browser-for-local-development.md) |
+| 016 | [ADR 016: Printing the file the student actually has](adr/016-office-file-upload.md) |
+| 017 | [ADR 017: Printing it again copies the file, it does not share it](adr/017-print-it-again.md) |
+| 018 | [ADR 018: Sharing the pickup code, and who that trusts](adr/018-sharing-the-pickup-code.md) |
+| 019 | [ADR 019: Rate limiting a login per account and per address](adr/019-rate-limiting-a-login-per-account.md) |
+| 020 | [ADR 020: One style per role, written down once](adr/020-one-style-per-role.md) |
+| 021 | [ADR 021: The dialogs use the native `dialog` element, not Radix](adr/021-native-dialog-element.md) |
+| 022 | [ADR 022: The webhook event and the payment it causes are one transaction](adr/022-the-webhook-event-and-its-effect-are-one-transaction.md) |
+| 023 | [ADR 023: The deployment runs the commit it reviewed, in a mode it pins](adr/023-the-deployment-runs-the-commit-it-reviewed.md) |
+| 024 | [ADR 024: The boundary refuses a value the database cannot hold](adr/024-the-boundary-refuses-a-value-the-database-cannot-hold.md) |
+| 025 | [ADR 025: The limits on creating an account](adr/025-the-limits-on-creating-an-account.md) |
+| 026 | [ADR 026: The email address has to be proved](adr/026-the-email-address-has-to-be-proved.md) |
+| 027 | [ADR 027: Sign in with Google, without a new dependency](adr/027-sign-in-with-google-without-a-new-dependency.md) |
+| 028 | [ADR 028: The quality check runs in the worker, on a labelled fixture set](adr/028-the-quality-check-runs-in-the-worker.md) |
+| 029 | [ADR 029: Clerk proves who someone is, this database decides what they may do](adr/029-clerk-authentication-with-local-authorization.md) |
+| 030 | [ADR 030: The address is looked up on the server, and the shop owner's own coordinates win](adr/030-the-address-is-looked-up-on-the-server.md) |
+| 031 | [ADR 031: The free geocoder is the default, and the rules that come with it](adr/031-the-free-geocoder-and-the-rules-that-come-with-it.md) |
+| 032 | [ADR 032: The map is drawn last, and the list is the map that always works](adr/032-the-map-is-drawn-last.md) |
+| 033 | [ADR 033: Queue-wait estimates stay rule-based; simulated data cannot justify ML](adr/033-wait-estimates-and-the-ml-decision.md) |
+| 034 | [ADR 034: Live updates over an authorized WebSocket, with polling as the fallback](adr/034-websocket-live-updates.md) |
+
+---
+
 ## The stack, and why each piece is here
 
 | Piece | Choice | Why |
@@ -391,8 +436,11 @@ Being honest about the edges is part of explaining the design.
   payment starts again with a new upload.
 - The rate limiter lives in the process, so a second API instance would
   need Redis. The deployment is one instance.
-- The queue polls every five seconds. WebSockets arrive in the phase where
-  a live board actually needs them.
+- The vendor board has a WebSocket, with polling every five seconds as
+  the fallback when the socket drops. The socket is a notification, not
+  the source of truth: every message makes the client resync from the
+  API, and authorization is decided on the server. See
+  [ADR 034](adr/034-websocket-live-updates.md).
 - The PDF quality checker and the map view are built. The checker
   measures the file on a labelled set and only advises. The map is an
   addition to the list: it is loaded when the customer scrolls to it,
