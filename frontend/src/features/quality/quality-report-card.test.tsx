@@ -68,6 +68,30 @@ describe("QualityReportCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not report a failure before an acknowledgement was attempted", () => {
+    // TanStack Query starts a mutation with error: null, not undefined.
+    renderWithProviders(
+      <QualityReportCard
+        report={flaggedReport}
+        acknowledgeError={null}
+        onAcknowledge={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /acknowledge and continue/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders nothing when there is neither a report nor an error", () => {
+    const { container } = renderWithProviders(
+      <QualityReportCard error={null} />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("offers the check when the file has not been checked yet", () => {
     renderWithProviders(
       <QualityReportCard

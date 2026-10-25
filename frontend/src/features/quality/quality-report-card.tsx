@@ -51,7 +51,7 @@ export function QualityReportCard({
     );
   }
 
-  if (error !== undefined && report === undefined) {
+  if (error != null && report === undefined) {
     // A report that has not been asked for yet is not a failure: the
     // check simply has not run. The customer can start it.
     const notAskedFor = error instanceof ApiError && error.status === 404;
@@ -148,7 +148,7 @@ export function QualityReportCard({
           </li>
         ))}
       </ul>
-      {acknowledgeError !== undefined && (
+      {acknowledgeError != null && (
         <Alert>{messageForError(acknowledgeError)}</Alert>
       )}
       {report.acknowledged ? (
