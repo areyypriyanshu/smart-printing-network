@@ -125,3 +125,20 @@ def test_notification_parser_accepts_only_tiny_valid_transition_messages() -> No
     ):
         with pytest.raises(ValueError):
             _message_from_json(bad)
+
+
+def test_the_browser_payload_never_carries_the_sequential_event_id() -> None:
+    message = TransitionMessage(
+        event_id=4321,
+        order_id=ORDER,
+        shop_id=SHOP,
+        from_status="PAID",
+        to_status="ACCEPTED",
+        at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    # The notification the listener reads keeps the id...
+    assert message.as_dict()["event_id"] == 4321
+    assert _message_from_json(json.dumps(message.as_dict())).event_id == 4321
+    # ...and the message the browser receives never does.
+    assert "event_id" not in message.as_wire_dict()
+    assert message.as_wire_dict()["to_status"] == "ACCEPTED"

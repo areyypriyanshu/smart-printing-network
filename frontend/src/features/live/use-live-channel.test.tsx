@@ -6,6 +6,12 @@ import { setTokenSource } from "../../api/client";
 import { renderWithProviders } from "../../test/render";
 import { useLiveChannel } from "./use-live-channel";
 
+// The server derives the channel identity itself and sends it back on the
+// subscription confirmation: `vendor:{shop_id}` / `order:{order_id}`. The
+// client asks for `/ws/vendor` and cannot know the shop id, so the format
+// below is the real contract the client has to accept.
+const VENDOR_CHANNEL = "vendor:11111111-1111-4111-8111-111111111111";
+
 type TestMessage = { type: string; channel?: string };
 
 class FakeWebSocket {
@@ -95,7 +101,7 @@ describe("useLiveChannel", () => {
       token: "fake-token",
     });
     act(() => {
-      socket.message({ type: "subscribed", channel: "/ws/vendor" });
+      socket.message({ type: "subscribed", channel: VENDOR_CHANNEL });
       vi.advanceTimersByTime(50);
     });
     expect(result.current).toBe("live");
@@ -145,7 +151,7 @@ describe("useLiveChannel", () => {
     const fourth = FakeWebSocket.instances[3];
     act(() => fourth.open());
     act(() => {
-      fourth.message({ type: "subscribed", channel: "/ws/vendor" });
+      fourth.message({ type: "subscribed", channel: VENDOR_CHANNEL });
       vi.advanceTimersByTime(50);
     });
     expect(result.current).toBe("live");
@@ -157,6 +163,37 @@ describe("useLiveChannel", () => {
     expect(FakeWebSocket.instances).toHaveLength(5);
   });
 
+  it("reconnects when a live socket goes silent", async () => {
+    const { result } = renderHook(() =>
+      useLiveChannel({ channel: "/ws/vendor", onMessage: vi.fn() }),
+    );
+    await flush();
+    const first = FakeWebSocket.instances[0];
+    act(() => first.open());
+    act(() => {
+      first.message({ type: "subscribed", channel: VENDOR_CHANNEL });
+      vi.advanceTimersByTime(50);
+    });
+    expect(result.current).toBe("live");
+
+    // The server pings an idle socket well inside the watchdog window.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+      first.message({ type: "ping" });
+    });
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current).toBe("live");
+
+    // Silence past the window drops the socket, and a fresh one opens.
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(result.current).toBe("polling");
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    act(() => vi.advanceTimersByTime(1000));
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
   it("closes on hide and resyncs once on visibility restoration", async () => {
     const onMessage = vi.fn();
     const { result } = renderHook(() =>
@@ -166,7 +203,7 @@ describe("useLiveChannel", () => {
     const first = FakeWebSocket.instances[0];
     act(() => first.open());
     act(() => {
-      first.message({ type: "subscribed", channel: "/ws/vendor" });
+      first.message({ type: "subscribed", channel: VENDOR_CHANNEL });
       vi.advanceTimersByTime(50);
     });
     expect(result.current).toBe("live");
@@ -185,7 +222,7 @@ describe("useLiveChannel", () => {
     const second = FakeWebSocket.instances[1];
     act(() => second.open());
     act(() => {
-      second.message({ type: "subscribed", channel: "/ws/vendor" });
+      second.message({ type: "subscribed", channel: VENDOR_CHANNEL });
       vi.advanceTimersByTime(50);
     });
     expect(result.current).toBe("live");

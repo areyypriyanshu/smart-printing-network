@@ -341,3 +341,12 @@ def test_reauthorization_closes_a_deactivated_users_socket(live_client, monkeypa
             [customer.id, _other.id, vendor_a.id, _vendor_b.id],
             [_order_a.id, _order_b.id],
         )
+
+
+def test_a_binary_frame_before_auth_is_refused_not_an_unhandled_error(live_client) -> None:
+    """An unauthenticated socket that sends bytes is refused, not crashed."""
+    client, _session = live_client
+    with pytest.raises(WebSocketDisconnect) as error, _connect(client, "/ws/vendor") as socket:
+        socket.send_bytes(b"\x00\x01\x02")
+        _receive(socket)
+    assert error.value.code == 4401

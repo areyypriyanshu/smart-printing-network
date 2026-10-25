@@ -95,14 +95,26 @@ def _supports_protocol(websocket: WebSocket) -> bool:
 
 
 async def _receive_token(websocket: WebSocket) -> str | None:
-    """Accept the application protocol, then read one bounded auth frame."""
+    """Accept the application protocol, then read one bounded auth frame.
+
+    The frame is read raw rather than with `receive_text` so that a frame
+    carrying bytes, or a disconnect, is a clean refusal: `receive_text`
+    indexes the message for text and raises `KeyError` when there is none,
+    which would escape as an unhandled error on an unauthenticated socket.
+    """
     await websocket.accept(subprotocol="spn.v1")
     try:
-        raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
-        if len(raw) > MAX_AUTH_FRAME_CHARS:
-            return None
+        frame = await asyncio.wait_for(websocket.receive(), timeout=10)
+    except (TimeoutError, WebSocketDisconnect, RuntimeError):
+        return None
+    if frame.get("type") != "websocket.receive":
+        return None
+    raw = frame.get("text")
+    if not isinstance(raw, str) or len(raw) > MAX_AUTH_FRAME_CHARS:
+        return None
+    try:
         message = json.loads(raw)
-    except (TimeoutError, ValueError, TypeError, WebSocketDisconnect, json.JSONDecodeError):
+    except (ValueError, TypeError):
         return None
     if not isinstance(message, dict) or message.get("type") != "authenticate":
         return None

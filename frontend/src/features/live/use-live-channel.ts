@@ -6,6 +6,9 @@ export type ConnectionState = "connecting" | "live" | "polling";
 
 export const RECONNECT_BASE_MS = 1000;
 export const RECONNECT_MAX_MS = 15_000;
+/** The server pings an idle socket at least every 25 seconds. */
+export const WATCHDOG_SILENCE_MS = 45_000;
+export const WATCHDOG_CHECK_MS = 10_000;
 const SYNC_COALESCE_MS = 50;
 
 type LiveChannelOptions = {
@@ -16,7 +19,6 @@ type LiveChannelOptions = {
 
 type Message = {
   type?: string;
-  channel?: string;
 };
 
 export function reconnectDelay(attempt: number): number {
@@ -49,7 +51,9 @@ export function useLiveChannel({
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let syncTimer: number | null = null;
+    let watchdogTimer: number | null = null;
     let attempts = 0;
+    let lastMessageAt = 0;
 
     const scheduleSync = () => {
       if (syncTimer !== null) return;
@@ -67,6 +71,22 @@ export function useLiveChannel({
         reconnectTimer = null;
         void connect();
       }, delay);
+    };
+
+    // A socket that has gone quiet without closing (a half-open
+    // connection, a network address translation that dropped it) would
+    // otherwise stay "live" with polling switched off, and the page
+    // would show a stale status. Drop it so a fresh one is opened.
+    const forceReconnect = () => {
+      if (stopped) return;
+      generation += 1;
+      const stale = socket;
+      socket = null;
+      if (stale !== null && stale.readyState < WebSocket.CLOSING) {
+        stale.close();
+      }
+      setState("polling");
+      scheduleReconnect();
     };
 
     const close = () => {
@@ -102,19 +122,28 @@ export function useLiveChannel({
         url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
         const next = new WebSocket(url, "spn.v1");
         socket = next;
+        lastMessageAt = Date.now();
         next.onopen = () => {
           if (currentGeneration !== generation || stopped) return;
+          lastMessageAt = Date.now();
           next.send(JSON.stringify({ type: "authenticate", token }));
         };
         next.onmessage = (event) => {
           if (currentGeneration !== generation || stopped) return;
+          lastMessageAt = Date.now();
           let message: Message;
           try {
             message = JSON.parse(String(event.data)) as Message;
           } catch {
             return;
           }
-          if (message.type === "subscribed" && message.channel === channel) {
+          // The server confirms the subscription on this socket with the
+          // channel it derived itself (`vendor:{shop_id}`), which the
+          // client cannot predict because the shop id is decided on the
+          // server. This socket is the subscription, and the generation
+          // guard already discards a message from a socket that has been
+          // replaced, so any `subscribed` here is this socket's.
+          if (message.type === "subscribed") {
             attempts = 0;
             setState("live");
             scheduleSync();
@@ -141,6 +170,16 @@ export function useLiveChannel({
       }
     };
 
+    watchdogTimer = window.setInterval(() => {
+      if (stopped || socket === null) return;
+      if (socket.readyState !== WebSocket.OPEN) return;
+      if (Date.now() - lastMessageAt <= WATCHDOG_SILENCE_MS) return;
+      forceReconnect();
+    }, WATCHDOG_CHECK_MS);
+
+    // A hidden tab does no live work: the socket is closed and polling
+    // takes over, because the browser is not being looked at. Coming
+    // back opens a fresh socket and resyncs once it is subscribed.
     const onVisibilityChange = () => {
       if (document.hidden) {
         close();
@@ -153,6 +192,10 @@ export function useLiveChannel({
     void connect();
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (watchdogTimer !== null) {
+        window.clearInterval(watchdogTimer);
+        watchdogTimer = null;
+      }
       close();
     };
   }, [channel, enabled]);

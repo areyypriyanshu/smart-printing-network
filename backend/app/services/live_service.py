@@ -38,9 +38,26 @@ class TransitionMessage:
     at: datetime
 
     def as_dict(self) -> Message:
+        """The notification payload, which keeps the internal event id."""
         return {
             "type": "order.transition",
             "event_id": self.event_id,
+            "order_id": str(self.order_id),
+            "shop_id": str(self.shop_id),
+            "from_status": self.from_status,
+            "to_status": self.to_status,
+            "at": self.at.isoformat(),
+        }
+
+    def as_wire_dict(self) -> Message:
+        """The browser message, which never carries the event id.
+
+        `event_id` is the sequential `order_events` primary key. Sequential
+        database ids do not leave the server, and the browser has no use for
+        this one. The notification that the listener reads still keeps it.
+        """
+        return {
+            "type": "order.transition",
             "order_id": str(self.order_id),
             "shop_id": str(self.shop_id),
             "from_status": self.from_status,
@@ -248,9 +265,9 @@ async def listen_for_transitions(
                         except ValueError:
                             logger.warning("invalid order transition notification discarded")
                             continue
-                        hub.publish(vendor_channel(message.shop_id), message.as_dict())
-                        hub.publish(order_channel(message.order_id), message.as_dict())
-            except (psycopg.Error, OSError) as exc:
+                        hub.publish(vendor_channel(message.shop_id), message.as_wire_dict())
+                        hub.publish(order_channel(message.order_id), message.as_wire_dict())
+            except Exception as exc:  # noqa: BLE001 - keep listening through anything
                 logger.warning(
                     "order transition listener stopped: %s; retrying", type(exc).__name__
                 )
