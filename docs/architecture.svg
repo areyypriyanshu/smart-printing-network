@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="arch-title arch-desc">
+  <title id="arch-title">Smart Printing Network runtime architecture</title>
+  <desc id="arch-desc">A browser talks over HTTPS to Caddy, which serves the React app and proxies API traffic to FastAPI. The API and a worker use PostgreSQL with PostGIS and private S3 storage. Clerk proves identity, Razorpay provides test-mode payments and signed webhooks, and Nominatim geocodes shop addresses on the server.</desc>
+
+  <defs>
+    <style>
+      text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      .display { font-family: "Bricolage Grotesque", Inter, ui-sans-serif, system-ui, sans-serif; }
+      .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+      .bg { fill: #fbf8f3; stroke: #eae3d7; stroke-width: 1.5; }
+      .card { fill: #ffffff; stroke: #eae3d7; stroke-width: 1.5; }
+      .ext { fill: #fff8e0; stroke: #e6d5a8; stroke-width: 1.5; stroke-dasharray: 7 5; }
+      .note { fill: #f4efe7; stroke: #eae3d7; stroke-width: 1.5; }
+      .kicker { font-size: 10.5px; font-weight: 700; letter-spacing: 1.6px; fill: #8f8478; }
+      .kicker-ext { font-size: 10.5px; font-weight: 700; letter-spacing: 1.6px; fill: #7a4a02; }
+      .title { font-size: 20px; font-weight: 700; fill: #241f19; }
+      .body { font-size: 13px; fill: #6b6156; }
+      .flow { stroke: #c9430a; stroke-width: 1.8; fill: none; }
+      .flow-soft { stroke: #8f7a52; stroke-width: 1.5; fill: none; stroke-dasharray: 6 5; }
+      .flow-label { font-size: 11.5px; fill: #6b6156; }
+      .flow-label-ext { font-size: 10.5px; fill: #7a4a02; }
+      .small { font-size: 11px; fill: #8f8478; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9430a"/>
+    </marker>
+    <marker id="arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8f7a52"/>
+    </marker>
+    <filter id="shadow" x="-12%" y="-12%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#241f19" flood-opacity="0.06"/>
+    </filter>
+    <clipPath id="top-edge">
+      <rect x="0" y="0" width="1200" height="20" rx="18"/>
+    </clipPath>
+  </defs>
+
+  <rect class="bg" x="0.75" y="0.75" width="1198.5" height="898.5" rx="18"/>
+
+  <g clip-path="url(#top-edge)">
+    <rect x="0" y="0" width="300" height="4" fill="#00aeef"/>
+    <rect x="300" y="0" width="300" height="4" fill="#ec008c"/>
+    <rect x="600" y="0" width="300" height="4" fill="#ffd400"/>
+    <rect x="900" y="0" width="300" height="4" fill="#231f20"/>
+  </g>
+
+  <text class="display" x="48" y="58" font-size="30" font-weight="700" fill="#241f19" letter-spacing="-0.6">Smart Printing Network</text>
+  <text x="48" y="84" font-size="14.5" fill="#6b6156">Runtime architecture · one origin, one database, no broker</text>
+  <text x="1152" y="84" text-anchor="end" font-size="11.5" fill="#8f8478">solid = this system · dashed = third party</text>
+
+  <!-- Client -->
+  <g filter="url(#shadow)">
+    <rect class="card" x="48" y="130" width="320" height="155" rx="14"/>
+  </g>
+  <text class="kicker" x="70" y="158">CLIENT</text>
+  <text class="title display" x="70" y="185">Browser</text>
+  <text class="body" x="70" y="212">React 19 · TypeScript · Vite</text>
+  <text class="body" x="70" y="232">TanStack Query · WebSocket client</text>
+  <text class="body" x="70" y="252">Clerk session token in memory</text>
+  <text class="body" x="70" y="272">Google Maps on scroll (optional)</text>
+
+  <!-- Edge -->
+  <g filter="url(#shadow)">
+    <rect class="card" x="48" y="330" width="320" height="145" rx="14"/>
+  </g>
+  <text class="kicker" x="70" y="358">EDGE</text>
+  <text class="title display" x="70" y="385">Caddy</text>
+  <text class="body" x="70" y="412">TLS · HSTS · CSP · security headers</text>
+  <text class="body" x="70" y="432">static SPA · /api · /ws · one origin</text>
+  <text class="body" x="70" y="452">54 MB request cap · no CORS</text>
+
+  <!-- Nominatim -->
+  <g filter="url(#shadow)">
+    <rect class="ext" x="48" y="690" width="320" height="130" rx="14"/>
+  </g>
+  <text class="kicker-ext" x="70" y="718">THIRD PARTY</text>
+  <text class="title display" x="70" y="745">OpenStreetMap Nominatim</text>
+  <text class="body" x="70" y="772">address → coordinates</text>
+  <text class="body" x="70" y="792">server-side · cached · rate-limited</text>
+
+  <!-- API -->
+  <g filter="url(#shadow)">
+    <rect class="card" x="430" y="330" width="290" height="150" rx="14"/>
+  </g>
+  <text class="kicker" x="452" y="358">APPLICATION</text>
+  <text class="title display" x="452" y="385">FastAPI API</text>
+  <text class="body" x="452" y="412">routers → services → pure domain</text>
+  <text class="body" x="452" y="432">sync SQLAlchemy · typed errors</text>
+  <text class="body" x="452" y="452">object-level authorization</text>
+
+  <!-- PostgreSQL -->
+  <g filter="url(#shadow)">
+    <rect class="card" x="430" y="520" width="290" height="130" rx="14"/>
+  </g>
+  <text class="kicker" x="452" y="548">DATA</text>
+  <text class="title display" x="452" y="575">PostgreSQL + PostGIS</text>
+  <text class="body" x="452" y="602">orders · payments · events</text>
+  <text class="body" x="452" y="622">uploads · shops · webhook events</text>
+
+  <!-- Worker -->
+  <g filter="url(#shadow)">
+    <rect class="card" x="430" y="690" width="290" height="130" rx="14"/>
+  </g>
+  <text class="kicker" x="452" y="718">APPLICATION</text>
+  <text class="title display" x="452" y="745">Worker</text>
+  <text class="body" x="452" y="772">expire · auto-reject · no-show</text>
+  <text class="body" x="452" y="792">refunds · retention · quality</text>
+
+  <!-- Clerk -->
+  <g filter="url(#shadow)">
+    <rect class="ext" x="800" y="130" width="330" height="120" rx="14"/>
+  </g>
+  <text class="kicker-ext" x="822" y="158">THIRD PARTY</text>
+  <text class="title display" x="822" y="185">Clerk</text>
+  <text class="body" x="822" y="212">proves who someone is</text>
+  <text class="body" x="822" y="232">roles live in this database</text>
+
+  <!-- Razorpay -->
+  <g filter="url(#shadow)">
+    <rect class="ext" x="800" y="270" width="330" height="120" rx="14"/>
+  </g>
+  <text class="kicker-ext" x="822" y="298">THIRD PARTY</text>
+  <text class="title display" x="822" y="325">Razorpay</text>
+  <text class="body" x="822" y="352">test mode only · API creates orders</text>
+  <text class="body" x="822" y="372">signed, deduplicated webhooks</text>
+
+  <!-- Invariants note -->
+  <rect class="note" x="800" y="410" width="330" height="150" rx="14"/>
+  <text class="kicker" x="822" y="438">INVARIANTS</text>
+  <text class="title display" x="822" y="465" font-size="18">What this shape enforces</text>
+  <text class="body" x="822" y="492">Money is integer paise, priced server-side.</text>
+  <text class="body" x="822" y="512">Only a signed webhook marks online payments.</text>
+  <text class="body" x="822" y="532">One transition function writes each event.</text>
+  <text class="body" x="822" y="552">Jobs claim rows in Postgres. No broker.</text>
+
+  <!-- Storage -->
+  <g filter="url(#shadow)">
+    <rect class="card" x="800" y="690" width="330" height="130" rx="14"/>
+  </g>
+  <text class="kicker" x="822" y="718">DATA</text>
+  <text class="title display" x="822" y="745">S3 / MinIO</text>
+  <text class="body" x="822" y="772">private PDFs · random keys</text>
+  <text class="body" x="822" y="792">5-minute presigned URLs · retention</text>
+
+  <!-- Flows: browser to edge -->
+  <line class="flow" x1="208" y1="285" x2="208" y2="330" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="220" y="313">HTTPS</text>
+
+  <line class="flow" x1="368" y1="405" x2="430" y2="405" marker-end="url(#arrow)"/>
+  <text x="399" y="396" text-anchor="middle" font-size="10" fill="#6b6156">proxy</text>
+
+  <!-- Flows: API to data -->
+  <line class="flow" x1="545" y1="480" x2="545" y2="520" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="557" y="504">SQL</text>
+
+  <line class="flow" x1="650" y1="690" x2="650" y2="650" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="662" y="674">jobs</text>
+
+  <!-- Flows: identity -->
+  <line class="flow-soft" x1="368" y1="160" x2="800" y2="160" marker-end="url(#arrow-soft)"/>
+  <text class="flow-label-ext" x="584" y="150" text-anchor="middle">sign in · bearer token</text>
+
+  <path class="flow-soft" d="M650,330 V290 H775 V200 H800" marker-end="url(#arrow-soft)"/>
+  <text class="flow-label-ext" x="700" y="282" text-anchor="middle">verify token</text>
+
+  <!-- Flows: payments -->
+  <line class="flow-soft" x1="720" y1="345" x2="800" y2="345" marker-end="url(#arrow-soft)"/>
+  <text class="flow-label-ext" x="760" y="336" text-anchor="middle">create · refund</text>
+
+  <line class="flow-soft" x1="800" y1="380" x2="720" y2="380" marker-end="url(#arrow-soft)"/>
+  <text class="flow-label-ext" x="760" y="372" text-anchor="middle">signed webhook</text>
+
+  <!-- Flows: storage -->
+  <path class="flow" d="M720,460 H760 V660 H900 V690" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="830" y="652" text-anchor="middle">presigned URLs</text>
+
+  <line class="flow" x1="720" y1="755" x2="800" y2="755" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="760" y="746" text-anchor="middle">private objects</text>
+
+  <!-- Flows: geocoding -->
+  <path class="flow-soft" d="M430,450 H400 V760 H368" marker-end="url(#arrow-soft)"/>
+  <text class="flow-label-ext" transform="rotate(-90 388 620)" x="388" y="620" text-anchor="middle">geocode</text>
+
+  <line x1="48" y1="850" x2="1152" y2="850" stroke="#eae3d7" stroke-width="1.5"/>
+  <text x="600" y="874" text-anchor="middle" font-size="12.5" fill="#6b6156">Money is integer paise · only a signed webhook marks online payments · every status change writes an event</text>
+</svg>

@@ -85,6 +85,8 @@ docs/*
 !docs/PROJECT_SUMMARY.md
 !docs/SECURITY_REVIEW.md
 !docs/coverage.svg
+# The runtime architecture diagram is referenced by the README.
+!docs/architecture.svg
 
 # Raw k6 summaries go here when --summary-export is used. They contain
 # the local test sessions the script made, so they are never committed.
