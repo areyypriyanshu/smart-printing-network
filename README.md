@@ -580,6 +580,13 @@ committed. The decisions are.
     point and compares MAE with an expanding global average. Simulated data
     tests the plumbing, but cannot justify ML. See
     [ADR 033](docs/adr/033-wait-estimates-and-the-ml-decision.md).
+12. **Live updates are a committed notification, not a change feed.** A
+    transition writes its notification in the same transaction as its event, so
+    a rolled-back order announces nothing, and the socket is only a hint that
+    every client resyncs from. Authorization is object-level and derived on the
+    server, so a vendor socket can only ever be that shop and a customer socket
+    only that customer's order. Polling stays as the fallback. See
+    [ADR 034](docs/adr/034-websocket-live-updates.md).
 
 ## Known limitations
 
@@ -603,13 +610,17 @@ committed. The decisions are.
   and it sends the message, so the platform cannot reset one itself.
   See
   [ADR 029](docs/adr/029-clerk-authentication-with-local-authorization.md).
-- Single-instance deployment. The rate limiter lives in the process, so a
-  second API instance would need Redis. A login is limited per account
-  and per address, so a campus behind one address is not locked out.
+- Single-instance deployment. The rate limiter and the live-update hub live in
+  the process, so a second API instance would need a shared transport (Redis or
+  a broker). A login is limited per account and per address, so a campus behind
+  one address is not locked out. See
+  [ADR 008](docs/adr/008-single-instance-docker-compose.md) and
+  [ADR 034](docs/adr/034-websocket-live-updates.md).
 - The vendor board polls every five seconds as fallback. WebSocket live
   updates push order status changes to the shop board and customer order
   page in real time (Sprint 10). Polling takes over when the socket is
-  closed or unavailable.
+  closed or unavailable. See
+  [ADR 034](docs/adr/034-websocket-live-updates.md).
 - Queue estimates are only as reliable as vendor clicks. Late or batched Start
   and Ready actions distort the event-derived speed. A currently printing
   order counts at full size, and the range is not a confidence interval or a
