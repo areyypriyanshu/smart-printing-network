@@ -50,3 +50,32 @@ test("a customer finds the shops near them and compares their prices", async ({
     timeout: 20_000,
   });
 });
+
+test.describe("the order wizard with a distant customer", () => {
+  test.use({
+    geolocation: { latitude: 23.7957, longitude: 86.4304 },
+    permissions: ["geolocation"],
+  });
+
+  test("keeps shops that are farther than five kilometres", async ({
+    page,
+  }) => {
+    await signInAsCustomer(page);
+    await page.goto("/new");
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles("tests/fixtures/one-page.pdf");
+
+    await expect(page.getByText("Paper size")).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: /find shops near me/i }).click();
+
+    const shop = page
+      .locator("li")
+      .filter({ hasText: "Central Prints" })
+      .first();
+    await expect(shop).toBeVisible({ timeout: 20_000 });
+    await expect(shop.getByText(/km away/)).toBeVisible();
+    await expect(page.getByText(/no verified shops yet/i)).toHaveCount(0);
+  });
+});

@@ -48,7 +48,7 @@ def list_shops(
 def list_nearby_shops(
     latitude: float = Query(ge=-90, le=90),
     longitude: float = Query(ge=-180, le=180),
-    radius_m: int = Query(default=5000, ge=100, le=50000),
+    radius_m: int | None = Query(default=None, ge=100, le=50000),
     limit: int = Query(default=20, ge=1, le=100),
     session: Session = Depends(get_db),
     _user: User = Depends(_customer_only),
@@ -58,7 +58,10 @@ def list_nearby_shops(
 
     The radius is in metres. A shop further away than the radius is not
     returned, so a customer in a town with no shop is told that rather
-    than shown one that is a hundred kilometres away.
+    than shown one that is a hundred kilometres away. Without a radius,
+    every verified shop is returned, nearest first: the order wizard
+    has no radius control and sorts the whole list rather than hiding
+    the shops a customer could still travel to.
     """
     return shop_service.list_nearby_shops(
         session,

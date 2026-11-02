@@ -34,15 +34,18 @@ export type NearbyQuery = {
 
 /**
  * The shops around a point, nearest first. The distance on each shop is
- * in metres.
+ * in metres. Without a radius, every shop is returned: the order wizard
+ * has no radius control and sorts the whole list by distance.
  */
 export function listNearbyShops(query: NearbyQuery): Promise<ShopListResponse> {
   const params = new URLSearchParams({
     latitude: String(query.latitude),
     longitude: String(query.longitude),
-    radius_m: String(query.radius_m ?? 5000),
-    limit: String(query.limit ?? 50),
+    limit: String(query.limit ?? 100),
   });
+  if (query.radius_m !== undefined) {
+    params.set("radius_m", String(query.radius_m));
+  }
   return apiRequest(`/shops/nearby?${params.toString()}`);
 }
 

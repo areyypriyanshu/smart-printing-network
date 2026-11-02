@@ -294,7 +294,10 @@ export interface paths {
          *
          *     The radius is in metres. A shop further away than the radius is not
          *     returned, so a customer in a town with no shop is told that rather
-         *     than shown one that is a hundred kilometres away.
+         *     than shown one that is a hundred kilometres away. Without a radius,
+         *     every verified shop is returned, nearest first: the order wizard
+         *     has no radius control and sorts the whole list rather than hiding
+         *     the shops a customer could still travel to.
          */
         get: operations["list_nearby_shops_api_v1_shops_nearby_get"];
         put?: never;
@@ -2989,7 +2992,7 @@ export interface operations {
             query: {
                 latitude: number;
                 longitude: number;
-                radius_m?: number;
+                radius_m?: number | null;
                 limit?: number;
             };
             header?: never;

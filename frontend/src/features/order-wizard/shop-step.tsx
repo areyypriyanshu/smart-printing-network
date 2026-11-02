@@ -64,8 +64,9 @@ export function ShopStep({
       : { latitude: position.latitude, longitude: position.longitude },
   );
 
-  // With a position, the nearby shops come first, nearest first. Without
-  // one, the whole list is shown as it always was.
+  // With a position, the whole list is ordered nearest first, with the
+  // distance on each card. Without one, the list is shown as it always
+  // was.
   const listed =
     position === null
       ? (shops.data?.items ?? [])

@@ -89,6 +89,17 @@ function useWizardHandlers() {
         attribution: "© OpenStreetMap contributors",
       }),
     ),
+    http.get("/api/v1/shops/nearby", () =>
+      HttpResponse.json({
+        items: [
+          { ...alpha, distance_m: 120 },
+          { ...beta, distance_m: 900 },
+          { ...gamma, distance_m: 2400 },
+        ],
+        next_cursor: null,
+        attribution: "© OpenStreetMap contributors",
+      }),
+    ),
     http.post("/api/v1/quotes", async ({ request }) => {
       const body = (await request.json()) as { shop_id: string };
       if (body.shop_id === alpha.id)
@@ -317,6 +328,62 @@ describe("finding shops near me", () => {
     expect(
       await screen.findByRole("button", { name: /showing shops near me/i }),
     ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps every shop, nearest first, when none are within five kilometres", async () => {
+    // The bug this covers: the wizard asked for a five kilometre
+    // radius, so a customer further away than that saw "No verified
+    // shops yet" even though verified shops existed.
+    useWizardHandlers();
+    const asked: string[] = [];
+    server.use(
+      http.get("/api/v1/shops/nearby", ({ request }) => {
+        asked.push(request.url);
+        if (new URL(request.url).searchParams.has("radius_m")) {
+          return HttpResponse.json({ items: [], next_cursor: null });
+        }
+        return HttpResponse.json({
+          items: [
+            { ...alpha, distance_m: 6400 },
+            { ...beta, distance_m: 8200 },
+            { ...gamma, distance_m: 12000 },
+          ],
+          next_cursor: null,
+        });
+      }),
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      geolocation: {
+        getCurrentPosition: (success: PositionCallback) => {
+          success({
+            coords: { latitude: 23.7957, longitude: 86.4304 },
+          } as GeolocationPosition);
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<OrderWizardPage />, {
+      route: `/new?upload=${uploadFixture.id}`,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    await user.click(
+      await screen.findByRole("button", { name: /find shops near me/i }),
+    );
+
+    expect(await screen.findByText(/6\.4 km away/)).toBeInTheDocument();
+    const names = screen
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(names).toEqual(["Alpha Prints", "Beta Print Hub", "Gamma Copies"]);
+    expect(
+      screen.queryByText(/no verified shops yet/i),
+    ).not.toBeInTheDocument();
+    const lastAsked = asked.at(-1) ?? "";
+    expect(new URL(lastAsked).searchParams.has("radius_m")).toBe(false);
+    expect(new URL(lastAsked).searchParams.get("limit")).toBe("100");
     vi.unstubAllGlobals();
   });
 

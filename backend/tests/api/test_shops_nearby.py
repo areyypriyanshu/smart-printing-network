@@ -78,6 +78,33 @@ def test_a_shop_outside_the_radius_is_not_returned(client: TestClient, db_sessio
     assert "Far Shop" not in names
 
 
+def test_without_a_radius_every_shop_is_returned_nearest_first(
+    client: TestClient, db_session: Session
+) -> None:
+    # The order wizard has no radius control. It sorts the whole list by
+    # distance, so a customer whose shops are all far away still has a
+    # shop to order from.
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.get(
+        f"{SHOPS}/nearby",
+        params={"latitude": CENTRAL[0], "longitude": CENTRAL[1]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["name"] for item in items] == [
+        "Close Shop",
+        "Another Close Shop",
+        "Middle Shop",
+        "Far Shop",
+    ]
+    distances = [item["distance_m"] for item in items]
+    assert distances == sorted(distances)
+
+
 def test_the_distance_is_in_metres(client: TestClient, db_session: Session) -> None:
     _seed(db_session)
     headers = login_headers(client, "customer@example.com")

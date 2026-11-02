@@ -73,34 +73,30 @@ def list_nearby_shops(
     *,
     latitude: float,
     longitude: float,
-    radius_m: int,
+    radius_m: int | None,
     limit: int,
     attribution: str | None = None,
 ) -> ShopListResponse:
-    """The shops within a radius, nearest first.
+    """The shops around a point, nearest first.
 
     The distance is measured on the sphere, in metres, which is what the
-    customer means by "nearby". The shop table has a geography column
-    with a spatial index on it, so the radius search does not scan the
-    table.
+    customer means by "nearby". When a radius is given, the shop table's
+    geography column and its spatial index answer the search. Without
+    one, every verified shop is returned, ordered by the same distance.
     """
     point = WKTElement(f"POINT({longitude} {latitude})", srid=4326)
     distance = func.ST_Distance(cast(Shop.location, Geography), cast(point, Geography))
-    stmt = (
-        select(
-            Shop,
-            func.ST_Y(cast(Shop.location, Geometry)).label("lat"),
-            func.ST_X(cast(Shop.location, Geometry)).label("lng"),
-            distance.label("distance_m"),
+    stmt = select(
+        Shop,
+        func.ST_Y(cast(Shop.location, Geometry)).label("lat"),
+        func.ST_X(cast(Shop.location, Geometry)).label("lng"),
+        distance.label("distance_m"),
+    ).where(Shop.is_verified.is_(True), Shop.accepting_orders.is_(True))
+    if radius_m is not None:
+        stmt = stmt.where(
+            func.ST_DWithin(cast(Shop.location, Geography), cast(point, Geography), radius_m)
         )
-        .where(
-            Shop.is_verified.is_(True),
-            Shop.accepting_orders.is_(True),
-            func.ST_DWithin(cast(Shop.location, Geography), cast(point, Geography), radius_m),
-        )
-        .order_by(distance.asc(), Shop.name.asc())
-        .limit(limit)
-    )
+    stmt = stmt.order_by(distance.asc(), Shop.name.asc()).limit(limit)
     rows = list(session.execute(stmt).all())
     rates_by_shop = _rates_for(session, [row[0].id for row in rows])
     estimates = estimate_service.estimates_for_shops_or_empty(session, [row[0].id for row in rows])
