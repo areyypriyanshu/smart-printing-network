@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     CHAR,
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -55,9 +56,14 @@ class User(Base):
     # Whether the account has a usable local password. It is a leftover
     # of the same thing and it says the same thing.
     has_password: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
-    # Whether the address has been proved. The provider decides, and
-    # nothing here acts on the answer.
+    # Whether the provider has proved the address. Signed provider
+    # updates keep this local copy current; uploads and orders require it.
     email_verified: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Clerk webhooks can arrive out of order. These provider timestamps
+    # let a later transaction reject a profile read that is older than
+    # the one already applied.
+    clerk_profile_updated_at: Mapped[int | None] = mapped_column(BigInteger)
+    clerk_profile_event_timestamp: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

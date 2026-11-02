@@ -36,6 +36,7 @@ def test_the_secret_is_not_in_the_body() -> None:
 def test_the_person_is_read_from_the_answer() -> None:
     document = {
         "id": "user_abc",
+        "updated_at": 1234,
         "first_name": "SPN",
         "last_name": "Check",
         "primary_email_address_id": "idn_2",
@@ -59,11 +60,13 @@ def test_the_person_is_read_from_the_answer() -> None:
     assert person.email == "primary@example.com"
     assert person.full_name == "SPN Check"
     assert person.email_verified is True
+    assert person.updated_at == 1234
 
 
 def test_a_person_with_no_name_gets_the_address_as_the_name() -> None:
     document = {
         "id": "user_abc",
+        "updated_at": 1234,
         "primary_email_address_id": "idn_1",
         "email_addresses": [
             {

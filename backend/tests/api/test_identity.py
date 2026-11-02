@@ -30,7 +30,7 @@ def _tell_the_provider_about(client: TestClient, subject: str, **details: str) -
         id=subject,
         email=details.get("email", "newcomer@example.com"),
         full_name=details.get("full_name", "New Comer"),
-        email_verified=True,
+        email_verified=details.get("email_verified", "true").lower() == "true",
     )
 
 
@@ -65,12 +65,28 @@ def test_a_person_who_says_they_are_here_to_print_gets_an_account(
     user = db_session.scalar(select(User).where(User.clerk_user_id == SUBJECT))
     assert user is not None
     assert user.role == "customer"
+    assert user.email_verified is True
+
+
+def test_unverified_provider_email_stays_unverified_after_onboarding(
+    client: TestClient, db_session: Session
+) -> None:
+    _tell_the_provider_about(client, SUBJECT, email_verified="false")
+
+    response = client.post(
+        ONBOARDING, json={"role": "customer"}, headers=identity_headers(client, SUBJECT)
+    )
+
+    assert response.status_code == 200, response.text
+    user = db_session.scalar(select(User).where(User.clerk_user_id == SUBJECT))
+    assert user is not None
+    assert user.email_verified is False
 
 
 def test_a_person_who_says_they_run_a_shop_gets_a_shop(
     client: TestClient, db_session: Session
 ) -> None:
-    _tell_the_provider_about(client, SUBJECT)
+    _tell_the_provider_about(client, SUBJECT, email_verified="false")
 
     response = client.post(
         ONBOARDING,
@@ -90,6 +106,9 @@ def test_a_person_who_says_they_run_a_shop_gets_a_shop(
     shop = db_session.scalar(select(Shop).where(Shop.owner_id == response.json()["id"]))
     assert shop is not None
     assert shop.name == "Corner Prints"
+    user = db_session.scalar(select(User).where(User.clerk_user_id == SUBJECT))
+    assert user is not None
+    assert user.email_verified is False
 
 
 def test_a_shop_owner_without_a_shop_is_refused(client: TestClient) -> None:
@@ -141,6 +160,37 @@ def test_the_account_is_made_once(client: TestClient, db_session: Session) -> No
     assert first.json()["id"] == second.json()["id"]
     accounts = db_session.scalars(select(User).where(User.clerk_user_id == SUBJECT)).all()
     assert len(accounts) == 1
+
+
+def test_onboarding_refreshes_the_current_profile_on_an_existing_account(
+    client: TestClient, db_session: Session
+) -> None:
+    existing = create_user(
+        db_session,
+        email="old-profile@example.com",
+        full_name="Old Profile",
+        role="customer",
+        email_verified=False,
+    )
+    existing.clerk_user_id = SUBJECT
+    db_session.commit()
+    _tell_the_provider_about(
+        client,
+        SUBJECT,
+        email="current-profile@example.com",
+        full_name="Current Profile",
+    )
+
+    response = client.post(
+        ONBOARDING, json={"role": "customer"}, headers=identity_headers(client, SUBJECT)
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["email"] == "current-profile@example.com"
+    assert response.json()["full_name"] == "Current Profile"
+    assert response.json()["id"] == str(existing.id)
+    db_session.refresh(existing)
+    assert existing.email_verified is True
 
 
 def test_the_role_does_not_change_after_the_account_is_made(
@@ -330,6 +380,7 @@ def test_a_shop_and_its_owner_are_made_together(db_session: Session) -> None:
             subject="user_shop",
             email="shop-owner@example.com",
             full_name="Shop Owner",
+            email_verified=True,
             shop_name="Central Prints",
             shop_address="Somewhere",
             phone="12",

@@ -64,6 +64,7 @@ class ClerkUser:
     email: str
     full_name: str
     email_verified: bool
+    updated_at: int = 0
 
 
 def build_get_user_request(*, secret_key: str, user_id: str) -> HttpRequest:
@@ -126,7 +127,17 @@ def parse_user(document: dict[str, Any]) -> ClerkUser:
     parts = [part for part in (first, last) if isinstance(part, str) and part]
     full_name = " ".join(parts) if parts else email
 
-    return ClerkUser(id=user_id, email=email, full_name=full_name, email_verified=verified)
+    updated_at = document.get("updated_at")
+    if isinstance(updated_at, bool) or not isinstance(updated_at, int) or updated_at < 0:
+        raise ClerkAdminError("the provider returned a person with no update timestamp")
+
+    return ClerkUser(
+        id=user_id,
+        email=email,
+        full_name=full_name,
+        email_verified=verified,
+        updated_at=updated_at,
+    )
 
 
 class ClerkAdminClient:

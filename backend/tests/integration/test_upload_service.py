@@ -7,7 +7,10 @@ import pytest
 from app.config import Settings
 from app.errors import FileTooLarge, PdfTooManyPages
 from app.gateways.storage import MemoryStorage
+from app.models import Upload
 from app.services import upload_service
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tests.factories import create_user
 from tests.fixtures.pdf_files import make_pdf
@@ -70,6 +73,31 @@ def test_successful_upload_records_digest_and_retention(
     assert upload.delete_after is not None
     expected = datetime.now(UTC) + timedelta(hours=Settings().file_retention_hours)
     assert abs((upload.delete_after - expected).total_seconds()) < 60
+
+
+def test_database_failure_does_not_write_an_untracked_file(
+    db_session: Session, tmp_path: Path, monkeypatch
+) -> None:
+    customer = create_user(db_session, email="database-error@example.com")
+    pdf_path = make_pdf(tmp_path / "database-error.pdf")
+    storage = MemoryStorage()
+
+    def fail_commit() -> None:
+        raise IntegrityError("upload insert", {}, RuntimeError("database rejected row"))
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    with pytest.raises(IntegrityError), pdf_path.open("rb") as source:
+        upload_service.create_upload(
+            db_session,
+            storage,
+            Settings(),
+            customer_id=customer.id,
+            original_filename="database-error.pdf",
+            source=source,
+        )
+
+    assert storage.objects == {}
+    assert db_session.scalar(select(Upload).where(Upload.customer_id == customer.id)) is None
 
 
 def test_long_filenames_are_truncated(db_session: Session, tmp_path: Path) -> None:

@@ -91,6 +91,11 @@ def dev_session(
         # the local way in signs it in with.
         user.clerk_user_id = dev_subject_for(user.email)
         session.commit()
+    if not user.email_verified:
+        # The local way in stands for the already-verified demo accounts
+        # used by offline browser journeys. It is unavailable in production.
+        user.email_verified = True
+        session.commit()
 
     return DevSessionResponse(access_token=verifier.issue(user.clerk_user_id))
 
@@ -110,6 +115,7 @@ def _make_account(session: Session, body: DevSessionRequest) -> User:
             subject=dev_subject_for(body.email),
             email=body.email,
             full_name=body.full_name,
+            email_verified=True,
             shop_name=body.shop_name,
             shop_address=body.shop_address,
             phone=None,
@@ -123,4 +129,5 @@ def _make_account(session: Session, body: DevSessionRequest) -> User:
         email=body.email,
         full_name=body.full_name,
         role=identity_service.CUSTOMER,
+        email_verified=True,
     )

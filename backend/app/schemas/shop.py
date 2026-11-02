@@ -124,6 +124,7 @@ class ShopSearchQuery(BaseModel):
     duplex: bool | None = None
     copies: int | None = Field(default=None, ge=1, le=MAX_COPIES)
     limit: int = Field(default=20, ge=1, le=100)
+    cursor: str | None = Field(default=None, max_length=8192)
 
     @model_validator(mode="after")
     def _the_parts_go_together(self) -> Self:
@@ -190,6 +191,7 @@ class ShopSearchResponse(BaseModel):
     """The shops the search found."""
 
     items: list[ShopSearchItem]
+    next_cursor: str | None
     # What has to be shown to a person when the data here is shown to
     # them. OpenStreetMap asks for it.
     attribution: str | None = None

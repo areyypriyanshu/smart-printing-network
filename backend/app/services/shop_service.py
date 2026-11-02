@@ -1,4 +1,7 @@
 import base64
+import binascii
+import json
+import math
 import uuid
 from datetime import datetime
 
@@ -75,6 +78,7 @@ def list_nearby_shops(
     longitude: float,
     radius_m: int | None,
     limit: int,
+    cursor: str | None = None,
     attribution: str | None = None,
 ) -> ShopListResponse:
     """The shops around a point, nearest first.
@@ -96,8 +100,20 @@ def list_nearby_shops(
         stmt = stmt.where(
             func.ST_DWithin(cast(Shop.location, Geography), cast(point, Geography), radius_m)
         )
-    stmt = stmt.order_by(distance.asc(), Shop.name.asc()).limit(limit)
+    if cursor is not None:
+        last_distance, last_name, last_id = _decode_nearby_cursor(
+            cursor,
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+        )
+        stmt = stmt.where(
+            tuple_(distance, Shop.name, Shop.id) > tuple_(last_distance, last_name, last_id)
+        )
+    stmt = stmt.order_by(distance.asc(), Shop.name.asc(), Shop.id.asc()).limit(limit + 1)
     rows = list(session.execute(stmt).all())
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     rates_by_shop = _rates_for(session, [row[0].id for row in rows])
     estimates = estimate_service.estimates_for_shops_or_empty(session, [row[0].id for row in rows])
     items = [
@@ -115,9 +131,20 @@ def list_nearby_shops(
         )
         for shop, lat, lng, metres in rows
     ]
+    next_cursor = (
+        _encode_nearby_cursor(
+            rows[-1][3],
+            rows[-1][0],
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+        )
+        if has_more and rows
+        else None
+    )
     return ShopListResponse(
         items=items,
-        next_cursor=None,
+        next_cursor=next_cursor,
         attribution=attribution,
     )
 
@@ -264,4 +291,57 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         timestamp_raw, id_raw = raw.split("|", 1)
         return datetime.fromisoformat(timestamp_raw), uuid.UUID(id_raw)
     except (ValueError, UnicodeDecodeError) as exc:
+        raise ValidationError("Invalid cursor") from exc
+
+
+def _encode_nearby_cursor(
+    distance_m: float,
+    shop: Shop,
+    *,
+    latitude: float,
+    longitude: float,
+    radius_m: int | None,
+) -> str:
+    raw = json.dumps(
+        {
+            "distance_m": repr(float(distance_m)),
+            "name": shop.name,
+            "shop_id": str(shop.id),
+            "latitude": repr(float(latitude)),
+            "longitude": repr(float(longitude)),
+            "radius_m": radius_m,
+        },
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_nearby_cursor(
+    cursor: str,
+    *,
+    latitude: float,
+    longitude: float,
+    radius_m: int | None,
+) -> tuple[float, str, uuid.UUID]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        value = json.loads(raw)
+        distance = float(value["distance_m"])
+        name = value["name"]
+        shop_id_raw = value["shop_id"]
+        if not isinstance(shop_id_raw, str):
+            raise ValueError("invalid shop id")
+        shop_id = uuid.UUID(shop_id_raw)
+        if (
+            value["latitude"] != repr(float(latitude))
+            or value["longitude"] != repr(float(longitude))
+            or value["radius_m"] != radius_m
+        ):
+            raise ValidationError("Cursor does not match this nearby search")
+        if not math.isfinite(distance) or not isinstance(name, str):
+            raise ValueError("invalid cursor values")
+        return distance, name, shop_id
+    except ValidationError:
+        raise
+    except (ValueError, TypeError, KeyError, UnicodeDecodeError, binascii.Error) as exc:
         raise ValidationError("Invalid cursor") from exc

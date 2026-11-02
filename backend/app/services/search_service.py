@@ -14,13 +14,18 @@ price of an order, so the number the customer is shown is the number
 the customer is charged.
 """
 
+import base64
+import binascii
+import json
+import math
 import uuid
 from collections.abc import Sequence
 from typing import Any
+from typing import cast as type_cast
 
 from geoalchemy2 import Geography, Geometry
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import BigInteger, cast, func, select
+from sqlalchemy import BigInteger, cast, func, select, tuple_
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -111,10 +116,22 @@ def search_shops(
             cast(Shop.min_order_paise, BigInteger),
         )
 
-    stmt = stmt.order_by(*_order_for(query, distance_expression, price_expression))
-    stmt = stmt.limit(query.limit)
+    order_expression, order_kind = _order_for(query, distance_expression, price_expression)
+    scope = _cursor_scope(query, point, pages, order_kind)
+    if query.cursor is not None:
+        last_value, last_name, last_id = _decode_cursor(
+            query.cursor, expected_scope=scope, expected_kind=order_kind
+        )
+        stmt = stmt.where(
+            tuple_(order_expression, Shop.name, Shop.id) > tuple_(last_value, last_name, last_id)
+        )
+    stmt = stmt.add_columns(order_expression.label("sort_value"))
+    stmt = stmt.order_by(order_expression.asc(), Shop.name.asc(), Shop.id.asc())
+    stmt = stmt.limit(query.limit + 1)
 
     rows = list(session.execute(stmt).all())
+    has_more = len(rows) > query.limit
+    rows = rows[: query.limit]
     items = []
     for row in rows:
         item = _item(
@@ -131,6 +148,17 @@ def search_shops(
         item.wait_estimate = estimates.get(item.id)
     return ShopSearchResponse(
         items=items,
+        next_cursor=(
+            _encode_cursor(
+                sort_kind=order_kind,
+                sort_value=rows[-1][-1],
+                name=rows[-1][0].name,
+                shop_id=rows[-1][0].id,
+                scope=scope,
+            )
+            if has_more and rows
+            else None
+        ),
         attribution=geocoder.attribution if geocoder is not None else None,
         nearest=(_nearest_shop(session, point) if not items and point is not None else None),
     )
@@ -204,7 +232,7 @@ def _order_for(
     query: ShopSearchQuery,
     distance_expression: ColumnElement[Any] | None,
     price_expression: ColumnElement[Any] | None,
-) -> list[Any]:
+) -> tuple[ColumnElement[Any], str]:
     """The order the shops come back in.
 
     The customer chooses it. Without a choice the server picks the one
@@ -213,15 +241,81 @@ def _order_for(
     nothing to compare.
     """
     if query.sort == "price" and price_expression is not None:
-        return [price_expression.asc(), Shop.name.asc()]
+        return price_expression, "price"
     if query.sort == "distance" and distance_expression is not None:
-        return [distance_expression.asc(), Shop.name.asc()]
+        return distance_expression, "distance"
     if query.sort is None:
         if distance_expression is not None:
-            return [distance_expression.asc(), Shop.name.asc()]
+            return distance_expression, "distance"
         if price_expression is not None:
-            return [price_expression.asc(), Shop.name.asc()]
-    return [Shop.name.asc()]
+            return price_expression, "price"
+    return type_cast(ColumnElement[Any], Shop.name), "name"
+
+
+def _cursor_scope(
+    query: ShopSearchQuery,
+    point: tuple[float, float] | None,
+    pages: int | None,
+    order_kind: str,
+) -> list[Any]:
+    """Bind a search cursor to the location, radius, sort and price inputs."""
+    return [
+        repr(point[0]) if point is not None else None,
+        repr(point[1]) if point is not None else None,
+        query.radius_m if point is not None else None,
+        query.sort,
+        order_kind,
+        str(query.upload_id) if query.upload_id is not None else None,
+        query.paper_size,
+        query.color,
+        query.duplex,
+        query.copies,
+        pages,
+    ]
+
+
+def _encode_cursor(
+    *, sort_kind: str, sort_value: Any, name: str, shop_id: uuid.UUID, scope: list[Any]
+) -> str:
+    value = repr(float(sort_value)) if sort_kind == "distance" else sort_value
+    raw = json.dumps(
+        {"kind": sort_kind, "value": value, "name": name, "shop_id": str(shop_id), "scope": scope},
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(
+    cursor: str, *, expected_scope: list[Any], expected_kind: str
+) -> tuple[Any, str, uuid.UUID]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        value = json.loads(raw)
+        name = value["name"]
+        if not isinstance(name, str):
+            raise ValueError("invalid shop name")
+        shop_id_raw = value["shop_id"]
+        if not isinstance(shop_id_raw, str):
+            raise ValueError("invalid shop id")
+        shop_id = uuid.UUID(shop_id_raw)
+
+        sort_value = value["value"]
+        if expected_kind == "distance":
+            sort_value = float(sort_value)
+            if not math.isfinite(sort_value):
+                raise ValueError("invalid distance")
+        elif expected_kind == "price":
+            if isinstance(sort_value, bool) or not isinstance(sort_value, int):
+                raise ValueError("invalid price")
+        elif not isinstance(sort_value, str):
+            raise ValueError("invalid shop name")
+        if value["scope"] != expected_scope or value["kind"] != expected_kind:
+            raise ValidationError("Cursor does not match this shop search")
+        return sort_value, name, shop_id
+    except ValidationError:
+        raise
+    except (ValueError, TypeError, KeyError, UnicodeDecodeError, binascii.Error) as exc:
+        raise ValidationError("Invalid cursor") from exc
 
 
 def _item(

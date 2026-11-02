@@ -5,7 +5,13 @@ created. The distance is measured in metres, because that is what
 "nearby" means.
 """
 
+import base64
+import json
+
+from app.gateways.identity.fake import dev_subject_for
+from app.models import Shop, User
 from fastapi.testclient import TestClient
+from geoalchemy2.elements import WKTElement
 from sqlalchemy.orm import Session
 from tests.factories import create_shop, create_user, login_headers
 
@@ -103,6 +109,131 @@ def test_without_a_radius_every_shop_is_returned_nearest_first(
     ]
     distances = [item["distance_m"] for item in items]
     assert distances == sorted(distances)
+
+
+def test_nearby_results_continue_past_the_page_limit(
+    client: TestClient, db_session: Session
+) -> None:
+    customer = create_user(db_session, email="many-shops-customer@example.com")
+    owners = [
+        User(
+            email=f"many-shops-{index}@example.com",
+            clerk_user_id=dev_subject_for(f"many-shops-{index}@example.com"),
+            full_name="Vendor",
+            role="vendor",
+            email_verified=True,
+        )
+        for index in range(101)
+    ]
+    db_session.add_all(owners)
+    db_session.flush()
+    db_session.add_all(
+        [
+            Shop(
+                owner_id=owner.id,
+                name=f"Shop {index:03d}",
+                address="1 Test Street",
+                location=WKTElement("POINT(88.3639 22.5726)", srid=4326),
+                min_order_paise=0,
+                is_verified=True,
+                accepting_orders=True,
+            )
+            for index, owner in enumerate(owners)
+        ]
+    )
+    db_session.commit()
+    headers = login_headers(client, customer.email)
+
+    first = client.get(
+        f"{SHOPS}/nearby",
+        params={"latitude": CENTRAL[0], "longitude": CENTRAL[1], "limit": 100},
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert len(first_body["items"]) == 100
+    assert first_body["next_cursor"]
+
+    second = client.get(
+        f"{SHOPS}/nearby",
+        params={
+            "latitude": CENTRAL[0],
+            "longitude": CENTRAL[1],
+            "limit": 100,
+            "cursor": first_body["next_cursor"],
+        },
+        headers=headers,
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert len(second_body["items"]) == 1
+    assert second_body["next_cursor"] is None
+    assert [item["name"] for item in first_body["items"] + second_body["items"]] == [
+        f"Shop {index:03d}" for index in range(101)
+    ]
+
+
+def test_a_nearby_cursor_is_rejected_for_a_different_search(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+    first = client.get(
+        f"{SHOPS}/nearby",
+        params={"latitude": CENTRAL[0], "longitude": CENTRAL[1], "radius_m": 50000, "limit": 1},
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+    cursor = first.json()["next_cursor"]
+    assert cursor is not None
+
+    changed_location = client.get(
+        f"{SHOPS}/nearby",
+        params={
+            "latitude": CENTRAL[0] + 0.001,
+            "longitude": CENTRAL[1],
+            "radius_m": 50000,
+            "limit": 1,
+            "cursor": cursor,
+        },
+        headers=headers,
+    )
+    changed_radius = client.get(
+        f"{SHOPS}/nearby",
+        params={
+            "latitude": CENTRAL[0],
+            "longitude": CENTRAL[1],
+            "radius_m": 10000,
+            "limit": 1,
+            "cursor": cursor,
+        },
+        headers=headers,
+    )
+
+    assert changed_location.status_code == 422
+    assert changed_radius.status_code == 422
+
+
+def test_a_nearby_cursor_with_a_non_string_shop_id_is_a_validation_error(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+    cursor = base64.urlsafe_b64encode(
+        json.dumps({"distance_m": "0.0", "name": "Shop", "shop_id": 1}).encode()
+    ).decode()
+
+    response = client.get(
+        f"{SHOPS}/nearby",
+        params={
+            "latitude": CENTRAL[0],
+            "longitude": CENTRAL[1],
+            "cursor": cursor,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 422
 
 
 def test_the_distance_is_in_metres(client: TestClient, db_session: Session) -> None:

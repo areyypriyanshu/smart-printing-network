@@ -11,6 +11,7 @@ the person wants to do.
 """
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -63,8 +64,10 @@ def onboard(
     subject = identity.subject
     person = identity_service.read_person(reader, subject)
 
-    existing = identity_service.find_by_subject(session, subject)
+    existing = session.scalar(select(User).where(User.clerk_user_id == subject).with_for_update())
     if existing is not None:
+        identity_service.sync_provider_profile(session, existing, person)
+        session.commit()
         return existing
 
     if body.role == identity_service.VENDOR:
@@ -75,6 +78,8 @@ def onboard(
             subject=subject,
             email=person.email,
             full_name=person.full_name,
+            email_verified=person.email_verified,
+            provider_updated_at=person.updated_at,
             shop_name=body.shop_name,
             shop_address=body.shop_address,
             phone=body.phone,
@@ -89,5 +94,7 @@ def onboard(
         subject=subject,
         email=person.email,
         full_name=person.full_name,
+        email_verified=person.email_verified,
+        provider_updated_at=person.updated_at,
         role=identity_service.CUSTOMER,
     )

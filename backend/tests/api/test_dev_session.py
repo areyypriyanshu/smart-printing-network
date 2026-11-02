@@ -12,6 +12,7 @@ from app.models import User
 from app.services import identity_service
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from tests.factories import create_user
 
 DEV_SESSION = "/api/v1/auth/dev-session"
 
@@ -31,6 +32,18 @@ def test_the_local_way_in_signs_the_same_account_in_again(client: TestClient) ->
     assert first.status_code == 200
     assert second.status_code == 200
     assert first.json()["access_token"] == second.json()["access_token"]
+
+
+def test_the_local_way_in_verifies_an_existing_demo_account(
+    client: TestClient, db_session: Session
+) -> None:
+    user = create_user(db_session, email="existing-demo@example.com", email_verified=False)
+
+    response = client.post(DEV_SESSION, json={"email": user.email})
+
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert user.email_verified is True
 
 
 def test_the_local_way_in_refuses_a_shop_with_no_place(client: TestClient) -> None:

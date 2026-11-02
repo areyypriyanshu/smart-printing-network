@@ -1342,6 +1342,8 @@ export interface components {
             /** Items */
             items: components["schemas"]["ShopSearchItem"][];
             nearest?: components["schemas"]["NearestShop"] | null;
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * SuspendShopRequest
@@ -2994,6 +2996,7 @@ export interface operations {
                 longitude: number;
                 radius_m?: number | null;
                 limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -3107,6 +3110,7 @@ export interface operations {
                 duplex?: boolean | null;
                 copies?: number | null;
                 limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;

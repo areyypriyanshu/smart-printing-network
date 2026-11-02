@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from app.models import Order, OrderEvent, Payment, ShopRate
+from app.models import Order, OrderEvent, Payment, ShopRate, User
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -139,6 +139,27 @@ def test_duplicate_idempotency_key_creates_one_order(
     assert first.json()["order"]["id"] == second.json()["order"]["id"]
     orders = list(db_session.scalars(select(Order).where(Order.customer_id == customer_id)))
     assert len(orders) == 1
+
+
+def test_an_unverified_customer_cannot_create_an_order(
+    client: TestClient, db_session: Session
+) -> None:
+    customer_id, shop_id, upload_id = _seed(db_session)
+    customer = db_session.get(User, customer_id)
+    assert customer is not None
+    customer.email_verified = False
+    db_session.commit()
+    headers = login_headers(client, "customer@example.com")
+
+    response = client.post(
+        ORDERS,
+        headers={**headers, "Idempotency-Key": "unverified-order"},
+        json=_payload(upload_id, shop_id),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+    assert db_session.scalar(select(Order).where(Order.customer_id == customer_id)) is None
 
 
 def test_expected_price_mismatch_returns_price_changed(

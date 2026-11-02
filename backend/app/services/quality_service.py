@@ -6,10 +6,10 @@ payment, and a report that failed says so rather than blocking anything.
 
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -27,6 +27,9 @@ ALGORITHM_VERSION = "1"
 #: How long one file may take to be analysed. A file that is slow is a
 #: failed report, not a report that hangs the worker.
 ANALYSIS_TIMEOUT_SECONDS = 60.0
+# A worker that vanished without finishing is safely retried after twice
+# the analyzer's own hard timeout.
+RECOVERY_TIMEOUT_SECONDS = ANALYSIS_TIMEOUT_SECONDS * 2
 
 
 def get_owned_upload(session: Session, upload_id: uuid.UUID, customer_id: uuid.UUID) -> Upload:
@@ -93,9 +96,24 @@ def run_one(session: Session, *, report_id: uuid.UUID, storage: Storage, now: da
     not done twice.
     """
     report = session.scalar(
-        select(QualityReport).where(QualityReport.id == report_id).with_for_update(skip_locked=True)
+        select(QualityReport)
+        .where(
+            QualityReport.id == report_id,
+            or_(
+                QualityReport.status == "PENDING",
+                and_(
+                    QualityReport.status == "RUNNING",
+                    or_(
+                        QualityReport.started_at.is_(None),
+                        QualityReport.started_at
+                        <= now - timedelta(seconds=RECOVERY_TIMEOUT_SECONDS),
+                    ),
+                ),
+            ),
+        )
+        .with_for_update(skip_locked=True)
     )
-    if report is None or report.status not in {"PENDING", "RUNNING"}:
+    if report is None:
         return False
     upload = session.get(Upload, report.upload_id)
     if upload is None or upload.file_deleted_at is not None:

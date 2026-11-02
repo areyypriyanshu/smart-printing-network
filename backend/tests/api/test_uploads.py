@@ -53,6 +53,20 @@ def test_upload_valid_pdf_returns_metadata_and_stores_file(
     assert abs((upload.delete_after - expected_delete_after).total_seconds()) < 60
 
 
+def test_an_unverified_customer_cannot_upload(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    create_user(db_session, email="unverified@example.com", email_verified=False)
+    headers = login_headers(client, "unverified@example.com")
+
+    response = _upload(client, headers, make_pdf(tmp_path / "unverified.pdf"))
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+    assert client.app.state.storage.objects == {}
+    assert db_session.query(Upload).count() == 0
+
+
 def test_upload_rejects_a_text_file_renamed_as_pdf(
     client: TestClient, db_session: Session, tmp_path: Path
 ) -> None:

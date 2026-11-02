@@ -50,6 +50,7 @@ def list_nearby_shops(
     longitude: float = Query(ge=-180, le=180),
     radius_m: int | None = Query(default=None, ge=100, le=50000),
     limit: int = Query(default=20, ge=1, le=100),
+    cursor: str | None = Query(default=None),
     session: Session = Depends(get_db),
     _user: User = Depends(_customer_only),
     attribution: str | None = Depends(get_attribution),
@@ -69,6 +70,7 @@ def list_nearby_shops(
         longitude=longitude,
         radius_m=radius_m,
         limit=limit,
+        cursor=cursor,
         attribution=attribution,
     )
 

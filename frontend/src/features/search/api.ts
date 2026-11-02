@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { apiRequest, type ShopSearchResponse } from "../../api/client";
+import { collectAllPages } from "../../api/pagination";
 
 export type { ShopSearchItem, ShopSearchResponse } from "../../api/client";
 
@@ -27,6 +28,13 @@ export type ShopSearchQuery = {
 export function searchShops(
   query: ShopSearchQuery,
 ): Promise<ShopSearchResponse> {
+  return collectAllPages((cursor) => searchShopsPage(query, cursor));
+}
+
+function searchShopsPage(
+  query: ShopSearchQuery,
+  cursor?: string,
+): Promise<ShopSearchResponse> {
   const params = new URLSearchParams();
   if (query.latitude !== undefined)
     params.set("latitude", String(query.latitude));
@@ -43,6 +51,7 @@ export function searchShops(
   if (query.duplex !== undefined) params.set("duplex", String(query.duplex));
   if (query.copies !== undefined) params.set("copies", String(query.copies));
   if (query.limit !== undefined) params.set("limit", String(query.limit));
+  if (cursor !== undefined) params.set("cursor", cursor);
   return apiRequest(`/shops/search?${params.toString()}`);
 }
 

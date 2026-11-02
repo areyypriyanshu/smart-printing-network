@@ -1,20 +1,21 @@
 """The job that analyses the files customers have asked about.
 
 The analysis is CPU heavy, so it happens here and not in the request
-that asked for it. The job claims the reports that are waiting, one at a
-time, and each report is locked while it is being worked on, so two
-workers running at the same time do not analyse the same file twice.
+that asked for it. The job selects waiting reports in small locked
+batches, then rechecks and claims each report under its own lock before
+work starts. This prevents an earlier commit from releasing the other
+batch locks and letting two workers analyse the same report.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.gateways.storage import Storage
 from app.models import QualityReport
-from app.services.quality_service import run_one
+from app.services.quality_service import RECOVERY_TIMEOUT_SECONDS, run_one
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,22 @@ def run(session: Session, *, storage: Storage, now: datetime) -> int:
     report_ids = list(
         session.scalars(
             select(QualityReport.id)
-            .where(QualityReport.status == "PENDING")
+            .where(
+                or_(
+                    QualityReport.status == "PENDING",
+                    and_(
+                        QualityReport.status == "RUNNING",
+                        or_(
+                            QualityReport.started_at.is_(None),
+                            QualityReport.started_at
+                            <= now - timedelta(seconds=RECOVERY_TIMEOUT_SECONDS),
+                        ),
+                    ),
+                )
+            )
             .order_by(QualityReport.created_at.asc())
             .limit(BATCH_SIZE)
+            .with_for_update(skip_locked=True)
         )
     )
     analysed = 0

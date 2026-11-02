@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -24,8 +25,10 @@ from app.gateways.storage import Storage
 from app.models import Upload
 from app.schemas.order import FileUrlResponse
 from app.schemas.text import single_line
+from app.services.authorization_service import require_verified_email
 from app.services.document_service import ConversionError, convert_to_pdf
 
+logger = logging.getLogger(__name__)
 CHUNK_SIZE = 1024 * 1024
 PDF_MAGIC = b"%PDF-"
 #: How many bytes are read to work out what a file is.
@@ -43,6 +46,7 @@ def create_upload(
     original_filename: str,
     source: IO[bytes],
 ) -> Upload:
+    require_verified_email(session, customer_id)
     max_bytes = settings.max_upload_mb * 1024 * 1024
     _check_filename(original_filename)
     digest = hashlib.sha256()
@@ -86,28 +90,52 @@ def create_upload(
             printable = Path(temp_file.name)
 
         file_key = f"uploads/{uuid.uuid4().hex}.pdf"
+        upload = Upload(
+            customer_id=customer_id,
+            file_key=file_key,
+            original_filename=original_filename[:MAX_FILENAME_LENGTH],
+            size_bytes=size,
+            sha256=digest.hexdigest(),
+            page_count=page_count,
+            source_format=info.kind,
+            delete_after=datetime.now(UTC) + timedelta(hours=settings.file_retention_hours),
+        )
         try:
+            session.add(upload)
+            session.commit()
             storage.put_file(file_key, printable)
+        except Exception as exc:
+            session.rollback()
+            tracked = session.get(Upload, upload.id) if upload.id is not None else None
+            if tracked is not None:
+                # The row is durable before storage is touched, so an
+                # object left by a failed write remains visible to purge.
+                try:
+                    storage.delete(file_key)
+                except Exception as cleanup_exc:
+                    logger.error(
+                        "upload_storage_cleanup_failed",
+                        extra={
+                            "upload_id": str(tracked.id),
+                            "reason": type(cleanup_exc).__name__,
+                        },
+                    )
+                else:
+                    session.delete(tracked)
+                    session.commit()
+                logger.error(
+                    "upload_storage_write_failed",
+                    extra={"upload_id": str(tracked.id), "reason": type(exc).__name__},
+                )
+            raise
         finally:
             if info.converted:
                 # The converted PDF is scratch space, not the stored object.
-                # It is removed as soon as the object has been written, so a
-                # conversion never leaves a file behind on the container.
+                # It is removed after the write attempt, so a conversion
+                # never leaves a file behind on the container.
                 Path(printable).unlink(missing_ok=True)
 
-    upload = Upload(
-        customer_id=customer_id,
-        file_key=file_key,
-        original_filename=original_filename[:MAX_FILENAME_LENGTH],
-        size_bytes=size,
-        sha256=digest.hexdigest(),
-        page_count=page_count,
-        source_format=info.kind,
-        delete_after=datetime.now(UTC) + timedelta(hours=settings.file_retention_hours),
-    )
-    session.add(upload)
-    session.commit()
-    session.refresh(upload)
+        session.refresh(upload)
     return upload
 
 

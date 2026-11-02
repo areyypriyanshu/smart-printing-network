@@ -19,6 +19,7 @@ def create_user(
     role: str = "customer",
     full_name: str = "Test User",
     is_active: bool = True,
+    email_verified: bool = True,
 ) -> User:
     """An account to test with.
 
@@ -33,6 +34,7 @@ def create_user(
         full_name=full_name,
         role=role,
         is_active=is_active,
+        email_verified=email_verified,
     )
     session.add(user)
     session.commit()

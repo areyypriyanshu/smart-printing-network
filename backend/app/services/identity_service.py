@@ -45,6 +45,49 @@ def find_by_email(session: Session, email: str) -> User | None:
     return session.scalar(select(User).where(User.email == email))
 
 
+def sync_provider_profile(
+    session: Session,
+    user: User,
+    person: ClerkUser,
+    *,
+    event_timestamp: int | None = None,
+) -> bool:
+    """Apply the provider's current name and primary email to its local row.
+
+    An address already owned by another local account is never linked to
+    this one. In that case the local address is retained and ordering is
+    disabled until the conflict is resolved.
+    """
+    if user.clerk_user_id != person.id:
+        return False
+
+    effective_event_timestamp = person.updated_at if event_timestamp is None else event_timestamp
+    incoming_version = (person.updated_at, effective_event_timestamp)
+    current_version = (
+        user.clerk_profile_updated_at,
+        user.clerk_profile_event_timestamp,
+    )
+    if current_version[0] is not None and incoming_version <= (
+        current_version[0],
+        current_version[1] if current_version[1] is not None else -1,
+    ):
+        return False
+
+    user.clerk_profile_updated_at = person.updated_at
+    user.clerk_profile_event_timestamp = effective_event_timestamp
+
+    owner = find_by_email(session, person.email)
+    if owner is not None and owner.id != user.id:
+        user.email_verified = False
+        user.full_name = person.full_name.replace("\x00", "")
+        return False
+
+    user.email = person.email
+    user.full_name = person.full_name.replace("\x00", "")
+    user.email_verified = person.email_verified
+    return True
+
+
 def create_account(
     session: Session,
     *,
@@ -52,6 +95,8 @@ def create_account(
     email: str,
     full_name: str,
     role: str,
+    email_verified: bool,
+    provider_updated_at: int | None = None,
 ) -> User:
     """The account for a person who has just chosen what they are here for.
 
@@ -74,9 +119,12 @@ def create_account(
     user = User(
         email=email,
         clerk_user_id=subject,
-        full_name=full_name,
+        full_name=full_name.replace("\x00", ""),
         role=role,
         is_active=True,
+        email_verified=email_verified,
+        clerk_profile_updated_at=provider_updated_at,
+        clerk_profile_event_timestamp=provider_updated_at,
     )
     session.add(user)
     try:
@@ -102,6 +150,8 @@ def create_vendor_account(
     subject: str,
     email: str,
     full_name: str,
+    email_verified: bool,
+    provider_updated_at: int | None = None,
     shop_name: str,
     shop_address: str,
     phone: str | None,
@@ -147,9 +197,12 @@ def create_vendor_account(
     user = User(
         email=email,
         clerk_user_id=subject,
-        full_name=full_name,
+        full_name=full_name.replace("\x00", ""),
         role=VENDOR,
         is_active=True,
+        email_verified=email_verified,
+        clerk_profile_updated_at=provider_updated_at,
+        clerk_profile_event_timestamp=provider_updated_at,
     )
     session.add(user)
     # The account and the shop are made together, in one transaction.

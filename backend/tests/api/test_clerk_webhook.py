@@ -9,7 +9,9 @@ import json
 import time
 
 from app.config import get_settings
+from app.gateways.identity.clerk_admin import ClerkAdminError, ClerkUser, ClerkUserNotFound
 from app.gateways.webhooks.svix import expected_signature
+from app.models import WebhookEvent
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from tests.factories import create_user
@@ -31,6 +33,7 @@ def _delivery(
     body: dict[str, object], *, message_id: str = "msg_1", timestamp: str | None = None
 ) -> tuple[bytes, dict[str, str]]:
     """The body and the headers of a delivery that the provider signed."""
+    body.setdefault("timestamp", int(time.time() * 1000))
     raw = json.dumps(body).encode()
     stamp = timestamp if timestamp is not None else str(int(time.time()))
     signature = expected_signature(
@@ -54,6 +57,25 @@ def _person(subject: str, **details: str) -> dict[str, object]:
         "type": details.get("type", "user.updated"),
         "timestamp": int(time.time() * 1000),
     }
+
+
+def _provider_person(
+    client: TestClient,
+    subject: str,
+    *,
+    email: str,
+    full_name: str,
+    email_verified: bool,
+    updated_at: int = 0,
+) -> None:
+    reader = client.app.state.identity_reader
+    reader.people[subject] = ClerkUser(
+        id=subject,
+        email=email,
+        full_name=full_name,
+        email_verified=email_verified,
+        updated_at=updated_at,
+    )
 
 
 def test_a_delivery_with_no_signature_is_refused(client: TestClient) -> None:
@@ -105,8 +127,15 @@ def test_a_delivery_corrects_the_name_on_the_account(
     client: TestClient, db_session: Session
 ) -> None:
     user = create_user(db_session, email="named@example.com", full_name="Old Name")
+    _provider_person(
+        client,
+        user.clerk_user_id or "",
+        email=user.email,
+        full_name="Fresh Name",
+        email_verified=True,
+    )
     raw, headers = _delivery(
-        _person(user.clerk_user_id or "", first_name="Fresh", last_name="Name")
+        _person(user.clerk_user_id or "", first_name="Stale", last_name="Name")
     )
 
     response = client.post(WEBHOOK, content=raw, headers=headers)
@@ -114,6 +143,54 @@ def test_a_delivery_corrects_the_name_on_the_account(
     assert response.status_code == 200
     db_session.refresh(user)
     assert user.full_name == "Fresh Name"
+
+
+def test_a_user_update_syncs_the_current_primary_email_and_verification(
+    client: TestClient, db_session: Session
+) -> None:
+    user = create_user(
+        db_session,
+        email="old-address@example.com",
+        full_name="Old Name",
+        email_verified=False,
+    )
+    subject = user.clerk_user_id or ""
+    _provider_person(
+        client,
+        subject,
+        email="new-address@example.com",
+        full_name="Current Name",
+        email_verified=True,
+    )
+    raw, headers = _delivery(
+        _person(subject, first_name="Old Event", last_name="Name"), message_id="msg_email"
+    )
+
+    response = client.post(WEBHOOK, content=raw, headers=headers)
+
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert user.email == "new-address@example.com"
+    assert user.full_name == "Current Name"
+    assert user.email_verified is True
+
+
+def test_a_temporary_provider_failure_leaves_the_webhook_unprocessed(
+    client_that_reports_failures: TestClient, db_session: Session
+) -> None:
+    user = create_user(db_session, email="retry@example.com", email_verified=False)
+    reader = client_that_reports_failures.app.state.identity_reader
+
+    def unavailable(_subject: str) -> ClerkUser:
+        raise ClerkAdminError("provider unavailable")
+
+    reader.get_user = unavailable  # type: ignore[method-assign]
+    raw, headers = _delivery(_person(user.clerk_user_id or ""), message_id="msg_provider_retry")
+
+    response = client_that_reports_failures.post(WEBHOOK, content=raw, headers=headers)
+
+    assert response.status_code in {502, 503}
+    assert db_session.get(WebhookEvent, "msg_provider_retry") is None
 
 
 def test_a_ban_switches_the_account_off(client: TestClient, db_session: Session) -> None:
@@ -177,6 +254,13 @@ def test_the_same_delivery_twice_changes_nothing_new(
 ) -> None:
     """Deliveries come more than once, and that has to be harmless."""
     user = create_user(db_session, email="twice@example.com", full_name="Old")
+    _provider_person(
+        client,
+        user.clerk_user_id or "",
+        email=user.email,
+        full_name="Twice Name",
+        email_verified=True,
+    )
     raw, headers = _delivery(_person(user.clerk_user_id or "", first_name="Twice"))
 
     first = client.post(WEBHOOK, content=raw, headers=headers)
@@ -198,6 +282,13 @@ def test_a_delivery_is_acted_on_once(client: TestClient, db_session: Session) ->
     user = create_user(db_session, email="once@example.com", role="customer")
     user.clerk_user_id = subject
     db_session.commit()
+    _provider_person(
+        client,
+        subject,
+        email=user.email,
+        full_name="Once Name",
+        email_verified=True,
+    )
 
     body = {"type": "user.updated", "data": {"id": subject, "first_name": "Once"}}
     raw, headers = _delivery(body, message_id="msg_once")
@@ -224,6 +315,13 @@ def test_a_replayed_delivery_does_not_set_an_older_name(
     user.clerk_user_id = subject
     user.full_name = "Newer"
     db_session.commit()
+    _provider_person(
+        client,
+        subject,
+        email=user.email,
+        full_name="Newer",
+        email_verified=True,
+    )
 
     old, old_headers = _delivery(
         {"type": "user.updated", "data": {"id": subject, "first_name": "Older"}},
@@ -245,6 +343,87 @@ def test_a_replayed_delivery_does_not_set_an_older_name(
     assert db_session.get(type(user), user.id).full_name == "Newer"
 
 
+def test_a_late_profile_response_cannot_restore_an_older_verification_state(
+    client: TestClient, db_session: Session
+) -> None:
+    subject = "user_profile_version"
+    user = create_user(db_session, email="profile-version@example.com", role="customer")
+    user.clerk_user_id = subject
+    db_session.commit()
+
+    _provider_person(
+        client,
+        subject,
+        email=user.email,
+        full_name="Current Profile",
+        email_verified=False,
+        updated_at=2000,
+    )
+    newer, newer_headers = _delivery(
+        {
+            "type": "user.updated",
+            "timestamp": 3000,
+            "data": {"id": subject},
+        },
+        message_id="msg_profile_newer",
+    )
+    assert client.post(WEBHOOK, content=newer, headers=newer_headers).status_code == 200
+
+    # Simulate an earlier provider response finishing after the current
+    # response. Its profile version must not undo the newer result.
+    _provider_person(
+        client,
+        subject,
+        email=user.email,
+        full_name="Stale Verified Profile",
+        email_verified=True,
+        updated_at=1000,
+    )
+    older, older_headers = _delivery(
+        {
+            "type": "user.updated",
+            "timestamp": 2000,
+            "data": {"id": subject},
+        },
+        message_id="msg_profile_older",
+    )
+    assert client.post(WEBHOOK, content=older, headers=older_headers).status_code == 200
+
+    db_session.refresh(user)
+    assert user.email_verified is False
+    assert user.full_name == "Current Profile"
+    assert user.clerk_profile_updated_at == 2000
+
+
+def test_an_update_arriving_after_provider_deletion_is_recorded_and_deactivates(
+    client: TestClient, db_session: Session, monkeypatch
+) -> None:
+    subject = "user_deleted_before_update"
+    user = create_user(db_session, email="deleted-before-update@example.com", role="customer")
+    user.clerk_user_id = subject
+    db_session.commit()
+
+    def deleted(_subject: str) -> ClerkUser:
+        raise ClerkUserNotFound("The identity provider no longer has this account")
+
+    monkeypatch.setattr(client.app.state.identity_reader, "get_user", deleted)
+    raw, headers = _delivery(
+        {"type": "user.updated", "data": {"id": subject}},
+        message_id="msg_update_after_delete",
+    )
+
+    response = client.post(WEBHOOK, content=raw, headers=headers)
+
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert user.is_active is False
+    event = db_session.get(WebhookEvent, "msg_update_after_delete")
+    assert event is not None
+    assert event.processed_at is not None
+    replay = client.post(WEBHOOK, content=raw, headers=headers)
+    assert replay.json()["status"] == "duplicate"
+
+
 def test_a_name_the_database_cannot_hold_does_not_stop_the_delivery(
     client: TestClient, db_session: Session
 ) -> None:
@@ -253,6 +432,13 @@ def test_a_name_the_database_cannot_hold_does_not_stop_the_delivery(
     user = create_user(db_session, email="nul@example.com", role="customer")
     user.clerk_user_id = subject
     db_session.commit()
+    _provider_person(
+        client,
+        subject,
+        email=user.email,
+        full_name="Na\x00me",
+        email_verified=True,
+    )
 
     body = {"type": "user.updated", "data": {"id": subject, "first_name": "Na\u0000me"}}
     raw, headers = _delivery(body, message_id="msg_nul")

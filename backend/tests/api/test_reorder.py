@@ -12,6 +12,7 @@ from app.gateways.storage import MemoryStorage
 from app.models import Order, Upload
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tests.factories import (
     create_full_rate_table,
@@ -74,6 +75,22 @@ def test_reordering_copies_the_file(client: TestClient, db_session: Session) -> 
     assert copy.sha256 == original.sha256
 
 
+def test_an_unverified_customer_cannot_reorder(client: TestClient, db_session: Session) -> None:
+    customer, shop = _seed(db_session)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
+    _store_the_file(client, db_session, order)
+    customer.email_verified = False
+    db_session.commit()
+    headers = login_headers(client, CUSTOMER_EMAIL)
+
+    response = client.post(f"{ORDERS}/{order.id}/reorder", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+    assert len(client.app.state.storage.objects) == 1
+    assert db_session.query(Upload).filter(Upload.customer_id == customer.id).count() == 1
+
+
 def test_the_copy_has_its_own_retention_window(client: TestClient, db_session: Session) -> None:
     customer, shop = _seed(db_session)
     order = create_reserved_order(db_session, customer=customer, shop=shop)
@@ -88,6 +105,27 @@ def test_the_copy_has_its_own_retention_window(client: TestClient, db_session: S
     assert copy.delete_after is not None
     expected = datetime.now(UTC) + timedelta(hours=24)
     assert abs((copy.delete_after - expected).total_seconds()) < 60
+
+
+def test_database_failure_does_not_leave_an_untracked_reprint(
+    client_that_reports_failures: TestClient, db_session: Session, monkeypatch
+) -> None:
+    customer, shop = _seed(db_session)
+    order = create_reserved_order(db_session, customer=customer, shop=shop)
+    original = _store_the_file(client_that_reports_failures, db_session, order)
+    storage: MemoryStorage = client_that_reports_failures.app.state.storage
+
+    def fail_commit() -> None:
+        raise IntegrityError("reprint insert", {}, RuntimeError("database rejected row"))
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    headers = login_headers(client_that_reports_failures, CUSTOMER_EMAIL)
+
+    response = client_that_reports_failures.post(f"{ORDERS}/{order.id}/reorder", headers=headers)
+
+    assert response.status_code >= 500
+    assert set(storage.objects) == {original.file_key}
+    assert db_session.query(Upload).filter(Upload.customer_id == customer.id).count() == 1
 
 
 def test_reordering_after_the_file_is_deleted_says_so(

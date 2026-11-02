@@ -89,6 +89,7 @@ def seed(session: Session) -> None:
             subject=dev_subject_for(spec["email"]),
             email=spec["email"],
             full_name=spec["full_name"],
+            email_verified=True,
             shop_name=spec["shop_name"],
             shop_address=spec["shop_address"],
             phone=None,
@@ -114,6 +115,7 @@ def seed(session: Session) -> None:
             email=SEED_CUSTOMER["email"],
             full_name=SEED_CUSTOMER["full_name"],
             role=identity_service.CUSTOMER,
+            email_verified=True,
         )
         logger.info("seed: created customer %s", SEED_CUSTOMER["email"])
     else:

@@ -6,14 +6,16 @@ where the shop actually is, and the price, which has to be the price
 the customer is charged when they order.
 """
 
+import base64
 import json
 import uuid
 
 from app.gateways.geocoding import GeocodeResult, MemoryGeocoder, NominatimGeocoder
-from app.models import ShopRate
+from app.models import Shop, ShopRate, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
 from fastapi.testclient import TestClient
+from geoalchemy2.elements import WKTElement
 from sqlalchemy.orm import Session
 from tests.factories import (
     create_full_rate_table,
@@ -86,6 +88,166 @@ def test_the_nearest_shop_comes_first(client: TestClient, db_session: Session) -
     ]
     assert items[0]["distance_m"] < items[1]["distance_m"]
     assert items[1]["distance_m"] < items[2]["distance_m"]
+
+
+def test_unlocated_search_continues_past_the_page_limit(
+    client: TestClient, db_session: Session
+) -> None:
+    customer = create_user(db_session, email="paged-search-customer@example.com")
+    owners = [
+        User(
+            email=f"paged-search-vendor-{index}@example.com",
+            clerk_user_id=f"paged-search-vendor-{index}",
+            full_name="Vendor",
+            role="vendor",
+            email_verified=True,
+        )
+        for index in range(101)
+    ]
+    db_session.add_all(owners)
+    db_session.flush()
+    db_session.add_all(
+        [
+            Shop(
+                owner_id=owner.id,
+                name=f"Paged Shop {index:03d}",
+                address="1 Test Street",
+                location=WKTElement("POINT(88.3639 22.5726)", srid=4326),
+                min_order_paise=0,
+                is_verified=True,
+                accepting_orders=True,
+            )
+            for index, owner in enumerate(owners)
+        ]
+    )
+    db_session.commit()
+    headers = login_headers(client, customer.email)
+
+    first = _search(client, headers, limit=100)
+    assert len(first["items"]) == 100
+    assert first["next_cursor"]
+    second = _search(client, headers, limit=100, cursor=first["next_cursor"])
+
+    assert len(second["items"]) == 1
+    assert second["next_cursor"] is None
+    assert [item["name"] for item in first["items"] + second["items"]] == [
+        f"Paged Shop {index:03d}" for index in range(101)
+    ]
+
+
+def test_a_search_cursor_is_rejected_when_location_or_radius_changes(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+    first = _search(
+        client,
+        headers,
+        latitude=CENTRAL_LATITUDE,
+        longitude=CENTRAL_LONGITUDE,
+        radius_m=50000,
+        limit=1,
+    )
+    cursor = first["next_cursor"]
+    assert cursor is not None
+
+    changed_location = client.get(
+        SEARCH,
+        params={
+            "latitude": CENTRAL_LATITUDE + 0.001,
+            "longitude": CENTRAL_LONGITUDE,
+            "radius_m": 50000,
+            "limit": 1,
+            "cursor": cursor,
+        },
+        headers=headers,
+    )
+    changed_radius = client.get(
+        SEARCH,
+        params={
+            "latitude": CENTRAL_LATITUDE,
+            "longitude": CENTRAL_LONGITUDE,
+            "radius_m": 10000,
+            "limit": 1,
+            "cursor": cursor,
+        },
+        headers=headers,
+    )
+
+    assert changed_location.status_code == 422
+    assert changed_radius.status_code == 422
+
+
+def test_a_search_cursor_with_a_non_string_shop_id_is_a_validation_error(
+    client: TestClient, db_session: Session
+) -> None:
+    _seed(db_session)
+    headers = login_headers(client, "customer@example.com")
+    cursor = base64.urlsafe_b64encode(
+        json.dumps(
+            {"scope": [], "kind": "name", "value": "Shop", "name": "Shop", "shop_id": 1}
+        ).encode()
+    ).decode()
+
+    response = client.get(SEARCH, params={"cursor": cursor}, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_price_sorted_search_keeps_its_order_across_pages(
+    client: TestClient, db_session: Session
+) -> None:
+    customer = create_user(db_session, email="paged-price-customer@example.com")
+    upload = create_upload_row(db_session, customer=customer, page_count=2)
+    long_shop_name = "😀" * 200
+    for index, (name, rate_paise) in enumerate(
+        [(long_shop_name, 100), ("Alpha Middle", 200), ("Omega High", 300)]
+    ):
+        vendor = create_user(
+            db_session, email=f"paged-price-vendor-{index}@example.com", role="vendor"
+        )
+        shop = create_shop(db_session, owner=vendor, name=name)
+        db_session.add(
+            ShopRate(
+                shop_id=shop.id,
+                paper_size="A4",
+                color=False,
+                duplex=False,
+                rate_paise=rate_paise,
+            )
+        )
+    db_session.commit()
+    headers = login_headers(client, customer.email)
+    search = {
+        "sort": "price",
+        "upload_id": str(upload.id),
+        "paper_size": "A4",
+        "color": False,
+        "duplex": False,
+        "copies": 1,
+        "limit": 1,
+    }
+
+    first = _search(client, headers, **search)
+    assert len(first["next_cursor"]) > 1000
+    second = _search(client, headers, **search, cursor=first["next_cursor"])
+    third = _search(client, headers, **search, cursor=second["next_cursor"])
+
+    assert [first["items"][0]["name"], second["items"][0]["name"], third["items"][0]["name"]] == [
+        long_shop_name,
+        "Alpha Middle",
+        "Omega High",
+    ]
+    assert [
+        first["items"][0]["price_paise"],
+        second["items"][0]["price_paise"],
+        third["items"][0]["price_paise"],
+    ] == [
+        200,
+        400,
+        600,
+    ]
+    assert third["next_cursor"] is None
 
 
 def test_the_distance_is_measured_in_metres(client: TestClient, db_session: Session) -> None:

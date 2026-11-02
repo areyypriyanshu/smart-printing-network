@@ -5,11 +5,16 @@ import {
   type ShopListResponse,
   type ShopResponse,
 } from "../../api/client";
+import { collectAllPages } from "../../api/pagination";
 
 export type Shop = ShopResponse;
 
 export function listShops(): Promise<ShopListResponse> {
-  return apiRequest("/shops?limit=100");
+  return collectAllPages((cursor) =>
+    apiRequest(
+      `/shops?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
+  );
 }
 
 export function getShop(shopId: string): Promise<ShopResponse> {
@@ -38,15 +43,18 @@ export type NearbyQuery = {
  * has no radius control and sorts the whole list by distance.
  */
 export function listNearbyShops(query: NearbyQuery): Promise<ShopListResponse> {
-  const params = new URLSearchParams({
-    latitude: String(query.latitude),
-    longitude: String(query.longitude),
-    limit: String(query.limit ?? 100),
+  return collectAllPages((cursor) => {
+    const params = new URLSearchParams({
+      latitude: String(query.latitude),
+      longitude: String(query.longitude),
+      limit: String(query.limit ?? 100),
+    });
+    if (query.radius_m !== undefined) {
+      params.set("radius_m", String(query.radius_m));
+    }
+    if (cursor !== undefined) params.set("cursor", cursor);
+    return apiRequest(`/shops/nearby?${params.toString()}`);
   });
-  if (query.radius_m !== undefined) {
-    params.set("radius_m", String(query.radius_m));
-  }
-  return apiRequest(`/shops/nearby?${params.toString()}`);
 }
 
 export function useNearbyShops(query: NearbyQuery | null) {

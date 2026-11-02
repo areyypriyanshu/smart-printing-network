@@ -355,6 +355,7 @@ def test_a_deactivated_account_keeps_its_address(
             email="unused@example.com",
             full_name="Test User",
             role=identity_service.CUSTOMER,
+            email_verified=True,
         )
 
 

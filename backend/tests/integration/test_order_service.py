@@ -1,14 +1,16 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from threading import Barrier
 
 import pytest
 from app.errors import Forbidden, InvalidTransition, PriceChanged, UploadAlreadyUsed
-from app.models import Order, OrderEvent, ShopRate, Upload
+from app.models import Order, OrderEvent, Payment, Shop, ShopRate, Upload, User
 from app.schemas.order import OrderCreateRequest
 from app.services import order_service
-from sqlalchemy import select
+from sqlalchemy import delete, event, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from tests.factories import (
     create_full_rate_table,
     create_paid_order,
@@ -142,6 +144,77 @@ def test_duplicate_idempotency_key_returns_the_same_order(db_session: Session) -
     assert second.id == first.id
     orders = list(db_session.scalars(select(Order).where(Order.customer_id == customer_id)))
     assert len(orders) == 1
+
+
+@pytest.mark.parametrize("same_key", [True, False])
+def test_concurrent_orders_for_one_upload_return_a_winner_or_a_conflict(
+    engine, same_key: bool
+) -> None:
+    suffix = uuid.uuid4().hex
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    with factory() as seed_session:
+        customer = create_user(seed_session, email=f"customer-{suffix}@example.com")
+        vendor = create_user(seed_session, email=f"vendor-{suffix}@example.com", role="vendor")
+        shop = create_shop(seed_session, owner=vendor, min_order_paise=0)
+        create_full_rate_table(seed_session, shop, base_paise=BASE_PAISE)
+        upload = create_upload_row(seed_session, customer=customer, page_count=PAGES)
+        customer_id, vendor_id, shop_id, upload_id = (
+            customer.id,
+            vendor.id,
+            shop.id,
+            upload.id,
+        )
+    barrier = Barrier(2)
+
+    def wait_before_order_flush(session, _flush_context, _instances) -> None:
+        if any(isinstance(item, Order) for item in session.new):
+            barrier.wait(timeout=10)
+
+    event.listen(Session, "before_flush", wait_before_order_flush)
+    try:
+
+        def create(index: int) -> Order | UploadAlreadyUsed:
+            with factory() as session:
+                try:
+                    return order_service.create_order(
+                        session,
+                        customer_id=customer_id,
+                        request=_request(upload_id, shop_id),
+                        idempotency_key=(
+                            "concurrent-key" if same_key else f"concurrent-key-{index}"
+                        ),
+                    )
+                except UploadAlreadyUsed as error:
+                    return error
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(create, range(2)))
+        with factory() as verify_session:
+            order_ids = list(
+                verify_session.scalars(select(Order.id).where(Order.customer_id == customer_id))
+            )
+            assert len(order_ids) == 1
+    finally:
+        event.remove(Session, "before_flush", wait_before_order_flush)
+        with factory.begin() as cleanup:
+            order_ids = select(Order.id).where(Order.customer_id == customer_id)
+            cleanup.execute(delete(OrderEvent).where(OrderEvent.order_id.in_(order_ids)))
+            cleanup.execute(delete(Payment).where(Payment.order_id.in_(order_ids)))
+            cleanup.execute(delete(Order).where(Order.customer_id == customer_id))
+            cleanup.execute(delete(Upload).where(Upload.customer_id == customer_id))
+            cleanup.execute(delete(ShopRate).where(ShopRate.shop_id == shop_id))
+            cleanup.execute(delete(Shop).where(Shop.id == shop_id))
+            cleanup.execute(delete(User).where(User.id.in_([customer_id, vendor_id])))
+
+    winners = [result for result in results if isinstance(result, Order)]
+    conflicts = [result for result in results if isinstance(result, UploadAlreadyUsed)]
+    if same_key:
+        assert len(winners) == 2
+        assert conflicts == []
+        assert results[0].id == results[1].id
+    else:
+        assert len(winners) == 1
+        assert len(conflicts) == 1
 
 
 def test_expected_price_mismatch_raises_price_changed(db_session: Session) -> None:

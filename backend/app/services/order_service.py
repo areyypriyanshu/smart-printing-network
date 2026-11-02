@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -36,6 +37,7 @@ from app.schemas.order import (
     OrderResponse,
     ReorderResponse,
 )
+from app.services.authorization_service import require_verified_email
 from app.services.live_service import notify_transition
 from app.services.upload_service import get_upload, presigned_download
 
@@ -58,16 +60,11 @@ def create_order(
     they pay and collect. The payment row stays `CREATED` until the shop
     collects the order, which is when the money changes hands.
     """
-    existing = session.scalar(
-        select(Order).where(
-            Order.customer_id == customer_id, Order.idempotency_key == idempotency_key
-        )
-    )
+    existing = _order_for_idempotency_key(session, customer_id, idempotency_key)
     if existing is not None:
-        payment = session.scalar(select(Payment).where(Payment.order_id == existing.id))
-        if payment is None:
-            raise Conflict("The order exists but its payment is missing")
         return existing
+
+    require_verified_email(session, customer_id)
 
     upload = get_upload(session, upload_id=request.upload_id, customer_id=customer_id)
     if upload.file_deleted_at is not None:
@@ -137,7 +134,20 @@ def create_order(
         updated_at=current,
     )
     session.add(order)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        # Two requests can both pass the read above. The unique constraint
+        # is the final arbiter; after the losing insert rolls back, return
+        # the order created by the winning request.
+        session.rollback()
+        existing = _order_for_idempotency_key(session, customer_id, idempotency_key)
+        if existing is None:
+            constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+            if constraint_name == "uq_orders_upload_id":
+                raise UploadAlreadyUsed("This file is already attached to an order") from exc
+            raise
+        return existing
     # The order, the money that is owed, and the first event commit
     # together. There is no provider to call, so an order can never be
     # booked without the record of what the customer owes.
@@ -347,6 +357,7 @@ def reorder(
     )
     if order is None:
         raise NotFound("Order not found")
+    require_verified_email(session, customer_id)
     upload = session.get(Upload, order.upload_id)
     if upload is None or upload.file_deleted_at is not None:
         raise FileUnavailable(
@@ -355,14 +366,6 @@ def reorder(
         )
 
     new_key = f"uploads/{uuid.uuid4().hex}.pdf"
-    try:
-        storage.copy_file(upload.file_key, new_key)
-    except Exception as exc:  # noqa: BLE001 - the storage error is reported
-        logger.error("reorder_copy_failed", extra={"order_id": str(order.id), "reason": str(exc)})
-        raise FileUnavailable(
-            "We could not make a copy of this file. Try again in a moment."
-        ) from exc
-
     current = _now()
     copy = Upload(
         customer_id=customer_id,
@@ -375,7 +378,31 @@ def reorder(
         delete_after=current + timedelta(hours=get_settings().file_retention_hours),
     )
     session.add(copy)
-    session.commit()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    try:
+        storage.copy_file(upload.file_key, new_key)
+    except Exception as exc:  # noqa: BLE001 - the storage error is reported
+        try:
+            storage.delete(new_key)
+        except Exception as cleanup_exc:  # noqa: BLE001 - purge job can retry
+            logger.error(
+                "reorder_copy_cleanup_failed",
+                extra={"upload_id": str(copy.id), "reason": type(cleanup_exc).__name__},
+            )
+        else:
+            session.delete(copy)
+            session.commit()
+        logger.error(
+            "reorder_copy_failed",
+            extra={"order_id": str(order.id), "reason": type(exc).__name__},
+        )
+        raise FileUnavailable(
+            "We could not make a copy of this file. Try again in a moment."
+        ) from exc
     session.refresh(copy)
     return ReorderResponse(
         upload_id=copy.id,
@@ -428,6 +455,23 @@ def order_response(order: Order) -> OrderResponse:
         quality_acknowledged=order.quality_acknowledged,
         created_at=order.created_at,
     )
+
+
+def _order_for_idempotency_key(
+    session: Session, customer_id: uuid.UUID, idempotency_key: str
+) -> Order | None:
+    order = session.scalar(
+        select(Order).where(
+            Order.customer_id == customer_id,
+            Order.idempotency_key == idempotency_key,
+        )
+    )
+    if order is None:
+        return None
+    payment = session.scalar(select(Payment).where(Payment.order_id == order.id))
+    if payment is None:
+        raise Conflict("The order exists but its payment is missing")
+    return order
 
 
 def _now() -> datetime:

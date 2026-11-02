@@ -55,7 +55,9 @@ const beta: ShopSearchItem = {
 
 function useSearchHandlers(items: ShopSearchItem[] = [alpha, beta]) {
   server.use(
-    http.get("/api/v1/shops/search", () => HttpResponse.json({ items })),
+    http.get("/api/v1/shops/search", () =>
+      HttpResponse.json({ items, next_cursor: null }),
+    ),
     http.post("/api/v1/uploads", () =>
       HttpResponse.json(uploadFixture, { status: 201 }),
     ),
@@ -63,6 +65,29 @@ function useSearchHandlers(items: ShopSearchItem[] = [alpha, beta]) {
 }
 
 describe("the shop search", () => {
+  it("loads the next search page so the full result list is available", async () => {
+    const requested: URL[] = [];
+    server.use(
+      http.get("/api/v1/shops/search", ({ request }) => {
+        const url = new URL(request.url);
+        requested.push(url);
+        return url.searchParams.has("cursor")
+          ? HttpResponse.json({ items: [beta], next_cursor: null })
+          : HttpResponse.json({ items: [alpha], next_cursor: "page-two" });
+      }),
+    );
+    renderWithProviders(<SearchPage />, { route: "/shops" });
+
+    const list = await screen.findByRole("list");
+    expect(
+      within(list)
+        .getAllByRole("heading", { level: 3 })
+        .map((item) => item.textContent),
+    ).toEqual(["Alpha Prints", "Beta Print Hub"]);
+    expect(requested).toHaveLength(2);
+    expect(requested[1]?.searchParams.get("cursor")).toBe("page-two");
+  });
+
   it("shows the shops and how far away they are", async () => {
     useSearchHandlers();
     renderWithProviders(<SearchPage />, { route: "/shops" });
@@ -108,7 +133,7 @@ describe("the shop search", () => {
     server.use(
       http.get("/api/v1/shops/search", ({ request }) => {
         asked.push(request.url);
-        return HttpResponse.json({ items: [alpha] });
+        return HttpResponse.json({ items: [alpha], next_cursor: null });
       }),
     );
     const getCurrentPosition = vi.fn((success: PositionCallback) => {
@@ -167,7 +192,7 @@ describe("the shop search", () => {
     server.use(
       http.get("/api/v1/shops/search", ({ request }) => {
         asked.push(request.url);
-        return HttpResponse.json({ items: [alpha] });
+        return HttpResponse.json({ items: [alpha], next_cursor: null });
       }),
     );
     const user = userEvent.setup();
@@ -192,7 +217,7 @@ describe("the shop search", () => {
     server.use(
       http.get("/api/v1/shops/search", ({ request }) => {
         asked.push(request.url);
-        return HttpResponse.json({ items: [alpha] });
+        return HttpResponse.json({ items: [alpha], next_cursor: null });
       }),
     );
     const user = userEvent.setup();
@@ -249,6 +274,7 @@ describe("the shop search", () => {
       http.get("/api/v1/shops/search", () =>
         HttpResponse.json({
           items: [],
+          next_cursor: null,
           nearest: {
             name: "Central Prints",
             address: "12 Esplanade Row, Kolkata",
@@ -283,6 +309,7 @@ describe("the shop search", () => {
       http.get("/api/v1/shops/search", () =>
         HttpResponse.json({
           items: [alpha],
+          next_cursor: null,
           attribution: "© OpenStreetMap contributors",
         }),
       ),

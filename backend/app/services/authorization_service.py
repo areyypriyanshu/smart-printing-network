@@ -5,7 +5,13 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.errors import AccountNotProvisioned, Forbidden, NotFound, Unauthenticated
+from app.errors import (
+    AccountNotProvisioned,
+    EmailNotVerified,
+    Forbidden,
+    NotFound,
+    Unauthenticated,
+)
 from app.models import Order, Shop, User
 from app.services import identity_service
 
@@ -27,6 +33,13 @@ def require_role(user: User, *roles: str) -> User:
     if user.role not in roles:
         raise Forbidden("Your role cannot perform this action")
     return user
+
+
+def require_verified_email(session: Session, user_id: uuid.UUID) -> None:
+    """Refuse actions that require a verified customer contact address."""
+    verified = session.scalar(select(User.email_verified).where(User.id == user_id))
+    if verified is not True:
+        raise EmailNotVerified("Confirm your email address before uploading or ordering")
 
 
 def shop_for_vendor(session: Session, user: User) -> Shop:
