@@ -3,8 +3,9 @@
 A web platform where a customer uploads a document, sees the price from a
 nearby verified print shop, reserves it, and collects the order with a
 pickup code, paying in cash at the counter. Shops work a queue of reserved
-orders from a counter screen. Built as a portfolio project to be
-**testable, deployable and explainable**, not as a startup.
+orders from a counter screen. Built as a learning and engineering project
+to be **testable, deployable and explainable**, not as a startup. Public
+launch and portfolio presentation are currently deferred.
 
 ## By the numbers
 
@@ -33,7 +34,7 @@ emulation, so it is a regression baseline rather than a production claim.
 The raw numbers and methodology are in
 [`../perf/BASELINE.md`](../perf/BASELINE.md).
 
-## Resume bullets
+## Engineering summary
 
 - Built a print-shop marketplace end to end: FastAPI, React, PostgreSQL
   with PostGIS, S3-compatible object storage, a background worker, and a

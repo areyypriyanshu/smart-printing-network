@@ -253,7 +253,7 @@ The planning documents live with the maintainer and are not committed. The decis
 | [`AGENTS.md`](AGENTS.md) | The operating manual: rules, workflow and definition of done |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Start here.** The decisions and why they were made |
 | [`docs/adr/`](docs/adr/) | One architecture decision record per non-trivial decision |
-| [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md) | One page of measurable facts, for a resume or a reviewer |
+| [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md) | Project measurements and engineering summary |
 | [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) | The final security pass: audits, headers, storage and residual risks |
 | [`docs/architecture.svg`](docs/architecture.svg) | The runtime diagram used in this README |
 | [`backend/estimate_backtest.json`](backend/estimate_backtest.json) | The simulated, aggregate accuracy report |
@@ -302,6 +302,6 @@ The rest, including the alternatives that were rejected, are in [DECISIONS.md](d
 
 <p><a href="https://github.com/areyypriyanshu">GitHub</a> · <a href="https://linkedin.com/in/areyypriyanshu">LinkedIn</a></p>
 
-<p><sub>Built as a portfolio project about software that is testable, deployable and explainable.</sub></p>
+<p><sub>Built as a learning and engineering project with a focus on testability, deployability and explainable design. Public launch and portfolio presentation are currently deferred.</sub></p>
 
 </div>

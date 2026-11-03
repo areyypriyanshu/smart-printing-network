@@ -8,11 +8,11 @@ Operating manual for AI coding agents and human contributors working on **Smart 
 
 SPN lets customers upload a PDF, choose print options, see a price, pay, and collect from a nearby verified print shop with a pickup code. Shops run an order queue from a vendor dashboard.
 
-This repository is also the owner's main portfolio project (Priyanshu Mandal, final-year B.Tech IT student, targeting QA, DevOps and software roles). Therefore every change must be:
+This is an owner-maintained learning and engineering project. Portfolio presentation and a public launch are not current goals; treat them as deferred unless the owner reactivates them. Every change must be:
 
 1. **Testable:** proven by automated tests at the right level.
 2. **Deployable:** works in the Docker Compose stack and in CI, with safe migrations.
-3. **Explainable:** a reviewer, or an interviewer, can understand why it was built this way. Non-trivial decisions get an ADR in `docs/adr/`.
+3. **Explainable:** another developer can understand why it was built this way. Non-trivial decisions get an ADR in `docs/adr/`.
 
 Prefer boring, simple, correct code over clever code. A smaller change that is fully verified beats a bigger one that is probably fine.
 
@@ -115,7 +115,7 @@ smart-printing-network/
   .github/workflows/     # ci.yml, deploy.yml
 ```
 
-`docs/` is intentionally local-only: `.gitignore` excludes it and it is never committed. Keep it updated on disk, read it before tasks, and never report it as missing from the repository.
+`docs/` is mostly local-only: `.gitignore` excludes planning documents, with explicit exceptions for project-facing records such as ADRs and the project summary. Check `.gitignore` and Git tracking before changing or publishing a document. Keep local-only planning notes updated on disk, read them before tasks, and never report them as missing from the repository.
 
 Layering: `routers -> services -> models`, with `services -> domain` and `services -> gateways (interfaces)`. Routers contain no business logic. Services own transactions. See `BACKEND_STRUCTURE.md`.
 
@@ -233,7 +233,7 @@ Stop and ask rather than guess when:
 
 ### Teaching mode
 
-The owner is a student using this project to learn and to explain it in interviews. When you make a non-obvious choice, explain the reasoning briefly in the PR description or an ADR, and mention one alternative you rejected. Prefer code the owner can read and defend over code that is merely short.
+The owner uses this project to learn. When you make a non-obvious choice, explain the reasoning briefly in the PR description or an ADR, and mention one alternative you rejected. Prefer code the owner can understand and maintain over code that is merely short.
 
 ## 11. Report-back format
 
