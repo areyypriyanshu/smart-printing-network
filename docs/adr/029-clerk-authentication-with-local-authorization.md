@@ -1,6 +1,7 @@
 # ADR 029: Clerk proves who someone is, this database decides what they may do
 
 Date: 2026-10-21
+Amended: 2026-11-02 — clarified the local verification cache, webhook ordering rule, live account inventory, and P11 rollback gate.
 Status: Accepted
 Requirement: FR-1, FR-19, FR-20 (Sprint 5.9, authentication provider migration)
 
@@ -158,31 +159,28 @@ migration the email gateway is waiting for the notification backlog
 rather than doing anything. It is not deleted, because it is the seam
 the backlog will need.
 
-### The address is proved by the provider, and the application stops asking
+### The address is proved by Clerk and enforced from a local copy
 
-The provider's instance asks for an address to be proved before it lets
-anybody sign in, so a session that exists means the address behind it
-was proved. The application used to keep its own answer to that
-question, in a column, and refuse the upload while it was false, and
-put a banner at the top of every page for a customer whose answer was
-not yet true.
+Clerk owns the password, verification message and proof. The local
+`users.email_verified` column is still required: upload and order
+services use it as their authorization gate, and must not call Clerk
+for every request. A signed webhook synchronizes Clerk's current
+profile into that local row; onboarding also refreshes an existing
+account from Clerk's Backend API.
 
-All of that is gone, and the reason is worth writing down: a copy of
-an answer that another server owns can only ever disagree with the
-truth, and it disagrees in the way that costs a customer. A customer
-told to confirm an address they had already confirmed is a customer
-who gives up, and the local copy was false in exactly that case for
-as long as the provider's message was in flight.
+Webhook deliveries can arrive more than once or out of order. The
+handler therefore records Clerk's profile `updated_at` and the event's
+timestamp, and only applies a profile version newer than the version
+already stored. The additive migration `0016` leaves both values null
+for older accounts until the next successful sync. This keeps a late
+verified profile from undoing a newer unverified profile, while Clerk
+remains the source of truth and the local row remains the fast,
+service-enforced authorization state.
 
-So the rule is now: **the provider proves the address, and the
-application does not keep a copy of the answer.** The upload gate and
-the banner are gone with it, and the upload is refused for the
-reasons that are still this application's business: the file, the
-price, the state of the order.
-
-The address itself is still on the account, because the order is tied
-to it and a human has to read it. It is read from the provider's own
-API when the account is made, and not from the browser.
+The address itself is read from Clerk's Backend API, not from the
+browser. A failed Backend API request is not recorded as processed, so
+the provider can retry the webhook and onboarding can ask the customer
+to try again.
 
 ### The one question, and the one place the role is decided
 
@@ -344,10 +342,26 @@ webhook keeps in step.
   machinery with it.** The setting is not kept for the sake of a
   rollback, because a rollback to the previous image is a redeploy and
   the previous image brings its own settings with it. The password
-  column stays, nullable, and is dropped in the contraction, because
-  the deployment runs the migrations before the new image starts and a
-  migration that removed a column the previous image still reads would
-  break that rollback.
+  column stays in the schema and is dropped only in the contraction,
+  because the deployment runs migrations before the new image starts
+  and a migration that removed a column the previous image still reads
+  would break that rollback.
+- The compatibility release removes the old ORM mappings first and
+  leaves the physical auth schema in place. It must be deployed and its
+  rollback target verified before a separate contraction migration. A
+  2026-10-19 pre-Clerk archive inspected on 2026-11-02 contained 12
+  password hashes and 36 refresh-token rows; eight of its twelve users
+  do not match the known demo seed accounts and remain unclassified.
+  The live inventory now reports all 12 users already have Clerk IDs,
+  so no P6 import is needed. The live database still has 12 refresh-token
+  rows and 2 email-verification-token rows. On 2026-11-02 the compatibility
+  release was deployed with additive migration `0016`; readiness and health
+  returned 200, and immutable old API/web image digests were saved in
+  `.previous-tag` and `.previous-web-tag`. The auth tables and columns remain
+  physically present. A later contraction still requires a live password-hash
+  inventory and a downgrade data policy. The pre-deploy backup was not taken:
+  automatic review blocked the configured command because it can upload the
+  credential-bearing dump to an unspecified S3 destination.
 - **The local way in is a route, not a flag in the product.** The end
   to end suite has to run offline and the same way every time, so it
   signs in through a route that mints a session without the provider,

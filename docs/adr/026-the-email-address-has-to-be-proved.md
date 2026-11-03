@@ -8,18 +8,16 @@ Requirement: FR-19 (Sprint 5.7, hardening)
 > cutover).** The *rule* in this record is unchanged and is the
 > important half of it: an address is a claim until it is proved, and
 > an unproved account cannot order a print, because the printout and
-> the pickup code are tied to the address. What changed is who proves
-> it and who sends the message. After the authentication provider
-> migration, Clerk sends the message and proves the address, and
-> **this application keeps no copy of the answer at all**. The column
-> `users.email_verified` is gone, the banner that told a customer
-> their address was not confirmed is gone, and the upload gate that
-> refused the order is gone, because the provider does not let anybody
-> sign in until the address is proved. A copy of an answer that
-> another server owns can only ever disagree with the truth, and it
-> disagreed in the way that costs a customer. The `EmailSender`
-> interface stays in the codebase for the product email that the
-> notification backlog will need. See
+> the pickup code are tied to the address. Clerk now proves the address
+> and sends the verification message. The application keeps
+> `users.email_verified` as a local authorization cache: the signed
+> webhook updates it, and the upload/order services enforce it without
+> calling Clerk on each request. The old verification-token table and
+> link-handling code are obsolete; the table is retained physically for
+> the P11 rollback window, but it is no longer mapped by the current ORM.
+> This column is not obsolete. A conflict
+> or stale webhook must fail closed until the local state is safely
+> synchronized. See
 > [ADR 029](029-clerk-authentication-with-local-authorization.md).
 
 ## Context

@@ -22,6 +22,8 @@ target_metadata = Base.metadata
 
 POSTGIS_SCHEMAS = {"topology", "tiger", "tiger_data"}
 POSTGIS_TABLES = {"spatial_ref_sys"}
+LEGACY_AUTH_TABLES = {"refresh_tokens", "email_verification_tokens"}
+LEGACY_AUTH_USER_COLUMNS = {"password_hash", "has_password"}
 
 
 def include_name(name: str | None, type_: str, parent_names: dict[str, str | None]) -> bool:
@@ -29,6 +31,30 @@ def include_name(name: str | None, type_: str, parent_names: dict[str, str | Non
         return False
     if type_ == "table" and name in POSTGIS_TABLES:
         return False
+    return True
+
+
+def include_object(
+    object_: object,
+    name: str,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    """Keep the old authentication schema out of the current model comparison.
+
+    The current application no longer maps these objects, but the physical
+    schema remains until a later contraction release. The previous image still
+    needs them for rollback, so Alembic must neither drop them nor report them
+    as drift during this compatibility window. The later contraction removes
+    this allow-list in the same change as its reversible migration.
+    """
+    if type_ == "table" and name in LEGACY_AUTH_TABLES:
+        return False
+    if type_ == "column" and getattr(object_, "table", None) is not None:
+        table = object_.table
+        if table.name == "users" and name in LEGACY_AUTH_USER_COLUMNS:
+            return False
     return True
 
 
@@ -45,6 +71,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         include_name=include_name,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -65,6 +92,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             include_name=include_name,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()
