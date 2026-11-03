@@ -40,15 +40,26 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# The hostname Cloudflare gave the tunnel. It is in the tunnel's log,
-# when the tunnel starts. A restarted container keeps its log, so the
-# log holds every hostname it has ever had, and the current one is the
-# LAST of them. Taking the first would give the address of a tunnel
-# that no longer exists, and every request to it comes back as a 530.
+# A restarted container keeps its log. Read the recent startup window so
+# an older hostname in the full log cannot win over the current tunnel.
 read_url() {
-    docker logs "${TUNNEL_CONTAINER}" 2>&1 \
+    docker logs --tail 40 "${TUNNEL_CONTAINER}" 2>&1 \
         | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' \
         | tail -1
+}
+
+public_ready() {
+    local code
+    local hostname
+    hostname="${1#https://}"
+    # The generated hostname can be missing from this server's DNS cache
+    # even after Cloudflare has published it. Connect through the base
+    # domain's Cloudflare edge IP while retaining the generated hostname
+    # for TLS SNI and HTTP routing.
+    code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' \
+        --connect-to "${hostname}:443:trycloudflare.com:443" \
+        "${1}/readyz" 2>/dev/null || true)"
+    [ "${code}" = "200" ]
 }
 
 URL=""
@@ -65,13 +76,9 @@ while true; do
             URL="$candidate"
             break
         fi
-        # The hostname appears in the log a moment before the tunnel's
-        # connection to the edge is registered, and a request in that
-        # window comes back as a 502 or a 530. Wait until the site
-        # answers, so that whoever runs this script gets an address
-        # that works.
-        code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "${candidate}/readyz" 2>/dev/null || echo 000)"
-        if [ "$code" = "200" ]; then
+        # Check the public edge without depending on local DNS for this
+        # particular random hostname.
+        if public_ready "${candidate}"; then
             URL="$candidate"
             break
         fi
