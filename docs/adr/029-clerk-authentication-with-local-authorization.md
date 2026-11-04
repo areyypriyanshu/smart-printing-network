@@ -357,11 +357,12 @@ webhook keeps in step.
   rows and 2 email-verification-token rows. On 2026-11-02 the compatibility
   release was deployed with additive migration `0016`; readiness and health
   returned 200, and immutable old API/web image digests were saved in
-  `.previous-tag` and `.previous-web-tag`. The auth tables and columns remain
-  physically present. A later contraction still requires a live password-hash
-  inventory and a downgrade data policy. The pre-deploy backup was not taken:
-  automatic review blocked the configured command because it can upload the
-  credential-bearing dump to an unspecified S3 destination.
+  `.previous-tag` and `.previous-web-tag`. On 2026-11-04 the contraction
+  landed as migration `0017`: `users.password_hash`, `users.has_password`,
+  `refresh_tokens` and `email_verification_tokens` are dropped atomically,
+  and the Alembic legacy allow-list was removed. The downgrade recreates
+  the schema so the previous image can start, with the 0014 sentinel hash
+  in place of originals.
 - **The local way in is a route, not a flag in the product.** The end
   to end suite has to run offline and the same way every time, so it
   signs in through a route that mints a session without the provider,

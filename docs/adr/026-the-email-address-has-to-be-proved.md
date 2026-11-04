@@ -13,8 +13,8 @@ Requirement: FR-19 (Sprint 5.7, hardening)
 > `users.email_verified` as a local authorization cache: the signed
 > webhook updates it, and the upload/order services enforce it without
 > calling Clerk on each request. The old verification-token table and
-> link-handling code are obsolete; the table is retained physically for
-> the P11 rollback window, but it is no longer mapped by the current ORM.
+> link-handling code are obsolete; the table was dropped by migration
+> `0017` after the P11 rollback window closed.
 > This column is not obsolete. A conflict
 > or stale webhook must fail closed until the local state is safely
 > synchronized. See
